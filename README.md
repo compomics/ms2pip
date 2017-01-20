@@ -19,7 +19,7 @@ sh compile.sh
 
 ####MS2 peak intensity predictions
 
-Pretrained HCD models for the b- and y-ions can be found in
+Pre-trained HCD models for the b- and y-ions can be found in
 the `/models` folder. These C-coded decision tree models are compiled 
 by running the `compile.sh` script that writes the python module 
 `ms2pipfeatures_pyx.so` which is imported into the main python script
@@ -38,7 +38,8 @@ optional arguments:
   -c INT          number of cpu's to use
 ```
 
-
+[alert danger]<button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+<h4>This is an example message!</h4>Lorem ipsum ...[/alert]
 
 
 
