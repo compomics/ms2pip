@@ -1,20 +1,47 @@
-#ms2pipXGB
+#MS2PIPC
 
 ###Install
 
 Requirements:
 
-- python numpy
-- python pandas
-- python multiprocessing
-- python XGBoost (only required for training)
+- Python numpy
+- Python pandas
+- Python multiprocessing
+- XGBoost (python API) (only required for training)
 - Cython (http://cython.org/)
 
-To compile the Cython `.pyx` files:
+MS2PIPC requires the machine specific compilation of the C-code: 
 
 ```
 sh compile.sh
 ```
+
+
+####MS2 peak intensity predictions
+
+Pretrained HCD models for the b- and y-ions can be found in
+the `/models` folder. These C-coded decision tree models are compiled 
+by running the `compile.sh` script that writes the python module 
+`ms2pipfeatures_pyx.so` which is imported into the main python script
+`ms2pipC.py`:  
+
+```
+usage: ms2pipC.py [-h] [-s FILE] [-w FILE] [-c INT] <peptide file>
+
+positional arguments:
+  <peptide file>  list of peptides
+
+optional arguments:
+  -h, --help      show this help message and exit
+  -s FILE         .mgf MS2 spectrum file (optional)
+  -w FILE         write feature vectors to FILE.pkl (optional)
+  -c INT          number of cpu's to use
+```
+
+
+
+
+
 
 ###Convert spectral library .msp to PEPREC format
 
@@ -38,18 +65,16 @@ The files are written as `<file>.PEPREC` and `<file>.PEPREC.mgf`.
 The script
 
 ```
-usage: peprec2vec.py [-h] [-c INT] <.PEPREC file> <.PEPREC.mgf file>
-
-MS2PIP on XGBoost
+usage: ms2pipC.py [-h] [-s FILE] [-w FILE] [-c INT] <peptide file>
 
 positional arguments:
-  <.PEPREC file>        file containing peptide identifications
-  <.PEPREC.mgf file>    file containing ms2 spectra
+  <peptide file>  list of peptides
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -c INT, --num_cpu INT
-                        number of cores
+  -h, --help      show this help message and exit
+  -s FILE         .mgf MS2 spectrum file (optional)
+  -w FILE         write feature vectors to FILE.pkl (optional)
+  -c INT          number of cpu's to use
 ```
 
 computes MS2PIP feature vectors from the PEPREC formatted files.
