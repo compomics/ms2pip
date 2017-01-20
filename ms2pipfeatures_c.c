@@ -3,9 +3,7 @@
 #include <string.h>
 
 #include "models/modelB.c"
-//#include "models/testB.c"
 #include "models/modelY.c"
-//#include "models/testY.c"
 
 float membuffer[10000];
 unsigned int v[30000];

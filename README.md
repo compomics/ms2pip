@@ -80,69 +80,34 @@ $ python convert_to_mgf.py <file>.msp
 converts a spectral library in `.msp` format into a spectrum `.mgf` file 
 and a `<peptide file>`.
 
-###Create feature vectors from PEPREC format
-
-The script
-
-```
-usage: ms2pipC.py [-h] [-s FILE] [-w FILE] [-c INT] <peptide file>
-
-positional arguments:
-  <peptide file>  list of peptides
-
-optional arguments:
-  -h, --help      show this help message and exit
-  -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE.pkl (optional)
-  -c INT          number of cpu's to use
-```
 
 ###Optimize and Train XGBoost models
 
 The script
 
 ```
-usage: train_xgboost.py [-h] [-p INT]
-                        <vectors.pkl> <targets.pkl> <psmids.pkl> <model type>
+usage: train_xgboost_c.py [-h] [-c INT] <vectors.pkl> <type>
 
 XGBoost training
 
 positional arguments:
-  <vectors.pkl>  feature vector file
-  <targets.pkl>  target file
-  <psmids.pkl>   PSM groups file
-  <model type>   {b,y}
+  <_vectors.pkl>  feature vector file
+  <type>         model type
 
 optional arguments:
   -h, --help     show this help message and exit
-  -p INT         number of cpu's to use
+  -c INT         number of cpu's to use
 ```
 
-reads the Pickle files written by `peprec2vec.py` and trains an XGBoost model. Hyperparameters should still be optimized.
+reads the pickled feature vector file `<_vectors.pkl>` and trains an 
+XGBoost model. The `type` option should be "B" for b-ions and "Y" for 
+y-ions.
+
+Hyperparameters should still be optimized.
 You will need to digg into the script for model selection.
 
-This script will also write the XGBoost models as `.c` files that can be compiled and linked through Cython. Please consult the script for details.
-To compile the Cython links to the `.c` models just run the script `compile.sh` again.
-
-###Run MS2PIP
-
-The script
-
-```
-usage: ms2pipXGB.py [-h] [-c INT] <.PEPREC file> <.PEPREC.mgf file>
-
-MS2PIP on XGBoost
-
-positional arguments:
-  <.PEPREC file>        file containing peptide identifications
-  <.PEPREC.mgf file>    file containing ms2 spectra
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -c INT, --num_cpu INT
-                        number of cores
-```
-
-will read the compiled `.c` models and predict the MS2 peak intensities for the `<.PEPREC.mgf>` file. These will be compared to the observed peak intensities computed from the 
-`<.PEPREC>` file. The pearson correlation for the b and y-ion models are writted to the file `pearson.csv`.
-
+This script will write the XGBoost models as `.c` files that can be compiled
+and linked through Cython. Just put the models in the `/models` folder
+, change the `#include` directives in `ms2pipfeatures_c.c`, and recompile 
+the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script. 
+ 

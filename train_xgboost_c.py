@@ -27,11 +27,11 @@ def fair_obj(preds, dtrain):
 def main():
 
 	parser = argparse.ArgumentParser(description='XGBoost training')    
-	parser.add_argument('vectors',metavar='<vectors.pkl>',
+	parser.add_argument('vectors',metavar='<_vectors.pkl>',
 					 help='feature vector file')
 	parser.add_argument('type',metavar='<type>',
 					 help='model type')
-	parser.add_argument('-p',metavar='INT', action="store", dest='num_cpu', default=23, 
+	parser.add_argument('-c',metavar='INT', action="store", dest='num_cpu', default=23, 
 					 help='number of cpu\'s to use')
 	args = parser.parse_args()
 	
@@ -279,7 +279,6 @@ def print_logo():
                                
            """
 	print logo
-	print "Version 2.1\nby Sven Degroeve\n"
 
 if __name__ == "__main__":
 	print_logo()
