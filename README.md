@@ -17,7 +17,7 @@ sh compile.sh
 ```
 
 
-####MS2 peak intensity predictions
+###MS2 peak intensity predictions
 
 Pre-trained HCD models for the b- and y-ions can be found in
 the `/models` folder. These C-coded decision tree models are compiled 
@@ -34,32 +34,51 @@ positional arguments:
 optional arguments:
   -h, --help      show this help message and exit
   -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE.pkl (optional)
+  -w FILE         write feature vectors to FILE_vectors.pkl (optional)
   -c INT          number of cpu's to use
 ```
 
-[alert danger]<button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
-<h4>This is an example message!</h4>Lorem ipsum ...[/alert]
+To apply the pre-trained models you only need to pass a `<peptide file>`
+to `ms2pipC.py`. This file contains the peptide sequences for which you
+want to predict the b- and y-ion peak intensities. The file is space
+separated and contains four columns with the following header names:
+
+- `spec_id`: the id (TITLE) of the spectrum in the `.mgf` MS2 file
+- `modifications`: a string indicating the modified amino acids
+- `peptide`: the unmodified amino acid sequence
+- `charge`: charge state to predict
+
+The *spec_id* column is a unique identifier for each peptide that will
+be used in the title field of the predicted MS2 .mgf file. The 
+`modifications` column is a string that lists what amino acid positions
+(starting with 1, position 0 is reserved for n-terminal modifications).
+For instance the string "3|CAM|11|Oxidation" represents a Carbamidomethyl
+modification of the 3th amino acid and a Oxidation modification of the
+11th amino acid.
+
+!! PREDICTION FROM PEPTIDE FILE ONLY IS NOT IMPLEMENTED YET !!
+!! ONLY CAM and Oxidation are implemented (and CAM is considered fixed) !!
+
+###Writing feature vectors for model training
+
+To compile a (pickled) feature vector dataset you need to supply the 
+MS2 .mgf file (option `-s`) and the name of the file to write the feature
+vectors to (option `-w`) to `ms2pipC.py`.
+The `spec_id` column in the `<peptide file>` should match the TITLE field
+of the corresponding MS2 spectrum in the .mgf file and is used to find
+the targets for the feature vectors.
 
 
+###Convert spectral library .msp
 
-
-###Convert spectral library .msp to PEPREC format
-
-The script
+The python script
 
 ```
 $ python convert_to_mgf.py <file>.msp
 ```
 
-converts a spectral library in `.msp` format into a spectrum `.mgf` file and a peptide identification file in PEPREC format.
-This format contains at least three columns: 
-
-- `spec_id`: the id (TITLE) of the spectrum in the `.mgf` file
-- `modifications`: a string indicating the locations (starting at 1) and the modification types
-- `peptide`: the unmodified amino acid sequence
-
-The files are written as `<file>.PEPREC` and `<file>.PEPREC.mgf`.
+converts a spectral library in `.msp` format into a spectrum `.mgf` file 
+and a `<peptide file>`.
 
 ###Create feature vectors from PEPREC format
 
@@ -77,35 +96,6 @@ optional arguments:
   -w FILE         write feature vectors to FILE.pkl (optional)
   -c INT          number of cpu's to use
 ```
-
-computes MS2PIP feature vectors from the PEPREC formatted files.
-The following files are written:
-
-- `vectors_b.pkl`: all feature vectors for the b-ions
-- `vectors_y.pkl`: all feature vectors for the y-ions 
-- `targets_b_1.pkl`: all targets (charge +1) values for the b-ions
-- `targets_y_1.pkl`: all targets (charge +1) values for the y-ions
-- `psmids.pkl`: groups the feature vectors by PSM
-
-Currently (still under optimization) the following features are computed:
-
-- `peplen`: number of amino acids in peptide
-- `ionnumber`: number of amino acids in ion to predict
-- `ionnumber_rel`: number of amino acids in ion to predict divided by `peplen`
-- `pmz`: precursor mass
-- `mean 'chem'`: mean of 'chem' in peptide
-- `mz_ion`: mass of ion to predict
-- `mz_ion_other`: mass of other ion
-- `charge`: spectrum charge state
-- `'chem'_'loc'`: `chem` value of amino acid at location 'loc' (nterm, cterm and relative to cleavage pos 'i')
-- `mean_ion_'chem'`: mean of 'chem' in ion to predict
-- `mean_ion_other_'chem'`: mean of 'chem' in other ion
-- `min_ion_'chem'`: min value of 'chem' in ion to predict
-- `min_ion_other_'chem'`: min value of 'chem' in other ion
-- `max_ion_'chem'`: max value of 'chem' in ion to predict
-- `max_ion_other_'chem'`: max value of 'chem' in other ion
-
-The features `chem` are computed from tables with estimated chemical property values for basisity, hydrophobicity, helicity and pI.
 
 ###Optimize and Train XGBoost models
 
