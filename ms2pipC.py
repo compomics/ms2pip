@@ -12,28 +12,20 @@ from scipy.stats import pearsonr
 
 def main():
 
-	parser = argparse.ArgumentParser(description='MS2PIP on XGBoost')    
-	parser.add_argument('pep_file', metavar='<.PEPREC file>',
-					 help='file containing peptide identifications')
+	parser = argparse.ArgumentParser()    
+	parser.add_argument('pep_file', metavar='<peptide file>',
+					 help='list of peptides')
 	parser.add_argument('-s', metavar='FILE',action="store", dest='spec_file',
-					 help='.mgf MS2 spectrum file')
+					 help='.mgf MS2 spectrum file (optional)')
 	parser.add_argument('-w', metavar='FILE',action="store", dest='vector_file',
-					 help='write feature vectors to FILE.pkl')
+					 help='write feature vectors to FILE.pkl (optional)')
 	parser.add_argument('-c', metavar='INT',action="store", dest='num_cpu',default='23',
-					 help='number of cores')
+					 help="number of cpu's to use")
 
 	args = parser.parse_args()
 
 	num_cpu = int(args.num_cpu)
-	
-	#bst = xgb.Booster({'nthread':23}) #init model
-	#bst.load_model('null_vectors.pkl.xgboost') # load data
-	
-	#xgb.plot_tree(bst)
-	#plt.show()
-	#ddd
-
-	
+		
 	# read peptide information
 	# the file contains the following columns: spec_id, modifications, peptide and charge
 	data = pd.read_csv(	args.pep_file,
@@ -76,7 +68,7 @@ def main():
 
 	myPool.close()
 	myPool.join()
-	
+	dddddd
 	# workers done...merging results
 	sys.stderr.write('\nmerging results and writing files...\n')
 	if args.spec_file:
@@ -132,6 +124,7 @@ def process_file(args,data):
 		if not rows: break
 		for row in rows:
 			row = row.rstrip()
+			if row == "": continue
 			if skip:
 				if row[0] == "B":
 					if row[:10] == "BEGIN IONS":
@@ -163,7 +156,7 @@ def process_file(args,data):
 				#process
 				if not title in peptides: continue
 
-				#if title != "human14": continue
+				#if title != "1164.61730957031_4463.29189999998": continue
 				
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
@@ -198,6 +191,8 @@ def process_file(args,data):
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
+				print b
+				print y
 
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
 				#print bst.predict(xgb.DMatrix(tmp))
@@ -216,6 +211,8 @@ def process_file(args,data):
 						resultB[ii] = resultB[ii]+0.5
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
+					print resultB
+					print resultY
 	
 					tmp = pd.DataFrame()
 					tmp['peplen'] = [peplen]*(2*len(b))
@@ -294,7 +291,7 @@ def print_logo():
                                    
            """
 	print logo
-	print "Version 2.1\nby Sven Degroeve\n"
+	print "by sven.degroeve@ugent.be\n"
 
 if __name__ == "__main__":
 	print_logo()
