@@ -1,8 +1,16 @@
+"""
+Convert msp files
+
+Writes three files: mgf with the spectra; PEPREC with the peptide sequences; meta with additional metainformation.
+Arguments:
+	arg1 path to msp file
+	arg2 TITLE
+"""
 #CHaNGED MODS!!
 
 import sys
 
-AminoMass = {}  
+AminoMass = {}
 AminoMass['A']= 71.037114
 AminoMass['C']= 103.009185
 AminoMass['D']= 115.026943
@@ -32,10 +40,10 @@ PTMmap['Pyro-carbamidomethyl'] = 'pyr'
 PTMmap['Gln->pyro-Glu'] = 'gln'
 PTMmap['Acetyl'] = 'ace'
 
-fpip = open(sys.argv[1]+'.PEPRECtmp','w')
+fpip = open(sys.argv[1]+'.PEPREC','w')
 fpip.write("spec_id modifications peptide\n")
-fmgf = open(sys.argv[1]+'.PEPREC.mgftmp','w')
-fmeta = open(sys.argv[1]+'.PEPREC.metatmp','w')
+fmgf = open(sys.argv[1]+'.PEPREC.mgf','w')
+fmeta = open(sys.argv[1]+'.PEPREC.meta','w')
 
 PTMs = {}
 
@@ -70,22 +78,22 @@ with open(sys.argv[1]) as f:
 					fpip.write('%s%i  %s\n'%(sys.argv[2],specid,peptide))
 
 				fmeta.write('%s%i %s %s %s %s %s\n'%(sys.argv[2],specid,charge,peptide,parentmz,purity,HCDenergy))
-					
-				# THIS IS NOT A PROBLEM: MW is nothing	
+
+				# THIS IS NOT A PROBLEM: MW is nothing
 				if tmp[0] == '0':
 					if 'X' in peptide: continue
 					tmp1 = 18.010601 + sum([AminoMass[x] for x in peptide])
 					tmp2 = (float(parentmz) * (float(charge))) - ((float(charge))*1.007825035) #or 0.0073??
 					if abs(tmp1-tmp2) > 0.5:
 						print "."
-	
-					
+
+
 				buf = "BEGIN IONS\n"
 				buf += "TITLE="+sys.argv[2]+str(specid) + '\n'
 				buf += "CHARGE="+str(charge) + '\n'
 				buf += "PEPMASS="+parentmz + '\n'
 				fmgf.write(buf+mgf+"END IONS"+'\n')
-				
+
 				specid += 1
 				read_spec = False
 				mgf = ""
