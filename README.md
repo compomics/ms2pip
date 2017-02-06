@@ -10,7 +10,7 @@ Requirements:
 - XGBoost (python API) (only required for training)
 - Cython (http://cython.org/)
 
-MS2PIPC requires the machine specific compilation of the C-code: 
+MS2PIPC requires the machine specific compilation of the C-code:
 
 ```
 sh compile.sh
@@ -20,8 +20,8 @@ sh compile.sh
 ###MS2 peak intensity predictions
 
 Pre-trained HCD models for the b- and y-ions can be found in
-the `/models` folder. These C-coded decision tree models are compiled 
-by running the `compile.sh` script that writes the python module 
+the `/models` folder. These C-coded decision tree models are compiled
+by running the `compile.sh` script that writes the python module
 `ms2pipfeatures_pyx.so` which is imported into the main python script
 `ms2pipC.py`:  
 
@@ -49,7 +49,7 @@ separated and contains four columns with the following header names:
 - `charge`: charge state to predict
 
 The *spec_id* column is a unique identifier for each peptide that will
-be used in the title field of the predicted MS2 .mgf file. The 
+be used in the title field of the predicted MS2 .mgf file. The
 `modifications` column is a string that lists what amino acid positions
 (starting with 1, position 0 is reserved for n-terminal modifications).
 For instance the string "3|CAM|11|Oxidation" represents a Carbamidomethyl
@@ -61,7 +61,7 @@ modification of the 3th amino acid and a Oxidation modification of the
 
 ###Writing feature vectors for model training
 
-To compile a (pickled) feature vector dataset you need to supply the 
+To compile a (pickled) feature vector dataset you need to supply the
 MS2 .mgf file (option `-s`) and the name of the file to write the feature
 vectors to (option `-w`) to `ms2pipC.py`.
 The `spec_id` column in the `<peptide file>` should match the TITLE field
@@ -74,11 +74,11 @@ the targets for the feature vectors.
 The python script
 
 ```
-$ python convert_to_mgf.py <file>.msp
+$ python convert_to_mgf.py <file>.msp <title>
 ```
 
-converts a spectral library in `.msp` format into a spectrum `.mgf` file 
-and a `<peptide file>`.
+converts a spectral library in `.msp` format into a spectrum `.mgf` file,
+ a `<peptide file>` and a `<meta>` file.
 
 
 ###Optimize and Train XGBoost models
@@ -99,8 +99,8 @@ optional arguments:
   -c INT         number of cpu's to use
 ```
 
-reads the pickled feature vector file `<_vectors.pkl>` and trains an 
-XGBoost model. The `type` option should be "B" for b-ions and "Y" for 
+reads the pickled feature vector file `<_vectors.pkl>` and trains an
+XGBoost model. The `type` option should be "B" for b-ions and "Y" for
 y-ions.
 
 Hyperparameters should still be optimized.
@@ -108,6 +108,5 @@ You will need to digg into the script for model selection.
 
 This script will write the XGBoost models as `.c` files that can be compiled
 and linked through Cython. Just put the models in the `/models` folder
-, change the `#include` directives in `ms2pipfeatures_c.c`, and recompile 
-the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script. 
- 
+, change the `#include` directives in `ms2pipfeatures_c.c`, and recompile
+the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script.
