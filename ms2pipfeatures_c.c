@@ -2,8 +2,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/modelB.c"
-#include "models/modelY.c"
+//#include "models/modelB.c"
+//#include "models/modelY.c"
+
+#include "models/dB.c"
+#include "models/dY.c"
+
 
 float membuffer[10000];
 unsigned int v[30000];
@@ -83,8 +87,12 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 	j=0;
 	for (i=peplen-1; i >= 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = 18.0105647+mz+1.007236;
+		membuffer[j] = 18.0105647+mz+1.007236;
+		//printf("%f ",membuffer[j]);
+		j++;
 	}
+	
+	
 
 	msms_pos = 0;
 	mem_pos = 0;
@@ -118,6 +126,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 				}
 			}
 			ions[(peplen-1)+mem_pos] = max;
+			//printf("F %f %f\n",mz,max);
 			mem_pos += 1;
 		}
 	}

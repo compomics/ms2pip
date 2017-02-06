@@ -27,7 +27,7 @@ def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndar
 		b.append(result[i])
 	y = []
 	for i in range(len(modpeptide)-1):
-		y.append(result[2*len(modpeptide)-2-i])
+		y.append(result[2*len(modpeptide)-3-i])
 	return(b,y)
 
 def get_score(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks, charge):

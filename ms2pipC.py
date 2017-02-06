@@ -39,7 +39,7 @@ def main():
 	titles = scan_spectrum_file(args.spec_file)
 	num_spectra_per_cpu = int(len(titles)/(num_cpu))
 	sys.stderr.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
-						
+
 	sys.stderr.write('starting workers...\n')
 	
 	myPool = multiprocessing.Pool(num_cpu)
@@ -68,7 +68,7 @@ def main():
 
 	myPool.close()
 	myPool.join()
-	dddddd
+
 	# workers done...merging results
 	sys.stderr.write('\nmerging results and writing files...\n')
 	if args.spec_file:
@@ -85,8 +85,8 @@ def main():
 			for r in results:
 				all_result.extend(r.get())
 			all_result = pd.concat(all_result)
-			all_result.to_pickle("all_result.pkl")
-			#all_result.to_csv("all_result.csv",index=False)
+			#all_result.to_pickle("all_result.pkl")
+			all_result.to_csv("all_result.csv",index=False)
 
 def process_file(args,data):
 	
@@ -118,6 +118,7 @@ def process_file(args,data):
 	skip = False
 	vectors = []
 	result = []
+	pcount = 0
 	while (1):
 		rows = f.readlines(3000000)
 		sys.stderr.write('.')
@@ -156,7 +157,7 @@ def process_file(args,data):
 				#process
 				if not title in peptides: continue
 
-				#if title != "1164.61730957031_4463.29189999998": continue
+				#if title != "674.342590332031_293.17330000002": continue
 				
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
@@ -191,9 +192,7 @@ def process_file(args,data):
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				print b
-				print y
-
+				
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
 				#print bst.predict(xgb.DMatrix(tmp))
 
@@ -211,8 +210,6 @@ def process_file(args,data):
 						resultB[ii] = resultB[ii]+0.5
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
-					print resultB
-					print resultY
 	
 					tmp = pd.DataFrame()
 					tmp['peplen'] = [peplen]*(2*len(b))
@@ -221,6 +218,8 @@ def process_file(args,data):
 					tmp['ionnumber'] = range(len(b))+range(len(y))
 					tmp['target'] = b + y
 					tmp['prediction'] = resultB + resultY
+					tmp['spec_id'] = [title]*len(tmp)
+					pcount += 1
 
 					result.append(tmp)
 
