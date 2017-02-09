@@ -42,13 +42,14 @@ def main():
 
 	sys.stderr.write('starting workers...\n')
 	
-	#myPool = multiprocessing.Pool(num_cpu)
+	myPool = multiprocessing.Pool(num_cpu)
 	
 	results = []
 	i = 0
 	for i in range(num_cpu-1):
 		tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 		# this commented part of code can be used for debugging by avoiding parallel processing
+		"""
 		process_file(
 										args,
 										data[data.spec_id.isin(tmp)]
@@ -67,7 +68,6 @@ def main():
 
 	myPool.close()
 	myPool.join()
-		"""
 
 	# workers done...merging results
 	sys.stderr.write('\nmerging results and writing files...\n')
@@ -108,10 +108,10 @@ def process_file(args,data):
 	
 	cols = get_feature_names()
 
-	bst = xgb.Booster({'nthread':23}) #init model
-	bst.load_model('vectors_vectors.pkl.xgboost') # load data
-	xgb.plot_tree(bst)
-	plt.show()
+	#bst = xgb.Booster({'nthread':23}) #init model
+	#bst.load_model('vectors_vectors.pkl.xgboost') # load data
+	#xgb.plot_tree(bst)
+	#plt.show()
 	
 	title = ""
 	parent_mz = 0.
@@ -211,7 +211,7 @@ def process_file(args,data):
 					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,msms,peaks,charge)
 					#v = ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge)
 					#print v
-					xv = xgb.DMatrix(v)
+					#xv = xgb.DMatrix(v)
 					#print
 					#print resultB
 					#print bst.predict(xv)

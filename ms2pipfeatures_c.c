@@ -808,12 +808,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		}	
 
 		v[fnum++] = charge;		
-		
-		for (j=0; j<100; j++) {
-			printf("%i ",v[j]);
-		}
-		printf("\n");
-		
+				
 		predictions[i] = score_B(v);
 		predictions[2*peplen-2-i] = score_Y(v);		
 	}	
