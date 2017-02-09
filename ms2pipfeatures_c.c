@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "models/modelB.c"
-//#include "models/modelY.c"
+#include "models/modelB.c"
+#include "models/modelY.c"
 
-#include "models/dB.c"
-#include "models/dY.c"
+//#include "models/dB.c"
+//#include "models/dY.c"
 
 
 float membuffer[10000];
@@ -14,14 +14,20 @@ unsigned int v[30000];
 float ions[1000];
 float predictions[1000];
 
-unsigned short bas[19] = {2064,2062,2086,2156,2121,2027,2237,2108,2218,2133,2128,2144,2142,2370,2076,2117,2087,2161,2131};
-unsigned short heli[19] = {124,79,89,85,126,114,97,129,88,122,94,56,96,95,100,109,127,107,111};
-unsigned short hydro[19] = {516,750,250,350,1000,169,37,941,0,823,121,8,224,223,215,392,802,988,700};
-unsigned short pI[19] = {600,507,277,322,548,597,759,602,974,574,541,630,565,1076,568,560,596,589,566};
+//unsigned short bas[19] = {2064,2062,2086,2156,2121,2027,2237,2108,2218,2133,2128,2144,2142,2370,2076,2117,2087,2161,2131};
+//unsigned short heli[19] = {124,79,89,85,126,114,97,129,88,122,94,56,96,95,100,109,127,107,111};
+//unsigned short hydro[19] = {516,750,250,350,1000,169,37,941,0,823,121,8,224,223,215,392,802,988,700};
+//unsigned short pI[19] = {600,507,277,322,548,597,759,602,974,574,541,630,565,1076,568,560,596,589,566};
 //float a_mass[19] = {71.037114,103.009185,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329};
 
 //hack: fixed C + Oxidation on 19
 float amino_masses[20] = {71.037114,160.030645,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354};
+
+unsigned short bas[19] = {37,35,59,129,94,0,210,81,191,106,101,117,115,343,49,90,60,134,104};
+unsigned short heli[19] = {68,23,33,29,70,58,41,73,32,66,38,0,40,39,44,53,71,51,55};
+unsigned short hydro[19] = {51,75,25,35,100,16,3,94,0,82,12,0,22,22,21,39,80,98,70};
+unsigned short pI[19] = {32,23,0,4,27,32,48,32,69,29,26,35,28,79,29,28,31,31,28};
+unsigned short amino_F[20] = {14,103,58,72,90,0,80,56,71,74,57,40,71,99,30,44,42,129,106,90};
 
 float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks)
 	{
@@ -36,7 +42,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 	
 	//b-ions
 	for (i=0; i < 2*peplen; i++) {
-		ions[i] = -9.96578428466;
+		ions[i] = -9.96578428466; //HARD CODED!!
 	}
 	
 	mz = 0.;
@@ -152,7 +158,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 
 	mz = 0.;
 	for (i=0; i < peplen; i++) {
-		mz += amino_masses[modpeptide[i]];
+		mz += amino_F[modpeptide[i]];
 		total_bas += bas[peptide[i]];
 		total_heli += heli[peptide[i]];
 		total_hydro += hydro[peptide[i]];
@@ -171,153 +177,301 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 	int sum_hydro = 0;
 	int sum_pI = 0;
 	int offset = 0;
+	int fnum = 0;
 	for (i=0; i < peplen-1; i++) {
-		v[0+offset] = (int) mz;
-		v[1+offset] = peplen;
-		v[2+offset] = i;
-		v[3+offset] = (int) 100*(float)i/peplen;
-		v[4+offset] = mean_mz;
-		v[5+offset] = mean_bas;
-		v[6+offset] = mean_heli;
-		v[7+offset] = mean_hydro;
-		v[8+offset] = mean_pI;
+		v[fnum++] = mz;
+		v[fnum++] = peplen;
+		v[fnum++] = i;
+		v[fnum++] = (int) 100*(float)i/peplen;
+		v[fnum++] = mean_mz;
+		v[fnum++] = mean_bas;
+		v[fnum++] = mean_heli;
+		v[fnum++] = mean_hydro;
+		v[fnum++] = mean_pI;
 
-		mzb += amino_masses[i];
-		v[9+offset] = (int) mzb;
-		v[10+offset] = (int) (mz - mzb);
-		v[11+offset] = (int) (mzb/(i+1));
-		v[12+offset] = (int) ((mz-mzb)/(peplen-1-i));
-		sum_bas += bas[i];
-		v[13+offset] = sum_bas;
-		v[14+offset] = total_bas-sum_bas;
-		v[15+offset] = (int) ((float)sum_bas/(i+1));
-		v[16+offset] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
-		sum_heli += heli[i];
-		v[17+offset] = sum_heli;
-		v[18+offset] = total_heli-sum_heli;
-		v[19+offset] = (int) ((float)sum_heli/(i+1));
-		v[20+offset] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
-		sum_hydro += hydro[i];
-		v[21+offset] = sum_hydro;
-		v[22+offset] = total_hydro-sum_hydro;
-		v[23+offset] = (int) ((float)sum_hydro/(i+1));
-		v[24+offset] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
-		sum_pI += pI[i];
-		v[25+offset] = sum_pI;
-		v[26+offset] = total_pI-sum_pI;
-		v[27+offset] = (int) ((float)sum_pI/(i+1));
-		v[28+offset] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
+		mzb += amino_F[modpeptide[i]];
+		v[fnum++] = (int) mzb;
+		v[fnum++] = (int) (mz - mzb);
+		v[fnum++] = (int) (mzb/(i+1));
+		v[fnum++] = (int) ((mz-mzb)/(peplen-1-i));
+		sum_bas += bas[peptide[i]];
+		v[fnum++] = sum_bas;
+		v[fnum++] = total_bas-sum_bas;
+		v[fnum++] = (int) ((float)sum_bas/(i+1));
+		v[fnum++] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
+		sum_heli += heli[peptide[i]];
+		v[fnum++] = sum_heli;
+		v[fnum++] = total_heli-sum_heli;
+		v[fnum++] = (int) ((float)sum_heli/(i+1));
+		v[fnum++] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
+		sum_hydro += hydro[peptide[i]];
+		v[fnum++] = sum_hydro;
+		v[fnum++] = total_hydro-sum_hydro;
+		v[fnum++] = (int) ((float)sum_hydro/(i+1));
+		v[fnum++] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
+		sum_pI += pI[peptide[i]];
+		v[fnum++] = sum_pI;
+		v[fnum++] = total_pI-sum_pI;
+		v[fnum++] = (int) ((float)sum_pI/(i+1));
+		v[fnum++] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
 
-		v[29+offset] = bas[peptide[0]];
-		v[30+offset] = heli[peptide[0]];
-		v[31+offset] = hydro[peptide[0]];
-		v[32+offset] = 0;
-		if (peptide[0] == 13) {
-			v[32+offset] = 1;
+		int pos = 0;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
 		}
-		v[33+offset] = bas[peptide[1]];
-		v[34+offset] = heli[peptide[1]];
-		v[35+offset] = hydro[peptide[1]];
-		v[36+offset] = pI[peptide[1]];
-		v[37+offset] = bas[peptide[-2]];
-		v[38+offset] = heli[peptide[-2]];
-		v[39+offset] = hydro[peptide[-2]];
-		v[40+offset] = pI[peptide[-2]];
-		v[41+offset] = heli[peptide[-1]];
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		pos = 1;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
 		
-		v[42+offset] = bas[peptide[i]];
+		pos = peplen-2;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		pos = peplen-1;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		v[fnum] = 0;
+		if (peptide[i] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		v[fnum] = 0;
+		if (peptide[i+1] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+
+		v[fnum++] = bas[peptide[i]];
 		if (i==0) {
-			v[43+offset] = bas[peptide[i]];
+			v[fnum++] = bas[peptide[i]];
 		}
 		else {
-			v[43+offset] = bas[peptide[i-1]];
+			v[fnum++] = bas[peptide[i-1]];
 		}	
-		v[44+offset] = bas[peptide[i+1]];
+		v[fnum++] = bas[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[45+offset] = bas[peptide[i+1]];
+			v[fnum++] = bas[peptide[i+1]];
 		}
 		else {
-			v[45+offset] = bas[peptide[i+2]];
+			v[fnum++] = bas[peptide[i+2]];
 		}
 			
-		v[46+offset] = heli[peptide[i]];
+		v[fnum++] = heli[peptide[i]];
 		if (i==0) {
-			v[47+offset] = heli[peptide[i]];
+			v[fnum++] = heli[peptide[i]];
 		}
 		else {
-			v[47+offset] = heli[peptide[i-1]];
+			v[fnum++] = heli[peptide[i-1]];
 		}	
-		v[48+offset] = heli[peptide[i+1]];
+		v[fnum++] = heli[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[49+offset] = heli[peptide[i+1]];
+			v[fnum++] = heli[peptide[i+1]];
 		}
 		else {
-			v[49+offset] = heli[peptide[i+2]];
+			v[fnum++] = heli[peptide[i+2]];
 		}	
 		
-		v[50+offset] = hydro[peptide[i]];
+		v[fnum++] = hydro[peptide[i]];
 		if (i==0) {
-			v[51+offset] = hydro[peptide[i]];
+			v[fnum++] = hydro[peptide[i]];
 		}
 		else {
-			v[51+offset] = hydro[peptide[i-1]];
+			v[fnum++] = hydro[peptide[i-1]];
 		}	
-		v[52+offset] = hydro[peptide[i+1]];
+		v[fnum++] = hydro[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[53+offset] = hydro[peptide[i+1]];
+			v[fnum++] = hydro[peptide[i+1]];
 		}
 		else {
-			v[53+offset] = hydro[peptide[i+2]];
+			v[fnum++] = hydro[peptide[i+2]];
 		}	
 		
-		v[54+offset] = pI[peptide[i]];
+		v[fnum++] = pI[peptide[i]];
 		if (i==0) {
-			v[55+offset] = pI[peptide[i]];
+			v[fnum++] = pI[peptide[i]];
 		}
 		else {
-			v[55+offset] = pI[peptide[i-1]];
+			v[fnum++] = pI[peptide[i-1]];
 		}	
-		v[56+offset] = pI[peptide[i+1]];
+		v[fnum++] = pI[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[57+offset] = pI[peptide[i+1]];
+			v[fnum++] = pI[peptide[i+1]];
 		}
 		else {
-			v[57+offset] = pI[peptide[i+2]];
+			v[fnum++] = pI[peptide[i+2]];
 		}	
 		
-		v[58+offset] = (int) 10*amino_masses[modpeptide[i]];
+		v[fnum++] = amino_F[modpeptide[i]];
 		if (i==0) {
-			v[59+offset] = (int) 10*amino_masses[modpeptide[i]];
+			v[fnum++] = amino_F[modpeptide[i]];
 		}
 		else {
-			v[59+offset] = (int) 10*amino_masses[modpeptide[i-1]];
+			v[fnum++] = amino_F[modpeptide[i-1]];
 		}	
-		v[60+offset] = (int) 10*amino_masses[modpeptide[i+1]];
+		v[fnum++] = amino_F[modpeptide[i+1]];
 		if (i==(peplen-2)) {
-			v[61+offset] = (int) 10*amino_masses[modpeptide[i+1]];
+			v[fnum++] = amino_F[modpeptide[i+1]];
 		}
 		else {
-			v[61+offset] = (int) 10*amino_masses[modpeptide[i+2]];
+			v[fnum++] = amino_F[modpeptide[i+2]];
 		}	
-				
-		v[62+offset] = 0;
-		if (peptide[i] == 16) {
-			v[62+offset] = 1;
-		}
-		v[63+offset] = 0;
-		if (peptide[i+1] == 16) {
-			v[63+offset] = 1;
-		}
-		v[64+offset] = 0;
-		if (peptide[i] == 11) {
-			v[64+offset] = 1;
-		}
-		v[65+offset] = 0;
-		if (peptide[i+1] == 11) {
-			v[65+offset] = 1;
-		}
-		v[66+offset] = charge;
-		offset+=67;
+
+		v[fnum++] = charge;		
 	}	
 	return v;
 }
@@ -340,7 +494,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 
 	mz = 0.;
 	for (i=0; i < peplen; i++) {
-		mz += amino_masses[modpeptide[i]];
+		mz += amino_F[modpeptide[i]];
 		total_bas += bas[peptide[i]];
 		total_heli += heli[peptide[i]];
 		total_hydro += hydro[peptide[i]];
@@ -358,152 +512,308 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 	int sum_heli = 0;
 	int sum_hydro = 0;
 	int sum_pI = 0;
+	int offset = 0;
 	for (i=0; i < peplen-1; i++) {
-		v[0] = (int) mz;
-		v[1] = peplen;
-		v[2] = i;
-		v[3] = (int) 100*(float)i/peplen;
-		v[4] = mean_mz;
-		v[5] = mean_bas;
-		v[6] = mean_heli;
-		v[7] = mean_hydro;
-		v[8] = mean_pI;
+		int fnum = 0;
+		v[fnum++] = mz;
+		v[fnum++] = peplen;
+		v[fnum++] = i;
+		v[fnum++] = (int) 100*(float)i/peplen;
+		v[fnum++] = mean_mz;
+		v[fnum++] = mean_bas;
+		v[fnum++] = mean_heli;
+		v[fnum++] = mean_hydro;
+		v[fnum++] = mean_pI;
 
-		mzb += amino_masses[i];
-		v[9] = (int) mzb;
-		v[10] = (int) (mz - mzb);
-		v[11] = (int) (mzb/(i+1));
-		v[12] = (int) ((mz-mzb)/(peplen-1-i));
-		sum_bas += bas[i];
-		v[13] = sum_bas;
-		v[14] = total_bas-sum_bas;
-		v[15] = (int) ((float)sum_bas/(i+1));
-		v[16] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
-		sum_heli += heli[i];
-		v[17] = sum_heli;
-		v[18] = total_heli-sum_heli;
-		v[19] = (int) ((float)sum_heli/(i+1));
-		v[20] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
-		sum_hydro += hydro[i];
-		v[21] = sum_hydro;
-		v[22] = total_hydro-sum_hydro;
-		v[23] = (int) ((float)sum_hydro/(i+1));
-		v[24] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
-		sum_pI += pI[i];
-		v[25] = sum_pI;
-		v[26] = total_pI-sum_pI;
-		v[27] = (int) ((float)sum_pI/(i+1));
-		v[28] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
+		mzb += amino_F[modpeptide[i]];
+		v[fnum++] = (int) mzb;
+		v[fnum++] = (int) (mz - mzb);
+		v[fnum++] = (int) (mzb/(i+1));
+		v[fnum++] = (int) ((mz-mzb)/(peplen-1-i));
+		sum_bas += bas[peptide[i]];
+		v[fnum++] = sum_bas;
+		v[fnum++] = total_bas-sum_bas;
+		v[fnum++] = (int) ((float)sum_bas/(i+1));
+		v[fnum++] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
+		sum_heli += heli[peptide[i]];
+		v[fnum++] = sum_heli;
+		v[fnum++] = total_heli-sum_heli;
+		v[fnum++] = (int) ((float)sum_heli/(i+1));
+		v[fnum++] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
+		sum_hydro += hydro[peptide[i]];
+		v[fnum++] = sum_hydro;
+		v[fnum++] = total_hydro-sum_hydro;
+		v[fnum++] = (int) ((float)sum_hydro/(i+1));
+		v[fnum++] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
+		sum_pI += pI[peptide[i]];
+		v[fnum++] = sum_pI;
+		v[fnum++] = total_pI-sum_pI;
+		v[fnum++] = (int) ((float)sum_pI/(i+1));
+		v[fnum++] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
 
-		v[29] = bas[peptide[0]];
-		v[30] = heli[peptide[0]];
-		v[31] = hydro[peptide[0]];
-		v[32] = 0;
-		if (peptide[0] == 13) {
-			v[32] = 1;
+		int pos = 0;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
 		}
-		v[33] = bas[peptide[1]];
-		v[34] = heli[peptide[1]];
-		v[35] = hydro[peptide[1]];
-		v[36] = pI[peptide[1]];
-		v[37] = bas[peptide[-2]];
-		v[38] = heli[peptide[-2]];
-		v[39] = hydro[peptide[-2]];
-		v[40] = pI[peptide[-2]];
-		v[41] = heli[peptide[-1]];
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		pos = 1;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
 		
-		v[42] = bas[peptide[i]];
+		pos = peplen-2;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		pos = peplen-1;
+		v[fnum++] = amino_F[modpeptide[pos]];
+		v[fnum++] = bas[peptide[pos]];
+		v[fnum++] = heli[peptide[pos]];
+		v[fnum++] = hydro[peptide[pos]];
+		v[fnum++] = pI[peptide[pos]];			
+		v[fnum] = 0;
+		if (peptide[pos] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[pos] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		v[fnum] = 0;
+		if (peptide[i] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+		v[fnum] = 0;
+		if (peptide[i+1] == 11) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 2) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 3) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 8) {
+			v[fnum] = 1;
+		}
+		fnum++;
+		v[fnum] = 0;
+		if (peptide[i+1] == 13) {
+			v[fnum] = 1;
+		}
+		fnum++;
+
+
+		v[fnum++] = bas[peptide[i]];
 		if (i==0) {
-			v[43] = bas[peptide[i]];
+			v[fnum++] = bas[peptide[i]];
 		}
 		else {
-			v[43] = bas[peptide[i-1]];
+			v[fnum++] = bas[peptide[i-1]];
 		}	
-		v[44] = bas[peptide[i+1]];
+		v[fnum++] = bas[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[45] = bas[peptide[i+1]];
+			v[fnum++] = bas[peptide[i+1]];
 		}
 		else {
-			v[45] = bas[peptide[i+2]];
+			v[fnum++] = bas[peptide[i+2]];
 		}
 			
-		v[46] = heli[peptide[i]];
+		v[fnum++] = heli[peptide[i]];
 		if (i==0) {
-			v[47] = heli[peptide[i]];
+			v[fnum++] = heli[peptide[i]];
 		}
 		else {
-			v[47] = heli[peptide[i-1]];
+			v[fnum++] = heli[peptide[i-1]];
 		}	
-		v[48] = heli[peptide[i+1]];
+		v[fnum++] = heli[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[49] = heli[peptide[i+1]];
+			v[fnum++] = heli[peptide[i+1]];
 		}
 		else {
-			v[49] = heli[peptide[i+2]];
+			v[fnum++] = heli[peptide[i+2]];
 		}	
 		
-		v[50] = hydro[peptide[i]];
+		v[fnum++] = hydro[peptide[i]];
 		if (i==0) {
-			v[51] = hydro[peptide[i]];
+			v[fnum++] = hydro[peptide[i]];
 		}
 		else {
-			v[51] = hydro[peptide[i-1]];
+			v[fnum++] = hydro[peptide[i-1]];
 		}	
-		v[52] = hydro[peptide[i+1]];
+		v[fnum++] = hydro[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[53] = hydro[peptide[i+1]];
+			v[fnum++] = hydro[peptide[i+1]];
 		}
 		else {
-			v[53] = hydro[peptide[i+2]];
+			v[fnum++] = hydro[peptide[i+2]];
 		}	
 		
-		v[54] = pI[peptide[i]];
+		v[fnum++] = pI[peptide[i]];
 		if (i==0) {
-			v[55] = pI[peptide[i]];
+			v[fnum++] = pI[peptide[i]];
 		}
 		else {
-			v[55] = pI[peptide[i-1]];
+			v[fnum++] = pI[peptide[i-1]];
 		}	
-		v[56] = pI[peptide[i+1]];
+		v[fnum++] = pI[peptide[i+1]];
 		if (i==(peplen-2)) {
-			v[57] = pI[peptide[i+1]];
+			v[fnum++] = pI[peptide[i+1]];
 		}
 		else {
-			v[57] = pI[peptide[i+2]];
+			v[fnum++] = pI[peptide[i+2]];
 		}	
 		
-		v[58] = (int) 10*amino_masses[modpeptide[i]];
+		v[fnum++] = amino_F[modpeptide[i]];
 		if (i==0) {
-			v[59] = (int) 10*amino_masses[modpeptide[i]];
+			v[fnum++] = amino_F[modpeptide[i]];
 		}
 		else {
-			v[59] = (int) 10*amino_masses[modpeptide[i-1]];
+			v[fnum++] = amino_F[modpeptide[i-1]];
 		}	
-		v[60] = (int) 10*amino_masses[modpeptide[i+1]];
+		v[fnum++] = amino_F[modpeptide[i+1]];
 		if (i==(peplen-2)) {
-			v[61] = (int) 10*amino_masses[modpeptide[i+1]];
+			v[fnum++] = amino_F[modpeptide[i+1]];
 		}
 		else {
-			v[61] = (int) 10*amino_masses[modpeptide[i+2]];
+			v[fnum++] = amino_F[modpeptide[i+2]];
 		}	
-				
-		v[62] = 0;
-		if (peptide[i] == 16) {
-			v[62] = 1;
+
+		v[fnum++] = charge;		
+		
+		for (j=0; j<100; j++) {
+			printf("%i ",v[j]);
 		}
-		v[63] = 0;
-		if (peptide[i+1] == 16) {
-			v[63] = 1;
-		}
-		v[64] = 0;
-		if (peptide[i] == 11) {
-			v[64] = 1;
-		}
-		v[65] = 0;
-		if (peptide[i+1] == 11) {
-			v[65] = 1;
-		}
-		v[66] = charge;
+		printf("\n");
+		
 		predictions[i] = score_B(v);
 		predictions[2*peplen-2-i] = score_Y(v);		
 	}	

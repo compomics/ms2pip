@@ -42,14 +42,13 @@ def main():
 
 	sys.stderr.write('starting workers...\n')
 	
-	myPool = multiprocessing.Pool(num_cpu)
+	#myPool = multiprocessing.Pool(num_cpu)
 	
 	results = []
 	i = 0
 	for i in range(num_cpu-1):
 		tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 		# this commented part of code can be used for debugging by avoiding parallel processing
-		"""
 		process_file(
 										args,
 										data[data.spec_id.isin(tmp)]
@@ -68,6 +67,7 @@ def main():
 
 	myPool.close()
 	myPool.join()
+		"""
 
 	# workers done...merging results
 	sys.stderr.write('\nmerging results and writing files...\n')
@@ -103,11 +103,15 @@ def process_file(args,data):
 
 	# cols contains the names of the computed features
 	# this should be replaced by the actual feature names
-	cols = ["F"+str(a) for a in range(66)]
-	cols.append("charge")
+	#cols = ["F"+str(a) for a in range(63)]
+	#cols.append("charge")
+	
+	cols = get_feature_names()
 
-	#bst = xgb.Booster({'nthread':23}) #init model
-	#bst.load_model('null_vectors.pkl.xgboost') # load data
+	bst = xgb.Booster({'nthread':23}) #init model
+	bst.load_model('vectors_vectors.pkl.xgboost') # load data
+	xgb.plot_tree(bst)
+	plt.show()
 	
 	title = ""
 	parent_mz = 0.
@@ -157,7 +161,7 @@ def process_file(args,data):
 				#process
 				if not title in peptides: continue
 
-				#if title != "674.342590332031_293.17330000002": continue
+				#if title != "human684921": continue
 				
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
@@ -180,10 +184,10 @@ def process_file(args,data):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if l[i+1] == "Oxidation":
-							modpeptide[int(l[i])-1] = 19
+							modpeptide[int(l[i])] = 19
 				if k: 
 					continue
-				
+
 				# normalize and convert MS2 peaks
 				msms = np.array(msms,dtype=np.float32)
 				peaks = peaks / np.sum(peaks)
@@ -197,7 +201,7 @@ def process_file(args,data):
 				#print bst.predict(xgb.DMatrix(tmp))
 
 				if args.vector_file:
-					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
+					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint16)
 					tmp["targetsB"] = b
 					tmp["targetsY"] = y
 					tmp["psmid"] = [title]*len(tmp)
@@ -205,9 +209,16 @@ def process_file(args,data):
 				else:				
 					# predict the b- and y-ion intensities from the peptide
 					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,msms,peaks,charge)
+					#v = ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge)
+					#print v
+					xv = xgb.DMatrix(v)
+					#print
+					#print resultB
+					#print bst.predict(xv)
+					#ddddd
 					resultY = resultY[::-1]
 					for ii in range(len(resultB)):
-						resultB[ii] = resultB[ii]+0.5
+						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
 	
@@ -229,42 +240,28 @@ def process_file(args,data):
 		return result
 
 def get_feature_names():
-	aminos = ['A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y']
-	names = ['peplen','ionnumber','ionnumber_rel','pmz']
-	for c in ['bas','hydro','heli','pI']:
+	names = ['pmz','peplen','ionnumber','ionnumber_rel']
+	for c in ['mz','bas','hydro','heli','pI']:
 		names.append('mean_'+c)
-	names.append("mz_ion")
-	names.append("mz_ion_other")
-	names.append("charge")
-	names.append("modi")
-	for k in ['0','1','-2','-1']:
-		for c in ['bas','hydro','heli','pI']:
-			names.append(c+'_'+k)
-	for k in ['i','i-1','i+1','i+2']:
-		for c in ['bas','hydro','heli','pI']:
-			names.append(c+'_'+k)
-	for c in ['bas','hydro','heli','pI']:
-		names.append('sum_ion_'+c)
-		names.append('mean_ion_'+c)
-		names.append('max_ion_'+c)
-		names.append('min_ion_'+c)
-		names.append('sum_ion_other_'+c)
-		names.append('mean_ion_other_'+c)
-		names.append('max_ion_other_'+c)
-		names.append('min_ion_other_'+c)
-	c="mz"
-	names.append('sum_ion_'+c)
-	names.append('mean_ion_'+c)
-	names.append('max_ion_'+c)
-	names.append('min_ion_'+c)
-	names.append('sum_ion_other_'+c)
-	names.append('mean_ion_other_'+c)
-	names.append('max_ion_other_'+c)
-	names.append('min_ion_other_'+c)
+	for c in ['mz','bas','hydro','heli','pI']:
+		names.append("%s_ion"%c)
+		names.append("%s_ion_other"%c)
+		names.append("mean_%s_ion"%c)
+		names.append("mean_%s_ion_other"%c)
 
-	for k in ['0','-1','i','i+1']:
-		for a in aminos:
-			names.append(a+'_'+k)
+	for pos in ['0','1','-2','-1']:
+		for c in ['mz','bas','hydro','heli','pI','P','D','E','K','R']:
+			names.append("loc_"+pos+"_"+c)
+
+	for pos in ['i','i+1']:
+		for c in ['P','D','E','K','R']:
+			names.append("loc_"+pos+"_"+c)
+
+	for c in ['bas','hydro','heli','pI','mz']:
+		for pos in ['i','i-1','i+1','i+2']:
+			names.append("loc_"+pos+"_"+c)
+				
+	names.append("charge")
 
 	return names
 

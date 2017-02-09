@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import math
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -46,6 +47,7 @@ def main():
 	targetsY = vectors.pop("targetsY")
 	#psmids = vectors.pop("psmid")
 	psmids = vectors["psmid"]
+	#vectors = vectors[['psmid','mean_pI','mean_pI_ion_other','loc_i-1_bas','loc_i_hydro','mean_mz_ion','mean_heli_ion','mean_bas','peplen','loc_i_heli','loc_i_pI','pmz','pI_ion_other','heli_ion_other','hydro_ion','loc_i_bas','loc_1_bas','mean_hydro_ion','ionnumber','loc_i+1_heli','mean_bas_ion_other','bas_ion_other','loc_i+1_bas','loc_0_bas','loc_i+1_hydro','mz_ion','heli_ion','pI_ion','mean_pI_ion','mean_bas_ion','bas_ion','ionnumber_rel','charge']]
 	#targets['target'] = targets['target'].values+targets2['target']
 	#targets['target'] = np.log2(targets['target']+0.001)
 	#targets['target'] = np.sqrt(targets['target'])
@@ -83,6 +85,11 @@ def main():
 	test_targets = targetsY[psmids.isin(test_psms)]
 	train_vectors = vectors[~psmids.isin(test_psms)]
 	train_targets = targetsY[~psmids.isin(test_psms)]
+
+	print len(train_targets)
+	print train_targets.describe()
+	#print test_targets
+	##dd
 
 	train_psmids = train_vectors.pop("psmid")
 	test_psmids = test_vectors.pop("psmid")
@@ -130,11 +137,11 @@ def main():
 			 #"scale_pos_weight":2
 	         }
 	plst = param.items()          
-	plst += [('eval_metric', 'mae')]
+	plst += [('eval_metric', 'rmse')]
 	
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
-	bst = xgb.train( plst, xtrain, 300, evallist,early_stopping_rounds=10)
+	bst = xgb.train( plst, xtrain, 200, evallist,early_stopping_rounds=10)
 	#bst = xgb.train( plst, xtrain, 30, evallist)
 	
 	#save model
@@ -164,8 +171,8 @@ def main():
 	tmp['target'] = list(test_targets.values)
 	tmp['predictions'] = predictions
 	tmp['psmid'] = list(test_psmids.values)
-	tmp['charge'] = list(test_vectors.Feature66.values)
-	tmp['peplen'] = list(test_vectors.Feature1.values)
+	#tmp['charge'] = list(test_vectors.charge.values)
+	#tmp['peplen'] = list(test_vectors.peplen.values)
 	tmp.to_pickle('predictions.pkl')
 
 	convert_model_to_c(bst,args,numf)
@@ -237,7 +244,7 @@ def convert_model_to_c(bst,args,numf):
 				if float(tmp2[1]) < 0: tmp2[1] = 1
 				tmp3 = tmp[1].split(",no=")
 				tmp4 = tmp3[1].split(',')
-				tree[int(l[0])] = [int(tmp2[0]),float(tmp2[1]),int(tmp3[0]),int(tmp4[0])]
+				tree[int(l[0])] = [int(tmp2[0]),int(math.ceil(float(tmp2[1]))),int(tmp3[0]),int(tmp4[0])]
 		forest.append(tree)
 	
 		tmp = args.vectors.replace('.','_')
@@ -258,7 +265,7 @@ def convert_model_to_c(bst,args,numf):
 			fout.write("\tcdef unsigned short[%i] v = sv\n"%numf)
 			fout.write("\treturn score_%s(v)\n"%args.type)
 	
-	os.remove('dump.raw.txt')
+	#os.remove('dump.raw.txt')
 
 
 def tree_to_code(tree,pos,padding):

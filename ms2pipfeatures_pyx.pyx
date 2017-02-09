@@ -14,9 +14,9 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[u
 	offset = 0
 	for i in range(len(peptide)-1):
 		v = []
-		for j in range(67):
+		for j in range(100):
 			v.append(result[j+offset])
-		offset+=67
+		offset+=100
 		r.append(v)
 	return r
 
@@ -51,5 +51,5 @@ def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndar
 	for i in range(len(modpeptide)-1):
 		resultB.append(predictions[i])
 	for i in range(len(modpeptide)-1):
-		resultY.append(predictions[len(modpeptide-1)+i])
+		resultY.append(predictions[len(modpeptide)-1+i])
 	return (resultB,resultY)
