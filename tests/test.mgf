@@ -1,0 +1,19 @@
+BEGIN IONS
+TITLE=title
+CHARGE=X
+PEPMASS=XXXXX
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+mz int
+END IONS
