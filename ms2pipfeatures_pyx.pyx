@@ -51,5 +51,5 @@ def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndar
 	for i in range(len(modpeptide)-1):
 		resultB.append(predictions[i])
 	for i in range(len(modpeptide)-1):
-		resultY.append(predictions[len(modpeptide)-1+i])
+		resultY.append(predictions[len(modpeptide)+i])
 	return (resultB,resultY)

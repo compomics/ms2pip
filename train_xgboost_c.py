@@ -128,7 +128,7 @@ def main():
 	         "silent":1,
 	         "eta":0.5,
 	         #"max_delta_step":1,
-	         "max_depth":9,
+	         "max_depth":5,
 			 "gamma":0,
 			 "min_child_weight":1,
 			 "subsample":1,
@@ -141,7 +141,7 @@ def main():
 	
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
-	bst = xgb.train( plst, xtrain, 200, evallist,early_stopping_rounds=10)
+	bst = xgb.train( plst, xtrain, 20, evallist,early_stopping_rounds=10)
 	#bst = xgb.train( plst, xtrain, 30, evallist)
 	
 	#save model

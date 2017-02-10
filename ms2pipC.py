@@ -108,8 +108,8 @@ def process_file(args,data):
 	
 	cols = get_feature_names()
 
-	#bst = xgb.Booster({'nthread':23}) #init model
-	#bst.load_model('vectors_vectors.pkl.xgboost') # load data
+	bst = xgb.Booster({'nthread':23}) #init model
+	bst.load_model('vectors_vectors.pkl.xgboost') # load data
 	#xgb.plot_tree(bst)
 	#plt.show()
 	
@@ -209,14 +209,19 @@ def process_file(args,data):
 				else:				
 					# predict the b- and y-ion intensities from the peptide
 					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,msms,peaks,charge)
+					for ii in range(len(resultB)):
+						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
+					for ii in range(len(resultY)):
+						resultY[ii] = resultY[ii]+0.5
+					resultY = resultY[::-1]
 					#v = ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge)
 					#print v
 					#xv = xgb.DMatrix(v)
 					#print
 					#print resultB
+					#print resultY
 					#print bst.predict(xv)
 					#ddddd
-					resultY = resultY[::-1]
 					for ii in range(len(resultB)):
 						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
 					for ii in range(len(resultY)):
