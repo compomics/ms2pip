@@ -104,9 +104,15 @@ def process_file(args,data):
 	# cols contains the names of the computed features
 	# this should be replaced by the actual feature names
 	#cols = ["F"+str(a) for a in range(63)]
+	cols = []
+	for ii in range(10):
+		for aa in aminos:
+			cols.append("f_"+str(ii)+"_"+aa)
+	#cols = ["F"+str(a) for a in range(190)]
+	#cols.append("pmz")
 	#cols.append("charge")
 	
-	cols = get_feature_names()
+	cols_n = get_feature_names()
 
 	bst = xgb.Booster({'nthread':23}) #init model
 	bst.load_model('vectors_vectors.pkl.xgboost') # load data
@@ -163,6 +169,8 @@ def process_file(args,data):
 
 				#if title != "human684921": continue
 				
+				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
+				
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
 				mods = modifications[title]
@@ -190,18 +198,30 @@ def process_file(args,data):
 
 				# normalize and convert MS2 peaks
 				msms = np.array(msms,dtype=np.float32)
+				#peaks = np.array(peaks,dtype=np.float32)
 				peaks = peaks / np.sum(peaks)
 				peaks = np.array(np.log2(peaks+0.001))
 				peaks = peaks.astype(np.float32)
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				
+				#ma = np.max(b+y)
+				#if ma == 0: continue
+				#b = np.array(b) / ma
+				#y = np.array(y) / ma
+				#b= np.log2(b+1)
+				#y= np.log2(y+1)
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
 				#print bst.predict(xgb.DMatrix(tmp))
 
 				if args.vector_file:
-					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint16)
+					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols_n,dtype=np.uint16)
+					#r = ms2pipfeatures_pyx.get_vector_bof(peptide)
+					#r.append(parent_mz)
+					#r.append(charge)
+					#tmp=pd.DataFrame([r]*(len(peptide)-1),columns=cols,dtype=np.uint16)
+					#tmp = pd.concat([tmp,tmp2],axis=1)
+					#tmp['cleavge_pos'] = [i for i in range(len(peptide)-1)]
 					tmp["targetsB"] = b
 					tmp["targetsY"] = y
 					tmp["psmid"] = [title]*len(tmp)
@@ -245,7 +265,16 @@ def process_file(args,data):
 		return result
 
 def get_feature_names():
-	names = ['pmz','peplen','ionnumber','ionnumber_rel']
+	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
+
+	names = []
+	for a in aminos:
+		names.append("I_"+a)
+	for a in aminos:
+		names.append("Ib_"+a)
+	for a in aminos:
+		names.append("Iy_"+a)
+	names += ['pmz','peplen','ionnumber','ionnumber_rel']
 	for c in ['mz','bas','hydro','heli','pI']:
 		names.append('mean_'+c)
 	for c in ['mz','bas','hydro','heli','pI']:

@@ -5,6 +5,7 @@ cimport numpy as np
 cdef extern from "ms2pipfeatures_c.c":
 	void init(char* amino_masses_fname, char* modifications_fname)
 	unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
+	unsigned int* get_v_bof(int peplen, unsigned short* peptide)
 	float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks)
 
@@ -14,10 +15,17 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[u
 	offset = 0
 	for i in range(len(peptide)-1):
 		v = []
-		for j in range(100):
+		for j in range(157):
 			v.append(result[j+offset])
-		offset+=100
+		offset+=157
 		r.append(v)
+	return r
+
+def get_vector_bof(np.ndarray[unsigned short, ndim=1, mode="c"] peptide):
+	cdef unsigned int* result = get_v_bof(len(peptide),&peptide[0])
+	r = []
+	for i in range(19*len(peptide)):
+		r.append(result[i])
 	return r
 
 def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks):

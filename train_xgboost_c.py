@@ -39,9 +39,10 @@ def main():
 	sys.stderr.write('loading data\n')
 	
 	vectors = pd.read_pickle(args.vectors)
+	vectors.dropna(inplace=True)
 	print len(vectors)
-	print vectors['charge'].value_counts()
-	#vectors = vectors[vectors.charge==2]
+	print vectors.head()
+	#print vectors['charge'].value_counts()
 	#tmp = vectors.pop("charge")
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")
@@ -82,9 +83,9 @@ def main():
 	#dddd
 		
 	test_vectors = vectors[psmids.isin(test_psms)]
-	test_targets = targetsY[psmids.isin(test_psms)]
+	test_targets = targetsB[psmids.isin(test_psms)]
 	train_vectors = vectors[~psmids.isin(test_psms)]
-	train_targets = targetsY[~psmids.isin(test_psms)]
+	train_targets = targetsB[~psmids.isin(test_psms)]
 
 	print len(train_targets)
 	print train_targets.describe()
@@ -126,11 +127,11 @@ def main():
 	param = {"objective":"reg:linear",
 	         "nthread":int(args.num_cpu),
 	         "silent":1,
-	         "eta":0.5,
+	         "eta":0.6,
 	         #"max_delta_step":1,
-	         "max_depth":5,
-			 "gamma":0,
-			 "min_child_weight":1,
+	         "max_depth":11,
+			 "gamma":1,
+			 "min_child_weight":100,
 			 "subsample":1,
 			 "colsample_bytree":1,
 			 #"scale_pos_weight":num_neg/num_pos
@@ -141,7 +142,7 @@ def main():
 	
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
-	bst = xgb.train( plst, xtrain, 20, evallist,early_stopping_rounds=10)
+	bst = xgb.train( plst, xtrain, 2000, evallist,early_stopping_rounds=10)
 	#bst = xgb.train( plst, xtrain, 30, evallist)
 	
 	#save model
@@ -157,7 +158,7 @@ def main():
 	importance = sorted(importance.items(), key=operator.itemgetter(1))
 	ll = []
 	with open("importance.txt","w") as f:
-		for feat,n in importance[-50:]:
+		for feat,n in importance[:]:
 			ll.append(feat)
 			f.write(feat + "\t" + str(n) + '\n')
 	
