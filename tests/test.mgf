@@ -1,19 +1,11 @@
 BEGIN IONS
-TITLE=title
-CHARGE=X
-PEPMASS=XXXXX
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
-mz int
+TITLE=peptide1
+CHARGE=2
+PEPMASS=475.137295 # just summed each aminoacid mass
+71.0 1000 # A
+129.0 700 # E
+231.1 400 # AC
+244.1 400 # DE
+346.1 700 # ACD
+404.1 1000 # CDE
 END IONS
