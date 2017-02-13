@@ -122,7 +122,7 @@ def process_file(args,data):
 	cols_n = get_feature_names()
 
 	bst = xgb.Booster({'nthread':23}) #init model
-	bst.load_model('vectors_vectors.pkl.xgboost') # load data
+	# bst.load_model('vectors_vectors.pkl.xgboost') # load data
 	#xgb.plot_tree(bst)
 	#plt.show()
 
