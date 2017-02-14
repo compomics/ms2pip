@@ -7,6 +7,7 @@ Requirements:
 - Python numpy
 - Python pandas
 - Python multiprocessing
+- PyTables
 - XGBoost (python API) (only required for training)
 - Cython (http://cython.org/)
 
@@ -26,7 +27,7 @@ by running the `compile.sh` script that writes the python module
 `ms2pipC.py`:  
 
 ```
-usage: ms2pipC.py [-h] [-s FILE] [-w FILE] [-c INT] <peptide file>
+usage: ms2pipC.py [-h] [-s FILE] [-w FILE.ext] [-c INT] <peptide file>
 
 positional arguments:
   <peptide file>  list of peptides
@@ -34,7 +35,7 @@ positional arguments:
 optional arguments:
   -h, --help      show this help message and exit
   -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE_vectors.pkl (optional)
+  -w FILE         write feature vectors to FILE.ext (.pkl or .h5) (optional)
   -c INT          number of cpu's to use
 ```
 
@@ -61,7 +62,7 @@ modification of the 3th amino acid and a Oxidation modification of the
 
 ###Writing feature vectors for model training
 
-To compile a (pickled) feature vector dataset you need to supply the
+To compile a feature vector dataset you need to supply the
 MS2 .mgf file (option `-s`) and the name of the file to write the feature
 vectors to (option `-w`) to `ms2pipC.py`.
 The `spec_id` column in the `<peptide file>` should match the TITLE field
@@ -86,12 +87,12 @@ converts a spectral library in `.msp` format into a spectrum `.mgf` file,
 The script
 
 ```
-usage: train_xgboost_c.py [-h] [-c INT] <vectors.pkl> <type>
+usage: train_xgboost_c.py [-h] [-c INT] <vectors.pkl or .h5> <type>
 
 XGBoost training
 
 positional arguments:
-  <_vectors.pkl>  feature vector file
+  <vectors.pkl or .h5>  feature vector file
   <type>         model type
 
 optional arguments:
@@ -99,7 +100,7 @@ optional arguments:
   -c INT         number of cpu's to use
 ```
 
-reads the pickled feature vector file `<_vectors.pkl>` and trains an
+reads the pickled feature vector file `<vectors.pkl or .h5>` and trains an
 XGBoost model. The `type` option should be "B" for b-ions and "Y" for
 y-ions.
 
