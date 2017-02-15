@@ -282,23 +282,23 @@ def get_feature_names():
 	for a in aminos:
 		names.append("Iy_"+a)
 	names += ['pmz','peplen','ionnumber','ionnumber_rel']
-	for c in ['mz','bas','hydro','heli','pI']:
+	for c in ['mz','bas','heli','hydro','pI']:
 		names.append('mean_'+c)
-	for c in ['mz','bas','hydro','heli','pI']:
+	for c in ['mz','bas','heli','hydro','pI']:
 		names.append("%s_ion"%c)
 		names.append("%s_ion_other"%c)
 		names.append("mean_%s_ion"%c)
 		names.append("mean_%s_ion_other"%c)
 
 	for pos in ['0','1','-2','-1']:
-		for c in ['mz','bas','hydro','heli','pI','P','D','E','K','R']:
+		for c in ['mz','bas','heli','hydro','pI','P','D','E','K','R']:
 			names.append("loc_"+pos+"_"+c)
 
 	for pos in ['i','i+1']:
 		for c in ['P','D','E','K','R']:
 			names.append("loc_"+pos+"_"+c)
 
-	for c in ['bas','hydro','heli','pI','mz']:
+	for c in ['bas','heli','hydro','pI','mz']:
 		for pos in ['i','i-1','i+1','i+2']:
 			names.append("loc_"+pos+"_"+c)
 
