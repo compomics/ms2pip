@@ -3,11 +3,17 @@ import numpy as np
 cimport numpy as np
 
 cdef extern from "ms2pipfeatures_c.c":
-	void init(char* amino_masses_fname, char* modifications_fname)
+	#uncomment for Omega
+	#void init(char* amino_masses_fname, char* modifications_fname, char* modifications_fname_sptm)
 	unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	unsigned int* get_v_bof(int peplen, unsigned short* peptide)
+	unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks)
+
+#uncomment for Omega
+#def ms2pip_init(amino_masses_fname, modifications_fname,modifications_fname_sptm):
+#	init(amino_masses_fname, modifications_fname,modifications_fname_sptm)
 
 def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
 	cdef unsigned int* result = get_v(len(peptide),&peptide[0],&modpeptide[0],charge)
@@ -15,9 +21,9 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[u
 	offset = 0
 	for i in range(len(peptide)-1):
 		v = []
-		for j in range(157):
+		for j in range(186):
 			v.append(result[j+offset])
-		offset+=157
+		offset+=186
 		r.append(v)
 	return r
 
@@ -26,6 +32,18 @@ def get_vector_bof(np.ndarray[unsigned short, ndim=1, mode="c"] peptide):
 	r = []
 	for i in range(19*len(peptide)):
 		r.append(result[i])
+	return r
+
+def get_vector_bof_chem(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, int charge):
+	cdef unsigned int* result = get_v_bof_chem(len(peptide),&peptide[0],charge)
+	r = []
+	offset = 0
+	for i in range(len(peptide)-1):
+		v = []
+		for j in range(128):
+			v.append(result[j+offset])
+		offset+=128
+		r.append(v)
 	return r
 
 def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks):
@@ -52,7 +70,7 @@ def get_score(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[un
 	#print mae
 	return mae
 
-def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks, charge):
+def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
 	cdef float* predictions = get_p(len(peptide),&peptide[0],&modpeptide[0],charge)
 	resultB = []
 	resultY = []

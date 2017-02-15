@@ -16,19 +16,25 @@ from scipy.stats import pearsonr
 
 import ms2pipfeatures_pyx
 
-fair_constant = 0.7
-def fair_obj(preds, dtrain):
+def tan_obj(preds, dtrain):
 	labels = dtrain.get_label()
-	x = (preds - labels)
-	den = abs(x) + fair_constant
-	grad = fair_constant * x / (den)
-	hess = fair_constant * fair_constant / (den * den)
+	x = (preds-labels)
+	grad = (np.exp(2*x)-1) / (np.exp(2*x)+1)
+	hess = (4*np.exp(2*x)) / (np.exp(2*x) + 1)^2 
 	return grad, hess
+
+def evalerror(preds, dtrain):
+    labels = dtrain.get_label()
+    # return a pair metric_name, result
+    # since preds are margin(before logistic transformation, cutoff at 0)
+    return 'pearsonr', pearsonr(preds,labels)[0]
 
 def main():
 
 	parser = argparse.ArgumentParser(description='XGBoost training')    
 	parser.add_argument('vectors',metavar='<_vectors.pkl>',
+					 help='feature vector file')
+	parser.add_argument('vectorstest',metavar='<_vectors.pkl>',
 					 help='feature vector file')
 	parser.add_argument('type',metavar='<type>',
 					 help='model type')
@@ -39,16 +45,29 @@ def main():
 	sys.stderr.write('loading data\n')
 	
 	vectors = pd.read_pickle(args.vectors)
-	vectors.dropna(inplace=True)
+	print len(vectors)
+	print vectors.charge
+	#vectors.dropna(inplace=True)
+	#vectors.to_pickle("/home/compomics/local/ddd.pkl")
+	#ddd
+	#vectors = pd.read_pickle("/home/compomics/local/ddd.pkl")
+	vectorstest = pd.read_pickle(args.vectorstest)
+	vectors=vectors[vectors.peplen==10]
+	vectors=vectors[(vectors.charge==2)|(vectors.charge==2)]
+	vectorstest=vectorstest[vectorstest.peplen==10]
+	vectorstest=vectorstest[(vectorstest.charge==2)|(vectorstest.charge==2)]
 	print len(vectors)
 	print vectors.head()
 	#print vectors['charge'].value_counts()
 	#tmp = vectors.pop("charge")
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")
+	targetsBtest = vectorstest.pop("targetsB")
+	targetsYtest = vectorstest.pop("targetsY")
 	#psmids = vectors.pop("psmid")
 	psmids = vectors["psmid"]
-	#vectors = vectors[['psmid','mean_pI','mean_pI_ion_other','loc_i-1_bas','loc_i_hydro','mean_mz_ion','mean_heli_ion','mean_bas','peplen','loc_i_heli','loc_i_pI','pmz','pI_ion_other','heli_ion_other','hydro_ion','loc_i_bas','loc_1_bas','mean_hydro_ion','ionnumber','loc_i+1_heli','mean_bas_ion_other','bas_ion_other','loc_i+1_bas','loc_0_bas','loc_i+1_hydro','mz_ion','heli_ion','pI_ion','mean_pI_ion','mean_bas_ion','bas_ion','ionnumber_rel','charge']]
+	psmidstest = vectorstest["psmid"]
+	#vectors = vectors[['psmid','loc_i+2_hydro','loc_i-1_hydro','Iy_H','loc_i+1_pI','Iy_G','peplen','mean_hydro_ion_other','loc_i_mz','loc_-2_mz','loc_-2_heli','Ib_D','loc_1_pI','loc_i+1_mz','Iy_A','loc_i+2_bas','loc_i-1_bas','Iy_E','Iy_V','Iy_Q','loc_-2_bas','mean_hydro','Ib_P','loc_-2_hydro','loc_i_bas','loc_1_mz','loc_0_heli','loc_i_pI','mean_hydro_ion','loc_0_pI','loc_0_mz','mean_mz_ion_other','Iy_R','mean_mz','mean_pI','loc_1_hydro','loc_1_bas','loc_1_heli','Ib_R','loc_i_heli','loc_0_hydro','mean_heli','loc_i_hydro','Ib_K','mean_pI_ion_other','loc_i+1_bas','Iy_K','Iy_P','mean_heli_ion_other','mean_mz_ion','Iy_I','loc_0_bas','mean_heli_ion','loc_i+1_hydro','Ib_H','mean_pI_ion','mz_ion_other','loc_i+1_heli','mean_bas','hydro_ion_other','mean_bas_ion_other','mean_bas_ion','pmz','pI_ion_other','hydro_ion','heli_ion_other','bas_ion_other','heli_ion','pI_ion','mz_ion','charge','bas_ion','ionnumber_rel']]
 	#targets['target'] = targets['target'].values+targets2['target']
 	#targets['target'] = np.log2(targets['target']+0.001)
 	#targets['target'] = np.sqrt(targets['target'])
@@ -75,17 +94,16 @@ def main():
 	#test_targets = targets.iloc[numTrain:]
 	
 	test_psms = upeps[:int(num_psms*0.2)]
-	
-	
+	#train_psms = np.random.choice(upeps[int(num_psms*0.2):],50000,replace=False)
 	#with open("testpsm","w") as f:
 	#	for t in test_psms:
 	#		f.write("%s\n"%t)
 	#dddd
 		
 	test_vectors = vectors[psmids.isin(test_psms)]
-	test_targets = targetsB[psmids.isin(test_psms)]
+	test_targets = targetsY[psmids.isin(test_psms)]
 	train_vectors = vectors[~psmids.isin(test_psms)]
-	train_targets = targetsB[~psmids.isin(test_psms)]
+	train_targets = targetsY[~psmids.isin(test_psms)]
 
 	print len(train_targets)
 	print train_targets.describe()
@@ -94,9 +112,11 @@ def main():
 
 	train_psmids = train_vectors.pop("psmid")
 	test_psmids = test_vectors.pop("psmid")
+	eval_psmids = vectorstest.pop("psmid")
 	
 	train_vectors = train_vectors.astype(np.float32)
 	test_vectors = test_vectors.astype(np.float32)
+	eval_vectors = vectorstest.astype(np.float32)
 
 	
 	#train_targets.hist()
@@ -104,12 +124,13 @@ def main():
 	
 	print len(train_vectors)
 	print len(test_vectors)
+	print len(eval_vectors)
 	
 	sys.stderr.write('loading data done\n')
 		
 	#rename features to understand decision tree dump
-	train_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
-	test_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
+	#train_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
+	#test_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
 	numf = len(train_vectors.columns.values)
 	
 	#create XGBoost datastructure
@@ -117,21 +138,22 @@ def main():
 	#xtrain = xgb.DMatrix(train_vectors, label=train_targets['y_4'])
 	#xeval = xgb.DMatrix(test_vectors, label=test_targets['y_4'])
 	xtrain = xgb.DMatrix(train_vectors, label=train_targets)
-	xeval = xgb.DMatrix(test_vectors, label=test_targets)
+	xtest = xgb.DMatrix(test_vectors, label=test_targets)
+	xeval = xgb.DMatrix(eval_vectors, label=targetsYtest)
 	sys.stderr.write('creating DMatrix done\n')
 	
-	evallist  = [(xeval,'eval')]
+	evallist  = [(xeval,'eval'),(xtest,'test')]
 	
 	
 	#set XGBoost parameters; make sure to tune well!
 	param = {"objective":"reg:linear",
 	         "nthread":int(args.num_cpu),
 	         "silent":1,
-	         "eta":0.6,
-	         #"max_delta_step":1,
-	         "max_depth":11,
-			 "gamma":1,
-			 "min_child_weight":100,
+	         "eta":0.3,
+	         "max_delta_step":8,
+	         "max_depth":9,
+			 "gamma":0,
+			 "min_child_weight":10000,
 			 "subsample":1,
 			 "colsample_bytree":1,
 			 #"scale_pos_weight":num_neg/num_pos
@@ -142,7 +164,7 @@ def main():
 	
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
-	bst = xgb.train( plst, xtrain, 2000, evallist,early_stopping_rounds=10)
+	bst = xgb.train( plst, xtrain, 500, evallist,early_stopping_rounds=10,feval=evalerror,maximize=True)
 	#bst = xgb.train( plst, xtrain, 30, evallist)
 	
 	#save model
@@ -169,13 +191,15 @@ def main():
 	predictions = bst.predict(xeval)
 	
 	tmp = pd.DataFrame()
-	tmp['target'] = list(test_targets.values)
+	tmp['target'] = list(targetsYtest.values)
 	tmp['predictions'] = predictions
 	tmp['psmid'] = list(test_psmids.values)
 	#tmp['charge'] = list(test_vectors.charge.values)
 	#tmp['peplen'] = list(test_vectors.peplen.values)
 	tmp.to_pickle('predictions.pkl')
 
+	ddd
+	
 	convert_model_to_c(bst,args,numf)
 		
 	for ch in range(8,20):
