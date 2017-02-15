@@ -95,6 +95,7 @@ def main():
 			#all_result.to_pickle("all_result.pkl")
 			all_result.to_csv("all_result.csv",index=False)
 
+#peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
 	
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
@@ -198,7 +199,7 @@ def process_peptides(args,data):
 	else:
 		return result
 
-
+#peak intensity prediction with spectrum file (for evaluation)
 def process_file(args,data):
 
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
@@ -213,22 +214,7 @@ def process_file(args,data):
 	modifications = specdict['modifications']
 
 	# cols contains the names of the computed features
-	# this should be replaced by the actual feature names
-	#cols = ["F"+str(a) for a in range(63)]
-	cols = []
-	for ii in range(10):
-		for aa in aminos:
-			cols.append("f_"+str(ii)+"_"+aa)
-	#cols = ["F"+str(a) for a in range(190)]
-	#cols.append("pmz")
-	#cols.append("charge")
-
 	cols_n = get_feature_names()
-
-	#bst = xgb.Booster({'nthread':23}) #init model
-	# bst.load_model('vectors_vectors.pkl.xgboost') # load data
-	#xgb.plot_tree(bst)
-	#plt.show()
 
 	title = ""
 	parent_mz = 0.
@@ -315,23 +301,13 @@ def process_file(args,data):
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				#ma = np.max(b+y)
-				#if ma == 0: continue
-				#b = np.array(b) / ma
-				#y = np.array(y) / ma
-				#b= np.log2(b+1)
-				#y= np.log2(y+1)
+				
+				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
 				#print bst.predict(xgb.DMatrix(tmp))
 
 				if args.vector_file:
-					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector_bof_chem(peptide,charge),columns=cols_n,dtype=np.uint16)
-					#r = ms2pipfeatures_pyx.get_vector_bof(peptide)
-					#r.append(parent_mz)
-					#r.append(charge)
-					#tmp=pd.DataFrame([r]*(len(peptide)-1),columns=cols,dtype=np.uint16)
-					#tmp = pd.concat([tmp,tmp2],axis=1)
-					#tmp['cleavge_pos'] = [i for i in range(len(peptide)-1)]
+					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols_n,dtype=np.uint16)
 					tmp["targetsB"] = b
 					tmp["targetsY"] = y
 					tmp["psmid"] = [title]*len(tmp)
@@ -344,14 +320,6 @@ def process_file(args,data):
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
 					resultY = resultY[::-1]
-					#v = ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge)
-					#print v
-					#xv = xgb.DMatrix(v)
-					#print
-					#print resultB
-					#print resultY
-					#print bst.predict(xv)
-					#ddddd
 
 					tmp = pd.DataFrame()
 					tmp['peplen'] = [peplen]*(2*len(b))
@@ -370,7 +338,7 @@ def process_file(args,data):
 	else:
 		return result
 
-
+#feature names
 def get_feature_names():
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 
@@ -431,6 +399,7 @@ def get_feature_names():
 
 	return names
 
+#feature names for the fixed peptide length feature vectors
 def get_feature_names_chem(peplen):
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 
