@@ -12,7 +12,7 @@ from scipy.stats import pearsonr
 
 def main():
 
-	parser = argparse.ArgumentParser()    
+	parser = argparse.ArgumentParser()
 	parser.add_argument('pep_file', metavar='<peptide file>',
 					 help='list of peptides')
 	parser.add_argument('-s', metavar='FILE',action="store", dest='spec_file',
@@ -25,7 +25,7 @@ def main():
 	args = parser.parse_args()
 
 	num_cpu = int(args.num_cpu)
-		
+
 	# read peptide information
 	# the file contains the following columns: spec_id, modifications, peptide and charge
 	data = pd.read_csv(	args.pep_file,
@@ -33,7 +33,7 @@ def main():
 						index_col=False,
 						dtype={'spec_id':str,'modifications':str})
 	data = data.fillna('-') # for some reason the missing values are converted to float otherwise
-			
+
 	# processing is parallelized at the spectrum TITLE level
 	sys.stderr.write('scanning spectrum file...')
 	titles = scan_spectrum_file(args.spec_file)
@@ -41,9 +41,9 @@ def main():
 	sys.stderr.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
 	sys.stderr.write('starting workers...\n')
-	
+
 	myPool = multiprocessing.Pool(num_cpu)
-	
+
 	results = []
 	i = 0
 	for i in range(num_cpu-1):
@@ -64,7 +64,7 @@ def main():
 	results.append(myPool.apply_async(process_file,args=(
 									args,
 									data[data.spec_id.isin(tmp)]
-									)))		
+									)))
 
 	myPool.close()
 	myPool.join()
@@ -72,14 +72,21 @@ def main():
 	# workers done...merging results
 	sys.stderr.write('\nmerging results and writing files...\n')
 	if args.spec_file:
-		if args.vector_file:			
+		if args.vector_file:
 			# read feature vectors from workers and concatenate
 			all_vectors = []
 			for r in results:
-				all_vectors.extend(r.get())			
+				all_vectors.extend(r.get())
 			all_vectors = pd.concat(all_vectors)
-			# write result
-			all_vectors.to_pickle(args.vector_file +'_vectors.pkl')
+  			# write result. write format depends on extension:
+  			ext = args.vector_file.split('.')[-1]
+  			if ext == 'pkl':
+				all_vectors.to_pickle(args.vector_file)
+  			elif ext == 'h5':
+				all_vectors.to_hdf(args.vector_file, 'table')
+    			# 'table' is a tag used to read back the
+  			else: # if none of the two, default to .h5
+				all_vectors.to_hdf(args.vector_file +'_vectors.h5', 'table')
 		else:
 			all_result = []
 			for r in results:
@@ -193,7 +200,7 @@ def process_peptides(args,data):
 
 
 def process_file(args,data):
-	
+
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 	a_map = {}
@@ -215,14 +222,14 @@ def process_file(args,data):
 	#cols = ["F"+str(a) for a in range(190)]
 	#cols.append("pmz")
 	#cols.append("charge")
-	
-	cols_n = get_feature_names_chem(10)
+
+	cols_n = get_feature_names()
 
 	#bst = xgb.Booster({'nthread':23}) #init model
-	#bst.load_model('vectors_vectors.pkl.xgboost') # load data
+	# bst.load_model('vectors_vectors.pkl.xgboost') # load data
 	#xgb.plot_tree(bst)
 	#plt.show()
-	
+
 	title = ""
 	parent_mz = 0.
 	charge = 0
@@ -260,7 +267,7 @@ def process_file(args,data):
 			elif row[0] == "B":
 				if row[:10] == "BEGIN IONS":
 					msms = []
-					peaks = []			
+					peaks = []
 			elif row[0] == "C":
 				if row[:6] == "CHARGE":
 					charge = int(row[7:9].replace("+",""))
@@ -271,24 +278,22 @@ def process_file(args,data):
 				#process
 				if not title in peptides: continue
 				#if title != "human684921": continue
-				
+
 				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
-				
+
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
 				mods = modifications[title]
 
-				if len(peptide) != 10: continue
-
-				#processing unmodified identification 
+				#processing unmodified identification
 				#if mods != '-': continue
 				#processing charge 2 only !!!!!!!!!!!!!!!!!!!!!!!!
 				#if charge != 2: continue
 
 				# convert peptide string to integer list to speed up C code
 				peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
-				
-				# modpeptide is the same as peptide but with modified amino acids 
+
+				# modpeptide is the same as peptide but with modified amino acids
 				# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
 				modpeptide = np.array(peptide[:],dtype=np.uint16)
 				peplen = len(peptide)
@@ -298,7 +303,7 @@ def process_file(args,data):
 					for i in range(0,len(l),2):
 						if l[i+1] == "Oxidation":
 							modpeptide[int(l[i])] = 19
-				if k: 
+				if k:
 					continue
 
 				# normalize and convert MS2 peaks
@@ -331,7 +336,7 @@ def process_file(args,data):
 					tmp["targetsY"] = y
 					tmp["psmid"] = [title]*len(tmp)
 					vectors.append(tmp)
-				else:				
+				else:
 					# predict the b- and y-ion intensities from the peptide
 					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,msms,peaks,charge)
 					for ii in range(len(resultB)):
@@ -347,11 +352,7 @@ def process_file(args,data):
 					#print resultY
 					#print bst.predict(xv)
 					#ddddd
-					#for ii in range(len(resultB)):
-					#	resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
-					#for ii in range(len(resultY)):
-					#	resultY[ii] = resultY[ii]+0.5
-					
+
 					tmp = pd.DataFrame()
 					tmp['peplen'] = [peplen]*(2*len(b))
 					tmp['charge'] = [charge]*(2*len(b))
@@ -379,8 +380,9 @@ def get_feature_names():
 	for a in aminos:
 		names.append("Iy_"+a)
 	names += ['pmz','peplen','ionnumber','ionnumber_rel']
-	for c in ['mz','bas','hydro','heli','pI']:
+	for c in ['mz','bas','heli','hydro','pI']:
 		names.append('mean_'+c)
+
 	for c in ['bas','hydro','heli','pI']:
 		names.append('max_'+c)
 	for c in ['bas','hydro','heli','pI']:
@@ -414,17 +416,17 @@ def get_feature_names():
 		names.append('ysum'+c)
 
 	for pos in ['0','1','-2','-1']:
-		for c in ['mz','bas','hydro','heli','pI','P','D','E','K','R']:
+		for c in ['mz','bas','heli','hydro','pI','P','D','E','K','R']:
 			names.append("loc_"+pos+"_"+c)
 
 	for pos in ['i','i+1']:
 		for c in ['P','D','E','K','R']:
 			names.append("loc_"+pos+"_"+c)
 
-	for c in ['bas','hydro','heli','pI','mz']:
+	for c in ['bas','heli','hydro','pI','mz']:
 		for pos in ['i','i-1','i+1','i+2']:
 			names.append("loc_"+pos+"_"+c)
-				
+
 	names.append("charge")
 
 	return names
@@ -492,16 +494,15 @@ def scan_spectrum_file(filename):
 
 def print_logo():
 	logo = """
- _____ _____ ___ _____ _____ _____ 
+ _____ _____ ___ _____ _____ _____
 |     |   __|_  |  _  |     |  _  |
 | | | |__   |  _|   __|-   -|   __|
-|_|_|_|_____|___|__|  |_____|__|   
-                                   
+|_|_|_|_____|___|__|  |_____|__|
+
            """
 	print logo
 	print "by sven.degroeve@ugent.be\n"
 
 if __name__ == "__main__":
 	print_logo()
-	main()        
-
+	main()
