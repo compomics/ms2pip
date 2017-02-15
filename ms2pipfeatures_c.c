@@ -97,8 +97,6 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 	int mem_pos;
 	float tolmz = 0.02;
 	float max, tmp2;
-	int c_stretch;
-	int last_hit;
 	
 	//b-ions
 	for (i=0; i < 2*peplen; i++) {
@@ -204,14 +202,8 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 //Experiment: features that assume fixed length peptide datasets
 unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	{
-	int i,j,tmp;
+	int i,j;
 	float mz;
-	int msms_pos;
-	int mem_pos;
-	float tolmz = 0.02;
-	unsigned short max, tmp2;
-	int c_stretch;
-	int last_hit;
 	
 	unsigned int max_bas_b = 0;
 	unsigned int max_heli_b = 0;
@@ -286,7 +278,6 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	int sum_heli = 0;
 	int sum_hydro = 0;
 	int sum_pI = 0;
-	int offset = 0;
 	int fnum = 0;
 	
 	for (i=0; i < peplen-1; i++) {
@@ -465,14 +456,8 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 //compute feature vectors from peptide
 unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	{
-	int i,j,tmp;
+	int i,j;
 	float mz;
-	int msms_pos;
-	int mem_pos;
-	float tolmz = 0.02;
-	unsigned short max, tmp2;
-	int c_stretch;
-	int last_hit;
 	
 	int max_bas_b = 0;
 	int max_heli_b = 0;
@@ -560,7 +545,6 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 	int sum_heli = 0;
 	int sum_hydro = 0;
 	int sum_pI = 0;
-	int offset = 0;
 	int fnum = 0;
 	
 	for (i=0; i < peplen-1; i++) {
@@ -996,14 +980,8 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 //compute feature vector from peptide + predict intensities
 float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	{
-	int i,j,tmp;
+	int i,j;
 	float mz;
-	int msms_pos;
-	int mem_pos;
-	float tolmz = 0.02;
-	unsigned short max, tmp2;
-	int c_stretch;
-	int last_hit;
 	
 	unsigned int buf1[19];
 	unsigned int buf2[19];
@@ -1045,7 +1023,6 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 	int sum_heli = 0;
 	int sum_hydro = 0;
 	int sum_pI = 0;
-	int offset = 0;
 	for (i=0; i < peplen-1; i++) {
 		int fnum = 0;
 		for (j=0; j < 19; j++) {
