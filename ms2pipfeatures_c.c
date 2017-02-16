@@ -422,14 +422,14 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 		v[fnum++] = hydro[peptide[i]]*hydro[peptide[i+1]];
 		v[fnum++] = pI[peptide[i]]*pI[peptide[i+1]];
 
-		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]];
-		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]];
-		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]];
-		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]];
-		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]];
+		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]]+1000;
+		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]]+1000;
+		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]]+1000;
+		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]]+1000;
+		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]]+1000;
+		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]]+1000;
+		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]]+1000;
+		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]]+1000;
 
 		v[fnum++] = bas[peptide[i]]+bas[peptide[0]];
 		v[fnum++] = heli[peptide[i]]+heli[peptide[0]];
@@ -698,14 +698,14 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		v[fnum++] = hydro[peptide[i]]*hydro[peptide[i+1]];
 		v[fnum++] = pI[peptide[i]]*pI[peptide[i+1]];
 
-		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]];
-		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]];
-		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]];
-		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]];
-		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]];
+		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]]+1000;
+		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]]+1000;
+		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]]+1000;
+		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]]+1000;
+		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]]+1000;
+		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]]+1000;
+		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]]+1000;
+		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]]+1000;
 
 		v[fnum++] = bas[peptide[i]]+bas[peptide[0]];
 		v[fnum++] = heli[peptide[i]]+heli[peptide[0]];
