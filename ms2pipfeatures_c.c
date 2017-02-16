@@ -435,10 +435,10 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 		v[fnum++] = heli[peptide[i]]+heli[peptide[0]];
 		v[fnum++] = hydro[peptide[i]]+hydro[peptide[0]];
 		v[fnum++] = pI[peptide[i]]+pI[peptide[0]];
-		v[fnum++] = bas[peptide[-1]]+bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[-1]]+heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[-1]]+hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[-1]]+pI[peptide[i+1]];
+		v[fnum++] = bas[peptide[peplen-1]]+bas[peptide[i+1]];
+		v[fnum++] = heli[peptide[peplen-1]]+heli[peptide[i+1]];
+		v[fnum++] = hydro[peptide[peplen-1]]+hydro[peptide[i+1]];
+		v[fnum++] = pI[peptide[peplen-1]]+pI[peptide[i+1]];
 
 		for (j=0; j < peplen; j++) {
 			v[fnum++]=amino_F[peptide[j]];
@@ -711,10 +711,10 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		v[fnum++] = heli[peptide[i]]+heli[peptide[0]];
 		v[fnum++] = hydro[peptide[i]]+hydro[peptide[0]];
 		v[fnum++] = pI[peptide[i]]+pI[peptide[0]];
-		v[fnum++] = bas[peptide[-1]]+bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[-1]]+heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[-1]]+hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[-1]]+pI[peptide[i+1]];
+		v[fnum++] = bas[peptide[peplen-1]]+bas[peptide[i+1]];
+		v[fnum++] = heli[peptide[peplen-1]]+heli[peptide[i+1]];
+		v[fnum++] = hydro[peptide[peplen-1]]+hydro[peptide[i+1]];
+		v[fnum++] = pI[peptide[peplen-1]]+pI[peptide[i+1]];
 
 		int pos = 0;
 		v[fnum++] = amino_F[modpeptide[pos]];
