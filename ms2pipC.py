@@ -97,7 +97,7 @@ def main():
 
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
-	
+
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 	a_map = {}
@@ -110,13 +110,13 @@ def process_peptides(args,data):
 	modifications = specdict['modifications']
 
 	for (peptide,mods) in zip(peptides,modifications):
-				
+
 		peptide = peptide.replace('L','I')
 
 		# convert peptide string to integer list to speed up C code
 		peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
-		
-		# modpeptide is the same as peptide but with modified amino acids 
+
+		# modpeptide is the same as peptide but with modified amino acids
 		# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
 		modpeptide = np.array(peptide[:],dtype=np.uint16)
 		peplen = len(peptide)
@@ -126,7 +126,7 @@ def process_peptides(args,data):
 			for i in range(0,len(l),2):
 				if l[i+1] == "Oxidation":
 					modpeptide[int(l[i])] = 19
-		if k: 
+		if k:
 			continue
 
 		"""
@@ -161,7 +161,7 @@ def process_peptides(args,data):
 					tmp["targetsY"] = y
 					tmp["psmid"] = [title]*len(tmp)
 					vectors.append(tmp)
-				else:				
+				else:
 					# predict the b- and y-ion intensities from the peptide
 					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,np.array(),np.array(),charge)
 					for ii in range(len(resultB)):
@@ -181,7 +181,7 @@ def process_peptides(args,data):
 						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
-	
+
 					tmp = pd.DataFrame()
 					tmp['peplen'] = [peplen]*(2*len(b))
 					tmp['charge'] = [charge]*(2*len(b))
@@ -301,7 +301,7 @@ def process_file(args,data):
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				
+
 				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
 				#print bst.predict(xgb.DMatrix(tmp))
@@ -351,36 +351,36 @@ def get_feature_names():
 	for c in ['mz','bas','heli','hydro','pI']:
 		names.append('mean_'+c)
 
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('max_'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('min_'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('max'+c+'_b')
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('min'+c+'_b')
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('max'+c+'_y')
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('min'+c+'_y')
-		
-	for c in ['mz','bas','hydro','heli','pI']:
+
+	for c in ['mz','bas','heli','hydro','pI']:
 		names.append("%s_ion"%c)
 		names.append("%s_ion_other"%c)
 		names.append("mean_%s_ion"%c)
 		names.append("mean_%s_ion_other"%c)
 
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('plus_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('times_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('minus1_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('minus2_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('bsum'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('ysum'+c)
 
 	for pos in ['0','1','-2','-1']:
@@ -405,44 +405,44 @@ def get_feature_names_chem(peplen):
 
 	names = []
 	names += ['pmz','peplen','ionnumber','ionnumber_rel']
-	for c in ['mz','bas','hydro','heli','pI']:
+	for c in ['mz','bas','heli','hydro','pI']:
 		names.append('mean_'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('max_'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('min_'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('max'+c+'_b')
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('min'+c+'_b')
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('max'+c+'_y')
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('min'+c+'_y')
-		
-	for c in ['mz','bas','hydro','heli','pI']:
+
+	for c in ['mz','bas','heli','hydro','pI']:
 		names.append("%s_ion"%c)
 		names.append("%s_ion_other"%c)
 		names.append("mean_%s_ion"%c)
 		names.append("mean_%s_ion_other"%c)
 
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('plus_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('times_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('minus1_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('minus2_cleave'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('bsum'+c)
-	for c in ['bas','hydro','heli','pI']:
+	for c in ['bas','heli','hydro','pI']:
 		names.append('ysum'+c)
 
 	for i in range(peplen):
-		for c in ['mz','bas','hydro','heli','pI']:
+		for c in ['mz','bas','heli','hydro','pI']:
 			names.append("fix_"+c+"_"+str(i))
-			
+
 	names.append("charge")
 
 	return names
