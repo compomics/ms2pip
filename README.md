@@ -69,6 +69,11 @@ The `spec_id` column in the `<peptide file>` should match the TITLE field
 of the corresponding MS2 spectrum in the .mgf file and is used to find
 the targets for the feature vectors.
 
+####Testing feature extraction
+In the folder `tests`, run `pytest`. This will run the tests in
+`test_features.py`, which verify if the feature and target extraction are
+working properly. (The tests must be updated when we add or remove features!)
+To do this the `pytest` package must be installed (`pip install pytest`)
 
 ###Convert spectral library .msp
 

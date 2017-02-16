@@ -1,0 +1,12 @@
+BEGIN IONS
+TITLE=peptide1
+CHARGE=2
+PEPMASS=475.137295
+72.044350 100 # A+H b1
+148.060393 600 # E+OH b3
+232.074995 300 # AC+H b2
+263.087336 400 # DE+OH y2
+347.101937 500 # ACD+H y3
+423.117981 200 # CDE+OH y1
+END IONS
+# all mz calculated the same way ms2pip looks for them
