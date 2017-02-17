@@ -81,12 +81,13 @@ def main():
   			# write result. write format depends on extension:
   			ext = args.vector_file.split('.')[-1]
   			if ext == 'pkl':
-				all_vectors.to_pickle(args.vector_file)
+				print all_vectors.head()
+				all_vectors.to_pickle(args.vector_file+'.pkl')
   			elif ext == 'h5':
 				all_vectors.to_hdf(args.vector_file, 'table')
     			# 'table' is a tag used to read back the
   			else: # if none of the two, default to .h5
-				all_vectors.to_hdf(args.vector_file +'_vectors.h5', 'table')
+				all_vectors.to_hdf(args.vector_file, 'table')
 		else:
 			all_result = []
 			for r in results:
