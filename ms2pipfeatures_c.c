@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "models/modelB.c"
-//#include "models/modelY.c"
+#include "models/modelB.c"
+#include "models/modelY.c"
 
-#include "models/dB.c"
-#include "models/dY.c"
+//#include "models/dB.c"
+//#include "models/dY.c"
 
 
 float membuffer[10000];
@@ -38,7 +38,7 @@ void init(char* amino_masses_fname, char* modifications_fname, char* modificatio
 	int numptm;
 	int before;
 	int after;
-		
+
 	FILE* f = fopen(modifications_fname,"rt");
 	fscanf(f,"%i\n",&nummods);
 	fclose(f);
@@ -57,8 +57,8 @@ void init(char* amino_masses_fname, char* modifications_fname, char* modificatio
 		amino_F[i] = (unsigned int) (amino_masses[i]-57.021464);
 		}
 	fscanf(f,"%f\n",&ntermmod);
-	fclose(f);  
-	
+	fclose(f);
+
 	for (i=0; i< 19; i++) {
 		amino_masses[19+i]=amino_masses[i];
 		amino_F[19+i] = amino_F[i];
@@ -72,9 +72,9 @@ void init(char* amino_masses_fname, char* modifications_fname, char* modificatio
 		if (after > 18) {
 			amino_masses[j] = amino_masses[before]+mz;
 			amino_F[j++] = (unsigned int) (amino_masses[before]+mz - 57.021464);
-			}	
+			}
 		}
-	fclose(f); 
+	fclose(f);
 	f = fopen(modifications_fname,"rt");
 	fscanf(f,"%i\n",&nummods);
 	for (i=0; i< nummods; i++) {
@@ -82,9 +82,9 @@ void init(char* amino_masses_fname, char* modifications_fname, char* modificatio
 		if (after > 18) {
 			amino_masses[j] = amino_masses[before]+mz;
 			amino_F[j++] = (unsigned int) (amino_masses[before]+mz - 57.021464);
-			}	
+			}
 		}
-	fclose(f); 
+	fclose(f);
 }
 */
 
@@ -97,19 +97,19 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 	int mem_pos;
 	float tolmz = 0.02;
 	float max, tmp2;
-	
+
 	//b-ions
 	for (i=0; i < 2*peplen; i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 		//ions[i] = 0; //HARD CODED!!
 	}
-	
+
 	mz = 0.;
 	for (i=0; i < peplen-1; i++) {
 		mz += amino_masses[modpeptide[i]];
 		membuffer[i] = mz+1.007236;
 	}
-	
+
 	msms_pos = 0;
 	mem_pos = 0;
 	while (1) {
@@ -136,7 +136,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 						max = tmp2;
 					}
 					tmp += 1;
-					if (tmp == numpeaks) { 
+					if (tmp == numpeaks) {
 						break;
 					}
 				}
@@ -156,8 +156,8 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 		//printf("%f ",membuffer[j]);
 		j++;
 	}
-	
-	
+
+
 
 	msms_pos = 0;
 	mem_pos = 0;
@@ -185,7 +185,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 						max = tmp2;
 					}
 					tmp += 1;
-					if (tmp == numpeaks) { 
+					if (tmp == numpeaks) {
 						break;
 					}
 				}
@@ -204,7 +204,7 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	{
 	int i,j;
 	float mz;
-	
+
 	unsigned int max_bas_b = 0;
 	unsigned int max_heli_b = 0;
 	unsigned int max_hydro_b = 0;
@@ -266,20 +266,20 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 			min_pI = pI[peptide[i]];
 		}
 	}
-	
+
 	int mean_mz = (int) ((float)mz/peplen);
 	int mean_bas = (int) ((float)total_bas/peplen);
 	int mean_heli = (int) ((float)total_heli/peplen);
 	int mean_hydro = (int) ((float)total_hydro/peplen);
 	int mean_pI = (int) ((float)total_pI/peplen);
-	
+
 	float mzb = 0.;
 	int sum_bas = 0;
 	int sum_heli = 0;
 	int sum_hydro = 0;
 	int sum_pI = 0;
 	int fnum = 0;
-	
+
 	for (i=0; i < peplen-1; i++) {
 		max_bas_b = 0;
 		max_heli_b = 0;
@@ -422,23 +422,23 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 		v[fnum++] = hydro[peptide[i]]*hydro[peptide[i+1]];
 		v[fnum++] = pI[peptide[i]]*pI[peptide[i+1]];
 
-		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]];
-		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]];
-		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]];
-		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]];
-		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]];
+		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]]+1000;
+		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]]+1000;
+		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]]+1000;
+		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]]+1000;
+		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]]+1000;
+		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]]+1000;
+		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]]+1000;
+		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]]+1000;
 
 		v[fnum++] = bas[peptide[i]]+bas[peptide[0]];
 		v[fnum++] = heli[peptide[i]]+heli[peptide[0]];
 		v[fnum++] = hydro[peptide[i]]+hydro[peptide[0]];
 		v[fnum++] = pI[peptide[i]]+pI[peptide[0]];
-		v[fnum++] = bas[peptide[-1]]+bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[-1]]+heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[-1]]+hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[-1]]+pI[peptide[i+1]];
+		v[fnum++] = bas[peptide[peplen-1]]+bas[peptide[i+1]];
+		v[fnum++] = heli[peptide[peplen-1]]+heli[peptide[i+1]];
+		v[fnum++] = hydro[peptide[peplen-1]]+hydro[peptide[i+1]];
+		v[fnum++] = pI[peptide[peplen-1]]+pI[peptide[i+1]];
 
 		for (j=0; j < peplen; j++) {
 			v[fnum++]=amino_F[peptide[j]];
@@ -449,7 +449,7 @@ unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 		}
 
 		v[fnum++] = charge;
-	}	
+	}
 	return v;
 }
 
@@ -458,7 +458,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 	{
 	int i,j;
 	float mz;
-	
+
 	int max_bas_b = 0;
 	int max_heli_b = 0;
 	int max_hydro_b = 0;
@@ -478,7 +478,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 
 	unsigned int buf2[19];
 	unsigned int buf3[19];
-	
+
 	for (i=0; i < 19; i++) {
 		buf2[i] = 0;
 		buf3[i] = 0;
@@ -533,20 +533,20 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 			min_pI = pI[peptide[i]];
 		}
 	}
-	
+
 	int mean_mz = (int) ((float)mz/peplen);
 	int mean_bas = (int) ((float)total_bas/peplen);
 	int mean_heli = (int) ((float)total_heli/peplen);
 	int mean_hydro = (int) ((float)total_hydro/peplen);
 	int mean_pI = (int) ((float)total_pI/peplen);
-	
+
 	float mzb = 0.;
 	int sum_bas = 0;
 	int sum_heli = 0;
 	int sum_hydro = 0;
 	int sum_pI = 0;
 	int fnum = 0;
-	
+
 	for (i=0; i < peplen-1; i++) {
 		max_bas_b = 0;
 		max_heli_b = 0;
@@ -571,7 +571,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		}
 		buf3[peptide[i]]--;
 		for (j=0; j < 19; j++) {
-			v[fnum++] = (int) 100*(((float) buf3[j])/(peplen-i+1));
+			v[fnum++] = (int) 100*(((float) buf3[j])/(peplen-i-1));
 		}
 
 		v[fnum++] = mz;
@@ -698,30 +698,30 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		v[fnum++] = hydro[peptide[i]]*hydro[peptide[i+1]];
 		v[fnum++] = pI[peptide[i]]*pI[peptide[i+1]];
 
-		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]];
-		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]];
-		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]];
-		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]];
-		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]];
+		v[fnum++] = bas[peptide[i]]-bas[peptide[i+1]]+1000;
+		v[fnum++] = heli[peptide[i]]-heli[peptide[i+1]]+1000;
+		v[fnum++] = hydro[peptide[i]]-hydro[peptide[i+1]]+1000;
+		v[fnum++] = pI[peptide[i]]-pI[peptide[i+1]]+1000;
+		v[fnum++] = bas[peptide[i+1]]-bas[peptide[i]]+1000;
+		v[fnum++] = heli[peptide[i+1]]-heli[peptide[i]]+1000;
+		v[fnum++] = hydro[peptide[i+1]]-hydro[peptide[i]]+1000;
+		v[fnum++] = pI[peptide[i+1]]-pI[peptide[i]]+1000;
 
 		v[fnum++] = bas[peptide[i]]+bas[peptide[0]];
 		v[fnum++] = heli[peptide[i]]+heli[peptide[0]];
 		v[fnum++] = hydro[peptide[i]]+hydro[peptide[0]];
 		v[fnum++] = pI[peptide[i]]+pI[peptide[0]];
-		v[fnum++] = bas[peptide[-1]]+bas[peptide[i+1]];
-		v[fnum++] = heli[peptide[-1]]+heli[peptide[i+1]];
-		v[fnum++] = hydro[peptide[-1]]+hydro[peptide[i+1]];
-		v[fnum++] = pI[peptide[-1]]+pI[peptide[i+1]];
+		v[fnum++] = bas[peptide[peplen-1]]+bas[peptide[i+1]];
+		v[fnum++] = heli[peptide[peplen-1]]+heli[peptide[i+1]];
+		v[fnum++] = hydro[peptide[peplen-1]]+hydro[peptide[i+1]];
+		v[fnum++] = pI[peptide[peplen-1]]+pI[peptide[i+1]];
 
 		int pos = 0;
 		v[fnum++] = amino_F[modpeptide[pos]];
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -753,7 +753,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -779,13 +779,13 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 			v[fnum] = 1;
 		}
 		fnum++;
-		
+
 		pos = peplen-2;
 		v[fnum++] = amino_F[modpeptide[pos]];
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -817,7 +817,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -903,7 +903,7 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		}
 		else {
 			v[fnum++] = bas[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = bas[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = bas[peptide[i+1]];
@@ -911,69 +911,69 @@ unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpept
 		else {
 			v[fnum++] = bas[peptide[i+2]];
 		}
-			
+
 		v[fnum++] = heli[peptide[i]];
 		if (i==0) {
 			v[fnum++] = heli[peptide[i]];
 		}
 		else {
 			v[fnum++] = heli[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = heli[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = heli[peptide[i+1]];
 		}
 		else {
 			v[fnum++] = heli[peptide[i+2]];
-		}	
-		
+		}
+
 		v[fnum++] = hydro[peptide[i]];
 		if (i==0) {
 			v[fnum++] = hydro[peptide[i]];
 		}
 		else {
 			v[fnum++] = hydro[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = hydro[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = hydro[peptide[i+1]];
 		}
 		else {
 			v[fnum++] = hydro[peptide[i+2]];
-		}	
-		
+		}
+
 		v[fnum++] = pI[peptide[i]];
 		if (i==0) {
 			v[fnum++] = pI[peptide[i]];
 		}
 		else {
 			v[fnum++] = pI[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = pI[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = pI[peptide[i+1]];
 		}
 		else {
 			v[fnum++] = pI[peptide[i+2]];
-		}	
-		
+		}
+
 		v[fnum++] = amino_F[modpeptide[i]];
 		if (i==0) {
 			v[fnum++] = amino_F[modpeptide[i]];
 		}
 		else {
 			v[fnum++] = amino_F[modpeptide[i-1]];
-		}	
+		}
 		v[fnum++] = amino_F[modpeptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = amino_F[modpeptide[i+1]];
 		}
 		else {
 			v[fnum++] = amino_F[modpeptide[i+2]];
-		}	
+		}
 
 		v[fnum++] = charge;
-	}	
+	}
 	return v;
 }
 
@@ -982,11 +982,11 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 	{
 	int i,j;
 	float mz;
-	
+
 	unsigned int buf1[19];
 	unsigned int buf2[19];
 	unsigned int buf3[19];
-	
+
 	for (i=0; i < 19; i++) {
 		buf1[i] = 0;
 		buf2[i] = 0;
@@ -1011,13 +1011,13 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		total_hydro += hydro[peptide[i]];
 		total_pI += pI[peptide[i]];
 	}
-	
+
 	int mean_mz = (int) ((float)mz/peplen);
 	int mean_bas = (int) ((float)total_bas/peplen);
 	int mean_heli = (int) ((float)total_heli/peplen);
 	int mean_hydro = (int) ((float)total_hydro/peplen);
 	int mean_pI = (int) ((float)total_pI/peplen);
-	
+
 	float mzb = 0.;
 	int sum_bas = 0;
 	int sum_heli = 0;
@@ -1079,7 +1079,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -1111,7 +1111,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -1137,13 +1137,13 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 			v[fnum] = 1;
 		}
 		fnum++;
-		
+
 		pos = peplen-2;
 		v[fnum++] = amino_F[modpeptide[pos]];
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -1175,7 +1175,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		v[fnum++] = bas[peptide[pos]];
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
-		v[fnum++] = pI[peptide[pos]];			
+		v[fnum++] = pI[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -1261,7 +1261,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		}
 		else {
 			v[fnum++] = bas[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = bas[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = bas[peptide[i+1]];
@@ -1269,72 +1269,71 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		else {
 			v[fnum++] = bas[peptide[i+2]];
 		}
-			
+
 		v[fnum++] = heli[peptide[i]];
 		if (i==0) {
 			v[fnum++] = heli[peptide[i]];
 		}
 		else {
 			v[fnum++] = heli[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = heli[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = heli[peptide[i+1]];
 		}
 		else {
 			v[fnum++] = heli[peptide[i+2]];
-		}	
-		
+		}
+
 		v[fnum++] = hydro[peptide[i]];
 		if (i==0) {
 			v[fnum++] = hydro[peptide[i]];
 		}
 		else {
 			v[fnum++] = hydro[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = hydro[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = hydro[peptide[i+1]];
 		}
 		else {
 			v[fnum++] = hydro[peptide[i+2]];
-		}	
-		
+		}
+
 		v[fnum++] = pI[peptide[i]];
 		if (i==0) {
 			v[fnum++] = pI[peptide[i]];
 		}
 		else {
 			v[fnum++] = pI[peptide[i-1]];
-		}	
+		}
 		v[fnum++] = pI[peptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = pI[peptide[i+1]];
 		}
 		else {
 			v[fnum++] = pI[peptide[i+2]];
-		}	
-		
+		}
+
 		v[fnum++] = amino_F[modpeptide[i]];
 		if (i==0) {
 			v[fnum++] = amino_F[modpeptide[i]];
 		}
 		else {
 			v[fnum++] = amino_F[modpeptide[i-1]];
-		}	
+		}
 		v[fnum++] = amino_F[modpeptide[i+1]];
 		if (i==(peplen-2)) {
 			v[fnum++] = amino_F[modpeptide[i+1]];
 		}
 		else {
 			v[fnum++] = amino_F[modpeptide[i+2]];
-		}	
+		}
 
-		v[fnum++] = charge;	
-				
+		v[fnum++] = charge;
+
 		predictions[i] = score_B(v);
-		predictions[2*peplen-2-i] = score_Y(v);		
-	}	
+		predictions[2*peplen-2-i] = score_Y(v);
+	}
 	return predictions;
 }
-
