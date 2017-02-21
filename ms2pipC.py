@@ -34,6 +34,9 @@ def main():
 						dtype={'spec_id':str,'modifications':str})
 	data = data.fillna('-') # for some reason the missing values are converted to float otherwise
 
+	#print data.peptide.value_counts()
+	#ddd
+	
 	# processing is parallelized at the spectrum TITLE level
 	sys.stderr.write('scanning spectrum file...')
 	titles = scan_spectrum_file(args.spec_file)
@@ -50,6 +53,7 @@ def main():
 		tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 		# this commented part of code can be used for debugging by avoiding parallel processing
 		"""
+
 		process_file(
 										args,
 										data[data.spec_id.isin(tmp)]
@@ -92,6 +96,7 @@ def main():
 			all_result = []
 			for r in results:
 				all_result.extend(r.get())
+			#all_result = pd.DataFrame(all_result)
 			all_result = pd.concat(all_result)
 			#all_result.to_pickle("all_result.pkl")
 			all_result.to_csv("all_result.csv",index=False)
@@ -266,9 +271,12 @@ def process_file(args,data):
 				if not title in peptides: continue
 				#if title != "human684921": continue
 
+
 				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
 
 				peptide = peptides[title]
+				#if not peptide == "FVFCAEAIYK":continue
+				#if not charge == 2: continue
 				peptide = peptide.replace('L','I')
 				mods = modifications[title]
 
@@ -289,7 +297,7 @@ def process_file(args,data):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if l[i+1] == "Oxidation":
-							modpeptide[int(l[i])] = 19
+							modpeptide[int(l[i])-1] = 19
 				if k:
 					continue
 
@@ -315,7 +323,7 @@ def process_file(args,data):
 					vectors.append(tmp)
 				else:
 					# predict the b- and y-ion intensities from the peptide
-					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,msms,peaks,charge)
+					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,charge)
 					for ii in range(len(resultB)):
 						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
 					for ii in range(len(resultY)):
@@ -331,7 +339,6 @@ def process_file(args,data):
 					tmp['prediction'] = resultB + resultY
 					tmp['spec_id'] = [title]*len(tmp)
 					pcount += 1
-
 					result.append(tmp)
 
 	if args.vector_file:
@@ -458,7 +465,7 @@ def scan_spectrum_file(filename):
 		for row in rows:
 			if row[0] == "T":
 				if row[:5] == "TITLE":
-					titles.append(row.rstrip()[6:])
+					titles.append(row.rstrip()[6:].replace(" ",""))
 	f.close()
 	return titles
 

@@ -51,12 +51,14 @@ def main():
 		  print "unsuported feature vector format"
 	
 		
-	vectors = vectors[vectors.charge==2]	
-	eval_vectors = eval_vectors[eval_vectors.charge==2]	
-	#vectors = vectors[vectors.peplen==14]	
-	#eval_vectors = eval_vectors[eval_vectors.peplen==14]	
+	#vectors = vectors[vectors.charge==2]	
+	#eval_vectors = eval_vectors[eval_vectors.charge==2]	
+	#vectors = vectors[vectors.peplen==10]	
+	#eval_vectors = eval_vectors[eval_vectors.peplen==10]	
 	#vectors = vectors[vectors.ionnumber==5]	
 	#eval_vectors = eval_vectors[eval_vectors.ionnumber==5]	
+
+	#vectors = vectors.sample(1000000,replace=False)
 
 	print "%s contains %i feature vectors" % (args.vectors,len(vectors))
 	print "%s contains %i feature vectors" % (args.vectorseval,len(eval_vectors))
@@ -67,7 +69,7 @@ def main():
 	num_psms = len(upeps)
 	np.random.shuffle(upeps)
 
-	test_psms = upeps[:int(num_psms*0.2)]
+	test_psms = upeps[:int(num_psms*0.05)]
 
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")
@@ -104,8 +106,9 @@ def main():
 	sys.stderr.write('loading data done\n')
 
 	#rename features to understand decision tree dump
-	#train_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
-	#test_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
+	train_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
+	test_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
+	eval_vectors.columns = ['Feature'+str(i) for i in range(len(eval_vectors.columns))]
 	numf = len(train_vectors.columns.values)
 
 	#create XGBoost datastructure
@@ -115,17 +118,18 @@ def main():
 	xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
 	sys.stderr.write('creating DMatrix done\n')
 
-	evallist  = [(xtest,'test'),(xeval,'eval')]
+	evallist  = [(xeval,'eval'),(xtest,'test')]
+	#evallist  = [(xtest,'test'),(xeval,'eval')]
 
 	#set XGBoost parameters; make sure to tune well!
 	param = {"objective":"reg:linear",
 	         "nthread":int(args.num_cpu),
 	         "silent":1,
-	         "eta":0.2,
-	         #"max_delta_step":8,
-	         "max_depth":4,
-			 "gamma":0,
-			 "min_child_weight":10,
+	         "eta":0.7,
+	         "max_delta_step":8,
+	         "max_depth":7,
+			 "gamma":1,	
+			 "min_child_weight":1000,
 			 "subsample":1,
 			 "colsample_bytree":1,
 			 #"scale_pos_weight":num_neg/num_pos
@@ -136,7 +140,7 @@ def main():
 
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
-	bst = xgb.train( plst, xtrain, 5000, evallist,early_stopping_rounds=10,feval=evalerror,maximize=True)
+	bst = xgb.train( plst, xtrain, 500, evallist,early_stopping_rounds=10,feval=evalerror,maximize=True)
 	#bst = xgb.train( plst, xtrain, 500, evallist,early_stopping_rounds=10)
 	#bst = xgb.train( plst, xtrain, 30, evallist)
 
@@ -159,17 +163,17 @@ def main():
 	for l in ll:
 		sys.stderr.write("'"+l+"',")
 
-	predictions = bst.predict(xeval)
+	predictions = bst.predict(xtest)
 
 	tmp = pd.DataFrame()
-	tmp['target'] = list(targetsYtest.values)
+	tmp['target'] = list(test_targets.values)
 	tmp['predictions'] = predictions
 	tmp['psmid'] = list(test_psmids.values)
-	#tmp['charge'] = list(test_vectors.charge.values)
-	#tmp['peplen'] = list(test_vectors.peplen.values)
-	tmp.to_pickle('predictions.pkl')
+	#tmp['charge'] = list(eval_vectors.charge.values)
+	#tmp['peplen'] = list(eval_vectors.peplen.values)
+	#tmp.to_pickle('predictions.pkl')
+	tmp.to_csv('predictions.csv',index=False)
 
-	ddd
 	
 	convert_model_to_c(bst,args,numf)
 
