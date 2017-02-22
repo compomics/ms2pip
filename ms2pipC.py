@@ -36,7 +36,7 @@ def main():
 
 	#print data.peptide.value_counts()
 	#ddd
-	
+
 	# processing is parallelized at the spectrum TITLE level
 	sys.stderr.write('scanning spectrum file...')
 	titles = scan_spectrum_file(args.spec_file)
@@ -103,12 +103,22 @@ def main():
 
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
+	"""
+	Take the PEPREC file (loaded in the variable data) and predict spectra.
+	return an .mgf file.
+	"""
+	# NOTE to write out the results as an .mgf file I need an m/z for each b and
+	# y ion as well as the predicted intensities. I also need the total ion m/z
+	# and a TITLE
 
-	# a_map converts the peptide amio acids to integers, note how 'L' is removed
+	# a_map converts the peptide amino acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
+	masses = [71.037114,160.030645,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
 	a_map = {}
+	a_mass = {}
 	for i,a in enumerate(aminos):
 		a_map[a] = i
+		a_mass[a] = masses[i]
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
@@ -135,75 +145,22 @@ def process_peptides(args,data):
 		if k:
 			continue
 
-		"""
+		#TODO get ion m/z
 
-				# normalize and convert MS2 peaks
-				msms = np.array(msms,dtype=np.float32)
-				#peaks = np.array(peaks,dtype=np.float32)
-				peaks = peaks / np.sum(peaks)
-				peaks = np.array(np.log2(peaks+0.001))
-				peaks = peaks.astype(np.float32)
+		# get ion intensities
+		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,np.array(),np.array(),charge)
 
-				# find the b- and y-ion peak intensities in the MS2 spectrum
-				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				#ma = np.max(b+y)
-				#if ma == 0: continue
-				#b = np.array(b) / ma
-				#y = np.array(y) / ma
-				#b= np.log2(b+1)
-				#y= np.log2(y+1)
-				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
-				#print bst.predict(xgb.DMatrix(tmp))
-
-				if args.vector_file:
-					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols_n,dtype=np.uint16)
-					#r = ms2pipfeatures_pyx.get_vector_bof(peptide)
-					#r.append(parent_mz)
-					#r.append(charge)
-					#tmp=pd.DataFrame([r]*(len(peptide)-1),columns=cols,dtype=np.uint16)
-					#tmp = pd.concat([tmp,tmp2],axis=1)
-					#tmp['cleavge_pos'] = [i for i in range(len(peptide)-1)]
-					tmp["targetsB"] = b
-					tmp["targetsY"] = y
-					tmp["psmid"] = [title]*len(tmp)
-					vectors.append(tmp)
-				else:
-					# predict the b- and y-ion intensities from the peptide
-					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,np.array(),np.array(),charge)
-					for ii in range(len(resultB)):
-						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
-					for ii in range(len(resultY)):
-						resultY[ii] = resultY[ii]+0.5
-					resultY = resultY[::-1]
-					#v = ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge)
-					#print v
-					#xv = xgb.DMatrix(v)
-					#print
-					#print resultB
-					#print resultY
-					#print bst.predict(xv)
-					#ddddd
-					for ii in range(len(resultB)):
-						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
-					for ii in range(len(resultY)):
-						resultY[ii] = resultY[ii]+0.5
-
-					tmp = pd.DataFrame()
-					tmp['peplen'] = [peplen]*(2*len(b))
-					tmp['charge'] = [charge]*(2*len(b))
-					tmp['ion'] = ['b']*len(b)+['y']*len(y)
-					tmp['ionnumber'] = range(len(b))+range(len(y))
-					tmp['target'] = b + y
-					tmp['prediction'] = resultB + resultY
-					tmp['spec_id'] = [title]*len(tmp)
-					pcount += 1
-
-					result.append(tmp)
-			"""
-	if args.vector_file:
-		return vectors
-	else:
-		return result
+		# preliminary: return a DF with the peptide length, charge, ion, prediction & id
+		tmp = pd.DataFrame()
+		tmp['peplen'] = [peplen]*(2*len(b))
+		tmp['charge'] = [charge]*(2*len(b))
+		tmp['ion'] = ['b']*len(b)+['y']*len(y)
+		tmp['ionnumber'] = range(len(b))+range(len(y))
+		tmp['target'] = b + y
+		tmp['prediction'] = resultB + resultY
+		tmp['spec_id'] = [title]*len(tmp)
+		#TODO write out mgf
+		return tmp
 
 #peak intensity prediction with spectrum file (for evaluation)
 def process_file(args,data):
