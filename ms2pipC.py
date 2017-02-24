@@ -36,47 +36,53 @@ def main():
 
 	#print data.peptide.value_counts()
 	#ddd
+	if args.spec_file:
+		# This code runs if we give an mgf file as input. One of two things can happen after:
+		# if args.vector_file, we save a file with the feature vectors and targets
+		# else, we predict spectra and return a file with the target and predicted values for each ion
 
-	# processing is parallelized at the spectrum TITLE level
-	sys.stderr.write('scanning spectrum file...')
-	titles = scan_spectrum_file(args.spec_file)
-	num_spectra_per_cpu = int(len(titles)/(num_cpu))
-	sys.stderr.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
+		# processing the mgf file:
+		# this is parallelized at the spectrum TITLE level
+		sys.stderr.write('scanning spectrum file...')
+		titles = scan_spectrum_file(args.spec_file)
+		num_spectra_per_cpu = int(len(titles)/(num_cpu))
+		sys.stderr.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
-	sys.stderr.write('starting workers...\n')
+		sys.stderr.write('starting workers...\n')
 
-	myPool = multiprocessing.Pool(num_cpu)
+		myPool = multiprocessing.Pool(num_cpu)
 
-	results = []
-	i = 0
-	for i in range(num_cpu-1):
-		tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
-		# this commented part of code can be used for debugging by avoiding parallel processing
-		"""
+		results = []
+		i = 0
+		for i in range(num_cpu-1):
+			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
+			# this commented part of code can be used for debugging by avoiding parallel processing
+			"""
 
-		process_file(
+			process_file(
 										args,
 										data[data.spec_id.isin(tmp)]
 										)
-		"""
-		results.append(myPool.apply_async(process_file,args=(
+			"""
+			results.append(myPool.apply_async(process_file,args=(
 										args,
 										data[data.spec_id.isin(tmp)]
 										)))
-	i+=1
-	tmp = titles[i*num_spectra_per_cpu:]
-	results.append(myPool.apply_async(process_file,args=(
+			i+=1
+			tmp = titles[i*num_spectra_per_cpu:]
+			results.append(myPool.apply_async(process_file,args=(
 									args,
 									data[data.spec_id.isin(tmp)]
 									)))
 
-	myPool.close()
-	myPool.join()
+		myPool.close()
+		myPool.join()
 
-	# workers done...merging results
-	sys.stderr.write('\nmerging results and writing files...\n')
-	if args.spec_file:
+		# workers done...merging results
+		sys.stderr.write('\nmerging results and writing files...\n')
+
 		if args.vector_file:
+			# i.e. if we want to save the features + targets:
 			# read feature vectors from workers and concatenate
 			all_vectors = []
 			for r in results:
@@ -85,22 +91,21 @@ def main():
   			# write result. write format depends on extension:
   			ext = args.vector_file.split('.')[-1]
   			if ext == 'pkl':
-				print all_vectors.head()
+				# print all_vectors.head()
 				all_vectors.to_pickle(args.vector_file+'.pkl')
   			elif ext == 'h5':
 				all_vectors.to_hdf(args.vector_file, 'table')
-    			# 'table' is a tag used to read back the
+    			# 'table' is a tag used to read back the .h5
   			else: # if none of the two, default to .h5
 				all_vectors.to_hdf(args.vector_file, 'table')
-		else:
-			all_result = []
-			for r in results:
-				all_result.extend(r.get())
-			#all_result = pd.DataFrame(all_result)
-			all_result = pd.concat(all_result)
-			#all_result.to_pickle("all_result.pkl")
-			all_result.to_csv("all_result.csv",index=False)
 
+			else:
+				# in this case we can return a tabel with for each ion the measured and predicted intensities
+				# TODO add prediction, join with targer and b/y ion sequences
+		else:
+			# For when we only give the PEPREC file and want the predictions
+			# TODO add predictions, save dataframe, save mgf
+			
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
 	"""
@@ -146,6 +151,9 @@ def process_peptides(args,data):
 			continue
 
 		#TODO get ion m/z
+		b_mz = []
+		y_mz = []
+		for i in range(len(modpeptide)-1):
 
 		# get ion intensities
 		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,np.array(),np.array(),charge)
