@@ -99,12 +99,11 @@ def main():
   			else: # if none of the two, default to .h5
 				all_vectors.to_hdf(args.vector_file, 'table')
 
-			else:
-				# in this case we can return a tabel with for each ion the measured and predicted intensities
-				# TODO add prediction, join with targer and b/y ion sequences
-		else:
-			# For when we only give the PEPREC file and want the predictions
-			# TODO add predictions, save dataframe, save mgf
+	else:
+		# For when we only give the PEPREC file and want the predictions
+		# TODO add predictions, save dataframe, save mgf
+		result = process_peptides(None, data)
+		result.to_csv('test_predicting.csv', index=False)
 
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
@@ -112,6 +111,7 @@ def process_peptides(args,data):
 	Take the PEPREC file (loaded in the variable data) and predict spectra.
 	return an .mgf file.
 	"""
+	sys.stdout.write('predicting spectra... \n')
 	# NOTE to write out the results as an .mgf file I need an m/z for each b and
 	# y ion as well as the predicted intensities. I also need the total ion m/z
 	# and a TITLE
@@ -123,15 +123,19 @@ def process_peptides(args,data):
 	a_mass = {}
 	for i,a in enumerate(aminos):
 		a_map[a] = i
-		a_mass[a] = masses[i]
+		a_mass[i] = masses[i]
 
 	# transform pandas datastructure into dictionary for easy access
-	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
+	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
 	modifications = specdict['modifications']
+	charges = specdict['charge']
 
-	for (peptide,mods) in zip(peptides,modifications):
+	for (pepid,modsid) in zip(peptides,modifications):
 
+		ch = charges[pepid]
+
+		peptide = peptides[pepid]
 		peptide = peptide.replace('L','I')
 
 		# convert peptide string to integer list to speed up C code
@@ -139,35 +143,37 @@ def process_peptides(args,data):
 
 		# modpeptide is the same as peptide but with modified amino acids
 		# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
+		mods = modifications[modsid]
 		modpeptide = np.array(peptide[:],dtype=np.uint16)
 		peplen = len(peptide)
-		k = False
 		if mods != '-':
 			l = mods.split('|')
 			for i in range(0,len(l),2):
 				if l[i+1] == "Oxidation":
 					modpeptide[int(l[i])] = 19
-		if k:
-			continue
 
-		#TODO get ion m/z
-		b_mz = []
-		y_mz = []
-		for i in range(len(modpeptide)-1):
+		b_mz = [None] * (len(modpeptide)-1)
+		y_mz = [None] * (len(modpeptide)-1)
+		b_mz[0] = a_mass[modpeptide[0]] + 1.007236
+		y_mz[0] = a_mass[modpeptide[len(modpeptide)-1]] + 18.0105647 + 1.007236
+		for i in range(1, len(modpeptide)-1):
+			b_mz[i] = b_mz[i-1] + a_mass[modpeptide[i]]
+			y_mz[i] = y_mz[i-1] + a_mass[modpeptide[-(i+1)]]
 
 		# get ion intensities
-		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,np.array(),np.array(),charge)
+		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 
-		# preliminary: return a DF with the peptide length, charge, ion, prediction & id
+		# return results as a DataFrame
 		tmp = pd.DataFrame()
-		tmp['peplen'] = [peplen]*(2*len(b))
-		tmp['charge'] = [charge]*(2*len(b))
-		tmp['ion'] = ['b']*len(b)+['y']*len(y)
-		tmp['ionnumber'] = range(len(b))+range(len(y))
-		tmp['target'] = b + y
+		tmp['peplen'] = [len(peptide)]*(2*len(resultB))
+		tmp['charge'] = [ch]*(2*len(resultB))
+		tmp['ion'] = ['b']*len(resultB)+['y']*len(resultY)
+		tmp['mz'] = b_mz + y_mz
+		tmp['ionnumber'] = range(1,len(resultB)+1)+range(len(resultY),0,-1)
+		# tmp['target'] = b + y
 		tmp['prediction'] = resultB + resultY
-		tmp['spec_id'] = [title]*len(tmp)
-		#TODO write out mgf
+		tmp['spec_id'] = [pepid]*len(tmp)
+		#TODO return results as mgf file
 		return tmp
 
 #peak intensity prediction with spectrum file (for evaluation)
