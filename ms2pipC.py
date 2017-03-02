@@ -43,12 +43,12 @@ def main():
 
 		# processing the mgf file:
 		# this is parallelized at the spectrum TITLE level
-		sys.stderr.write('scanning spectrum file...')
+		sys.stdout.write('scanning spectrum file...')
 		titles = scan_spectrum_file(args.spec_file)
 		num_spectra_per_cpu = int(len(titles)/(num_cpu))
-		sys.stderr.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
+		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
-		sys.stderr.write('starting workers...\n')
+		sys.stdout.write('starting workers...\n')
 
 		myPool = multiprocessing.Pool(num_cpu)
 
@@ -79,7 +79,7 @@ def main():
 		myPool.join()
 
 		# workers done...merging results
-		sys.stderr.write('\nmerging results and writing files...\n')
+		sys.stdout.write('\nmerging results and writing files...\n')
 
 		if args.vector_file:
 			# i.e. if we want to save the features + targets:
@@ -105,7 +105,7 @@ def main():
 		else:
 			# For when we only give the PEPREC file and want the predictions
 			# TODO add predictions, save dataframe, save mgf
-			
+
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
 	"""
@@ -199,7 +199,7 @@ def process_file(args,data):
 	pcount = 0
 	while (1):
 		rows = f.readlines(3000000)
-		sys.stderr.write('.')
+		sys.stdout.write('.')
 		if not rows: break
 		for row in rows:
 			row = row.rstrip()
