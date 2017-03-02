@@ -101,9 +101,23 @@ def main():
 
 	else:
 		# For when we only give the PEPREC file and want the predictions
-		# TODO add predictions, save dataframe, save mgf
+
 		result = process_peptides(None, data)
+		sys.stdout.write('\nmerging results and writing CSV...\n')
 		result.to_csv(args.pep_file +'_predictions.csv', index=False)
+		sys.stdout.write('\nmerging results and writing MGF...\n')
+		mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
+		for sp in result.spec_id.unique():
+			tmp = result[result.spec_id == sp]
+			tmp = tmp.sort_values('mz')
+			mgf_output.write('BEGIN IONS\n')
+			mgf_output.write('TITLE=' + str(sp) + '\n')
+			mgf_output.write('CHARGE=' + str(tmp.charge[0]) +'\n')
+			for i in range(len(tmp)):
+				mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
+			mgf_output.write('END IONS\n')
+		mgf_output.close()
+
 
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
@@ -178,8 +192,6 @@ def process_peptides(args,data):
 		tmp['spec_id'] = [pepid]*len(tmp)
 
 		final_result = final_result.append(tmp)
-
-		#TODO return results as mgf file
 
 	return final_result
 
