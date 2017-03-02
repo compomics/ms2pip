@@ -103,7 +103,7 @@ def main():
 		# For when we only give the PEPREC file and want the predictions
 		# TODO add predictions, save dataframe, save mgf
 		result = process_peptides(None, data)
-		result.to_csv('test_predicting.csv', index=False)
+		result.to_csv(args.pep_file +'_predictions.csv', index=False)
 
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(args,data):
@@ -125,14 +125,18 @@ def process_peptides(args,data):
 		a_map[a] = i
 		a_mass[i] = masses[i]
 
+	a_mass[19] = masses[19]
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
 	modifications = specdict['modifications']
 	charges = specdict['charge']
 
+	final_result = pd.DataFrame(columns=['peplen','charge','ion','mz', 'ionnumber', 'prediction', 'spec_id'])
+	i = 0
 	for (pepid,modsid) in zip(peptides,modifications):
-
+		i += 1
+		if i%100000 == 0: sys.stdout.write('.')
 		ch = charges[pepid]
 
 		peptide = peptides[pepid]
@@ -140,7 +144,6 @@ def process_peptides(args,data):
 
 		# convert peptide string to integer list to speed up C code
 		peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
-
 		# modpeptide is the same as peptide but with modified amino acids
 		# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
 		mods = modifications[modsid]
@@ -173,8 +176,12 @@ def process_peptides(args,data):
 		# tmp['target'] = b + y
 		tmp['prediction'] = resultB + resultY
 		tmp['spec_id'] = [pepid]*len(tmp)
+
+		final_result = final_result.append(tmp)
+
 		#TODO return results as mgf file
-		return tmp
+
+	return final_result
 
 #peak intensity prediction with spectrum file (for evaluation)
 def process_file(args,data):
