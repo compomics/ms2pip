@@ -101,14 +101,48 @@ def main():
 
 	else:
 		# For when we only give the PEPREC file and want the predictions
+		sys.stdout.write('scanning peptide file...')
 
-		result = process_peptides(None, data)
-		sys.stdout.write('\nmerging results and writing CSV...\n')
-		result.to_csv(args.pep_file +'_predictions.csv', index=False)
-		sys.stdout.write('\nmerging results and writing MGF...\n')
+		titles = data.spec_id
+		num_pep_per_cpu = int(len(titles)/(num_cpu))
+		sys.stdout.write("%i peptides (%i per cpu)\n"%(len(titles),num_pep_per_cpu))
+
+		sys.stdout.write('starting workers...\n')
+		myPool = multiprocessing.Pool(num_cpu)
+
+		sys.stdout.write('predicting spectra... \n')
+		results = []
+		i = 0
+		for i in range(num_cpu-1):
+			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
+
+			results.append(myPool.apply_async(process_peptides,args=(
+										None,
+										data[data.spec_id.isin(tmp)]
+										)))
+			i+=1
+			tmp = titles[i*num_pep_per_cpu:]
+			results.append(myPool.apply_async(process_peptides,args=(
+									None,
+									data[data.spec_id.isin(tmp)]
+									)))
+
+		myPool.close()
+		myPool.join()
+
+		sys.stdout.write('\nmerging results and writing files...\n')
+
+		all_preds = pd.DataFrame()
+		for r in results:
+			all_preds = all_preds.append(r.get())
+
+		# print all_preds
+
+		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
+
 		mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
-		for sp in result.spec_id.unique():
-			tmp = result[result.spec_id == sp]
+		for sp in all_preds.spec_id.unique():
+			tmp = all_preds[all_preds.spec_id == sp]
 			tmp = tmp.sort_values('mz')
 			mgf_output.write('BEGIN IONS\n')
 			mgf_output.write('TITLE=' + str(sp) + '\n')
@@ -125,10 +159,6 @@ def process_peptides(args,data):
 	Take the PEPREC file (loaded in the variable data) and predict spectra.
 	return an .mgf file.
 	"""
-	sys.stdout.write('predicting spectra... \n')
-	# NOTE to write out the results as an .mgf file I need an m/z for each b and
-	# y ion as well as the predicted intensities. I also need the total ion m/z
-	# and a TITLE
 
 	# a_map converts the peptide amino acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
@@ -149,8 +179,7 @@ def process_peptides(args,data):
 	final_result = pd.DataFrame(columns=['peplen','charge','ion','mz', 'ionnumber', 'prediction', 'spec_id'])
 	i = 0
 	for (pepid,modsid) in zip(peptides,modifications):
-		i += 1
-		if i%100000 == 0: sys.stdout.write('.')
+
 		ch = charges[pepid]
 
 		peptide = peptides[pepid]
@@ -192,6 +221,7 @@ def process_peptides(args,data):
 		tmp['spec_id'] = [pepid]*len(tmp)
 
 		final_result = final_result.append(tmp)
+		sys.stdout.write('.')
 
 	return final_result
 
