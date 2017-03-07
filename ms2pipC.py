@@ -117,13 +117,13 @@ def main():
 			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
 
 			results.append(myPool.apply_async(process_peptides,args=(
-										None,
+										i,
 										data[data.spec_id.isin(tmp)]
 										)))
 		i+=1
 		tmp = titles[i*num_pep_per_cpu:]
 		results.append(myPool.apply_async(process_peptides,args=(
-								None,
+								i,
 								data[data.spec_id.isin(tmp)]
 								)))
 
@@ -154,10 +154,9 @@ def main():
 
 
 #peak intensity prediction without spectrum file (under construction)
-def process_peptides(args,data):
+def process_peptides(worker_num,data):
 	"""
-	Take the PEPREC file (loaded in the variable data) and predict spectra.
-	return an .mgf file.
+	Take the PEPREC file and predict spectra.
 	"""
 
 	# a_map converts the peptide amino acids to integers, note how 'L' is removed
@@ -177,7 +176,8 @@ def process_peptides(args,data):
 	charges = specdict['charge']
 
 	final_result = pd.DataFrame(columns=['peplen','charge','ion','mz', 'ionnumber', 'prediction', 'spec_id'])
-	i = 0
+	sp_count = 0
+	total = len(peptides)
 	for (pepid,modsid) in zip(peptides,modifications):
 
 		ch = charges[pepid]
@@ -221,8 +221,8 @@ def process_peptides(args,data):
 		tmp['spec_id'] = [pepid]*len(tmp)
 
 		final_result = final_result.append(tmp)
-		i+=1
-		if i%10000==0: sys.stdout.write(str(i) + ' done... ')
+		sp_count+=1
+		if ((1.0 * sp_count)/total) * 100 % 20 == 0: print('worker ' + str(worker_num) + ': ' + str(sp_count) + ' peptides done'); sys.stdout.flush()
 
 	return final_result
 
