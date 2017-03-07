@@ -120,12 +120,12 @@ def main():
 										None,
 										data[data.spec_id.isin(tmp)]
 										)))
-			i+=1
-			tmp = titles[i*num_pep_per_cpu:]
-			results.append(myPool.apply_async(process_peptides,args=(
-									None,
-									data[data.spec_id.isin(tmp)]
-									)))
+		i+=1
+		tmp = titles[i*num_pep_per_cpu:]
+		results.append(myPool.apply_async(process_peptides,args=(
+								None,
+								data[data.spec_id.isin(tmp)]
+								)))
 
 		myPool.close()
 		myPool.join()
@@ -221,7 +221,8 @@ def process_peptides(args,data):
 		tmp['spec_id'] = [pepid]*len(tmp)
 
 		final_result = final_result.append(tmp)
-		sys.stdout.write('.')
+		i+=1
+		if i%10000==0: sys.stdout.write(str(i) + ' done... ')
 
 	return final_result
 
