@@ -68,12 +68,12 @@ def main():
 										args,
 										data[data.spec_id.isin(tmp)]
 										)))
-			i+=1
-			tmp = titles[i*num_spectra_per_cpu:]
-			results.append(myPool.apply_async(process_file,args=(
-									args,
-									data[data.spec_id.isin(tmp)]
-									)))
+		i+=1
+		tmp = titles[i*num_spectra_per_cpu:]
+		results.append(myPool.apply_async(process_file,args=(
+								args,
+								data[data.spec_id.isin(tmp)]
+								)))
 
 		myPool.close()
 		myPool.join()
