@@ -53,7 +53,6 @@ def main():
 		tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 		# this commented part of code can be used for debugging by avoiding parallel processing
 		"""
-
 		process_file(
 										args,
 										data[data.spec_id.isin(tmp)]
@@ -95,7 +94,9 @@ def main():
 		else:
 			all_result = []
 			for r in results:
-				all_result.extend(r.get())
+				tmp = r.get()
+				sys.stderr.write('O')
+				all_result.extend(tmp)
 			#all_result = pd.DataFrame(all_result)
 			all_result = pd.concat(all_result)
 			#all_result.to_pickle("all_result.pkl")
@@ -249,7 +250,7 @@ def process_file(args,data):
 			if row[0] == "T":
 				if row[:5] == "TITLE":
 					title = row[6:].replace(' ','')
-					if not title in peptides:
+					if not title in peptides:						
 						skip = True
 						continue
 			elif row[0].isdigit():
@@ -269,8 +270,7 @@ def process_file(args,data):
 			elif row[:8] == "END IONS":
 				#process
 				if not title in peptides: continue
-				#if title != "human684921": continue
-
+				#if title != "2143_TUM_first_pool_5_01_01_3xHCD_1h_R1": continue
 
 				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
 
@@ -297,7 +297,7 @@ def process_file(args,data):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if l[i+1] == "Oxidation":
-							modpeptide[int(l[i])-1] = 19
+							modpeptide[int(l[i])] = 19
 				if k:
 					continue
 
@@ -308,8 +308,14 @@ def process_file(args,data):
 				peaks = np.array(np.log2(peaks+0.001))
 				peaks = peaks.astype(np.float32)
 
+				tmptmp = np.argsort(msms)
+				msms = msms[tmptmp]
+				peaks = peaks[tmptmp]
+				
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
+				#if (np.max(b+y)<-9):
+				#	print title + " " + str(np.max(b+y))
 
 				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
@@ -339,6 +345,7 @@ def process_file(args,data):
 					tmp['prediction'] = resultB + resultY
 					tmp['spec_id'] = [title]*len(tmp)
 					pcount += 1
+					
 					result.append(tmp)
 
 	if args.vector_file:

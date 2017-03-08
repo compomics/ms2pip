@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/modelBnew.c"
-#include "models/modelYnew.c"
+//#include "models/modelBnew.c"
+//#include "models/modelYnew.c"
 
-//#include "models/dB.c"
-//#include "models/dY.c"
+#include "models/dB.c"
+#include "models/dY.c"
 
 float membuffer[10000];
 unsigned int v[30000];
@@ -94,7 +94,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 	float mz;
 	int msms_pos;
 	int mem_pos;
-	float tolmz = 0.02;
+	float tolmz = 0.8;
 	float max, tmp2;
 
 	//b-ions

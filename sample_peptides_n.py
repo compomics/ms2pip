@@ -91,8 +91,8 @@ while (1):
 			#tmap[title] = (float(pepmass) * (charge)) - ((charge)*1.007825035)
 			tmap[title] = charge
 
-pickle.dump( tmap, open( "tmap.p", "wb" ) )
-tmap = pickle.load( open( "tmap.p", "rb" ) )
+#pickle.dump( tmap, open( "tmap.p", "wb" ) )
+#tmap = pickle.load( open( "tmap.p", "rb" ) )
 
 sys.stderr.write("don")
 

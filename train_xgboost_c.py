@@ -61,7 +61,7 @@ def main():
 	#vectors = vectors.sample(1000000,replace=False)
 
 	print "%s contains %i feature vectors" % (args.vectors,len(vectors))
-	print "%s contains %i feature vectors" % (args.vectorseval,len(eval_vectors))
+	#print "%s contains %i feature vectors" % (args.vectorseval,len(eval_vectors))
 				
 	psmids = vectors["psmid"]
 	np.random.seed(1)
@@ -69,7 +69,7 @@ def main():
 	num_psms = len(upeps)
 	np.random.shuffle(upeps)
 
-	test_psms = upeps[:int(num_psms*0.05)]
+	test_psms = upeps[:int(num_psms*0.2)]
 
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")
@@ -95,30 +95,31 @@ def main():
 		elif args.type == 'Y':
 			eval_targets = targetsYeval
 
-	eval_psmids = eval_vectors.pop("psmid")
+	#eval_psmids = eval_vectors.pop("psmid")
 	train_psmids = train_vectors.pop("psmid")
 	test_psmids = test_vectors.pop("psmid")
 
 	train_vectors = train_vectors.astype(np.float32)
 	test_vectors = test_vectors.astype(np.float32)
-	eval_vectors = eval_vectors.astype(np.float32)
+	#eval_vectors = eval_vectors.astype(np.float32)
 
 	sys.stderr.write('loading data done\n')
 
 	#rename features to understand decision tree dump
 	train_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
 	test_vectors.columns = ['Feature'+str(i) for i in range(len(train_vectors.columns))]
-	eval_vectors.columns = ['Feature'+str(i) for i in range(len(eval_vectors.columns))]
+	#eval_vectors.columns = ['Feature'+str(i) for i in range(len(eval_vectors.columns))]
 	numf = len(train_vectors.columns.values)
 
 	#create XGBoost datastructure
 	sys.stderr.write('creating DMatrix\n')
 	xtrain = xgb.DMatrix(train_vectors, label=train_targets)
 	xtest = xgb.DMatrix(test_vectors, label=test_targets)
-	xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
+	#xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
 	sys.stderr.write('creating DMatrix done\n')
 
-	evallist  = [(xeval,'eval'),(xtest,'test')]
+	evallist  = [(xtest,'test')]
+	#evallist  = [(xeval,'eval'),(xtest,'test')]
 	#evallist  = [(xtest,'test'),(xeval,'eval')]
 
 	#set XGBoost parameters; make sure to tune well!
@@ -126,7 +127,7 @@ def main():
 	         "nthread":int(args.num_cpu),
 	         "silent":1,
 	         "eta":0.7,
-	         "max_delta_step":8,
+	         "max_delta_step":12,
 	         "max_depth":7,
 			 "gamma":1,	
 			 "min_child_weight":1000,
