@@ -36,46 +36,53 @@ def main():
 
 	#print data.peptide.value_counts()
 	#ddd
-	
-	# processing is parallelized at the spectrum TITLE level
-	sys.stderr.write('scanning spectrum file...')
-	titles = scan_spectrum_file(args.spec_file)
-	num_spectra_per_cpu = int(len(titles)/(num_cpu))
-	sys.stderr.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
+	if args.spec_file:
+		# This code runs if we give an mgf file as input. One of two things can happen after:
+		# if args.vector_file, we save a file with the feature vectors and targets
+		# else, we predict spectra and return a file with the target and predicted values for each ion
 
-	sys.stderr.write('starting workers...\n')
+		# processing the mgf file:
+		# this is parallelized at the spectrum TITLE level
+		sys.stdout.write('scanning spectrum file...')
+		titles = scan_spectrum_file(args.spec_file)
+		num_spectra_per_cpu = int(len(titles)/(num_cpu))
+		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
-	myPool = multiprocessing.Pool(num_cpu)
+		sys.stdout.write('starting workers...\n')
 
-	results = []
-	i = 0
-	for i in range(num_cpu-1):
-		tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
-		# this commented part of code can be used for debugging by avoiding parallel processing
-		"""
-		process_file(
+		myPool = multiprocessing.Pool(num_cpu)
+
+		results = []
+		i = 0
+		for i in range(num_cpu-1):
+			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
+			# this commented part of code can be used for debugging by avoiding parallel processing
+			"""
+
+			process_file(
 										args,
 										data[data.spec_id.isin(tmp)]
 										)
-		"""
-		results.append(myPool.apply_async(process_file,args=(
+			"""
+			results.append(myPool.apply_async(process_file,args=(
 										args,
 										data[data.spec_id.isin(tmp)]
 										)))
-	i+=1
-	tmp = titles[i*num_spectra_per_cpu:]
-	results.append(myPool.apply_async(process_file,args=(
-									args,
-									data[data.spec_id.isin(tmp)]
-									)))
+		i+=1
+		tmp = titles[i*num_spectra_per_cpu:]
+		results.append(myPool.apply_async(process_file,args=(
+								args,
+								data[data.spec_id.isin(tmp)]
+								)))
 
-	myPool.close()
-	myPool.join()
+		myPool.close()
+		myPool.join()
 
-	# workers done...merging results
-	sys.stderr.write('\nmerging results and writing files...\n')
-	if args.spec_file:
+		# workers done...merging results
+		sys.stdout.write('\nmerging results and writing files...\n')
+
 		if args.vector_file:
+			# i.e. if we want to save the features + targets:
 			# read feature vectors from workers and concatenate
 			all_vectors = []
 			for r in results:
@@ -84,127 +91,143 @@ def main():
   			# write result. write format depends on extension:
   			ext = args.vector_file.split('.')[-1]
   			if ext == 'pkl':
-				print all_vectors.head()
+				# print all_vectors.head()
 				all_vectors.to_pickle(args.vector_file+'.pkl')
   			elif ext == 'h5':
 				all_vectors.to_hdf(args.vector_file, 'table')
-    			# 'table' is a tag used to read back the
+    			# 'table' is a tag used to read back the .h5
   			else: # if none of the two, default to .h5
 				all_vectors.to_hdf(args.vector_file, 'table')
-		else:
-			all_result = []
-			for r in results:
-				tmp = r.get()
-				sys.stderr.write('O')
-				all_result.extend(tmp)
-			#all_result = pd.DataFrame(all_result)
-			all_result = pd.concat(all_result)
-			#all_result.to_pickle("all_result.pkl")
-			all_result.to_csv("all_result.csv",index=False)
+
+	else:
+		# For when we only give the PEPREC file and want the predictions
+		sys.stdout.write('scanning peptide file...')
+
+		titles = data.spec_id
+		num_pep_per_cpu = int(len(titles)/(num_cpu))
+		sys.stdout.write("%i peptides (%i per cpu)\n"%(len(titles),num_pep_per_cpu))
+
+		sys.stdout.write('starting workers...\n')
+		myPool = multiprocessing.Pool(num_cpu)
+
+		sys.stdout.write('predicting spectra... \n')
+		results = []
+		i = 0
+		for i in range(num_cpu-1):
+			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
+
+			results.append(myPool.apply_async(process_peptides,args=(
+										i,
+										data[data.spec_id.isin(tmp)]
+										)))
+		i+=1
+		tmp = titles[i*num_pep_per_cpu:]
+		results.append(myPool.apply_async(process_peptides,args=(
+								i,
+								data[data.spec_id.isin(tmp)]
+								)))
+
+		myPool.close()
+		myPool.join()
+
+		sys.stdout.write('\nmerging results and writing csv file...\n')
+
+		all_preds = pd.DataFrame()
+		for r in results:
+			all_preds = all_preds.append(r.get())
+
+		# print all_preds
+
+		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
+		mgf = False # prevent writing big mgf files
+		if mgf:
+			sys.stdout.write('\nwriting mgf file...\n')
+			mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
+			for sp in all_preds.spec_id.unique():
+				tmp = all_preds[all_preds.spec_id == sp]
+				tmp = tmp.sort_values('mz')
+				mgf_output.write('BEGIN IONS\n')
+				mgf_output.write('TITLE=' + str(sp) + '\n')
+				mgf_output.write('CHARGE=' + str(tmp.charge[0]) +'\n')
+				for i in range(len(tmp)):
+					mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
+				mgf_output.write('END IONS\n')
+			mgf_output.close()
+
 
 #peak intensity prediction without spectrum file (under construction)
-def process_peptides(args,data):
+def process_peptides(worker_num,data):
+	"""
+	Take the PEPREC file and predict spectra.
+	"""
 
-	# a_map converts the peptide amio acids to integers, note how 'L' is removed
+	# a_map converts the peptide amino acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
+	masses = [71.037114,160.030645,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
 	a_map = {}
+	a_mass = {}
 	for i,a in enumerate(aminos):
 		a_map[a] = i
+		a_mass[i] = masses[i]
 
+	a_mass[19] = masses[19]
 	# transform pandas datastructure into dictionary for easy access
-	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
+	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
 	modifications = specdict['modifications']
+	charges = specdict['charge']
 
-	for (peptide,mods) in zip(peptides,modifications):
+	final_result = pd.DataFrame(columns=['peplen','charge','ion','mz', 'ionnumber', 'prediction', 'spec_id'])
+	sp_count = 0
+	total = len(peptides)
 
+	for pepid in peptides:
+
+		ch = charges[pepid]
+
+		peptide = peptides[pepid]
 		peptide = peptide.replace('L','I')
 
 		# convert peptide string to integer list to speed up C code
 		peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
-
 		# modpeptide is the same as peptide but with modified amino acids
 		# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
+		mods = modifications[pepid]
 		modpeptide = np.array(peptide[:],dtype=np.uint16)
 		peplen = len(peptide)
-		k = False
 		if mods != '-':
 			l = mods.split('|')
 			for i in range(0,len(l),2):
 				if l[i+1] == "Oxidation":
 					modpeptide[int(l[i])] = 19
-		if k:
-			continue
 
-		"""
+		b_mz = [None] * (len(modpeptide)-1)
+		y_mz = [None] * (len(modpeptide)-1)
+		b_mz[0] = a_mass[modpeptide[0]] + 1.007236
+		y_mz[0] = a_mass[modpeptide[len(modpeptide)-1]] + 18.0105647 + 1.007236
+		for i in range(1, len(modpeptide)-1):
+			b_mz[i] = b_mz[i-1] + a_mass[modpeptide[i]]
+			y_mz[i] = y_mz[i-1] + a_mass[modpeptide[-(i+1)]]
 
-				# normalize and convert MS2 peaks
-				msms = np.array(msms,dtype=np.float32)
-				#peaks = np.array(peaks,dtype=np.float32)
-				peaks = peaks / np.sum(peaks)
-				peaks = np.array(np.log2(peaks+0.001))
-				peaks = peaks.astype(np.float32)
+		# get ion intensities
+		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 
-				# find the b- and y-ion peak intensities in the MS2 spectrum
-				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				#ma = np.max(b+y)
-				#if ma == 0: continue
-				#b = np.array(b) / ma
-				#y = np.array(y) / ma
-				#b= np.log2(b+1)
-				#y= np.log2(y+1)
-				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
-				#print bst.predict(xgb.DMatrix(tmp))
+		# return results as a DataFrame
+		tmp = pd.DataFrame()
+		tmp['peplen'] = [len(peptide)]*(2*len(resultB))
+		tmp['charge'] = [ch]*(2*len(resultB))
+		tmp['ion'] = ['b']*len(resultB)+['y']*len(resultY)
+		tmp['mz'] = b_mz + y_mz
+		tmp['ionnumber'] = range(1,len(resultB)+1)+range(len(resultY),0,-1)
+		# tmp['target'] = b + y
+		tmp['prediction'] = resultB + resultY
+		tmp['spec_id'] = [pepid]*len(tmp)
 
-				if args.vector_file:
-					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols_n,dtype=np.uint16)
-					#r = ms2pipfeatures_pyx.get_vector_bof(peptide)
-					#r.append(parent_mz)
-					#r.append(charge)
-					#tmp=pd.DataFrame([r]*(len(peptide)-1),columns=cols,dtype=np.uint16)
-					#tmp = pd.concat([tmp,tmp2],axis=1)
-					#tmp['cleavge_pos'] = [i for i in range(len(peptide)-1)]
-					tmp["targetsB"] = b
-					tmp["targetsY"] = y
-					tmp["psmid"] = [title]*len(tmp)
-					vectors.append(tmp)
-				else:
-					# predict the b- and y-ion intensities from the peptide
-					(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide,modpeptide,np.array(),np.array(),charge)
-					for ii in range(len(resultB)):
-						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
-					for ii in range(len(resultY)):
-						resultY[ii] = resultY[ii]+0.5
-					resultY = resultY[::-1]
-					#v = ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge)
-					#print v
-					#xv = xgb.DMatrix(v)
-					#print
-					#print resultB
-					#print resultY
-					#print bst.predict(xv)
-					#ddddd
-					for ii in range(len(resultB)):
-						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
-					for ii in range(len(resultY)):
-						resultY[ii] = resultY[ii]+0.5
+		final_result = final_result.append(tmp)
+		sp_count+=1
+		if int(((1.0 * sp_count)/total) * 100) % 20 == 0: print('worker ' + str(worker_num) + ': ' + str(sp_count) + ' peptides done'); sys.stdout.flush()
 
-					tmp = pd.DataFrame()
-					tmp['peplen'] = [peplen]*(2*len(b))
-					tmp['charge'] = [charge]*(2*len(b))
-					tmp['ion'] = ['b']*len(b)+['y']*len(y)
-					tmp['ionnumber'] = range(len(b))+range(len(y))
-					tmp['target'] = b + y
-					tmp['prediction'] = resultB + resultY
-					tmp['spec_id'] = [title]*len(tmp)
-					pcount += 1
-
-					result.append(tmp)
-			"""
-	if args.vector_file:
-		return vectors
-	else:
-		return result
+	return final_result
 
 #peak intensity prediction with spectrum file (for evaluation)
 def process_file(args,data):
@@ -235,7 +258,7 @@ def process_file(args,data):
 	pcount = 0
 	while (1):
 		rows = f.readlines(3000000)
-		sys.stderr.write('.')
+		sys.stdout.write('.')
 		if not rows: break
 		for row in rows:
 			row = row.rstrip()
@@ -250,7 +273,7 @@ def process_file(args,data):
 			if row[0] == "T":
 				if row[:5] == "TITLE":
 					title = row[6:].replace(' ','')
-					if not title in peptides:						
+					if not title in peptides:
 						skip = True
 						continue
 			elif row[0].isdigit():
@@ -270,7 +293,8 @@ def process_file(args,data):
 			elif row[:8] == "END IONS":
 				#process
 				if not title in peptides: continue
-				#if title != "2143_TUM_first_pool_5_01_01_3xHCD_1h_R1": continue
+				#if title != "human684921": continue
+
 
 				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
 
@@ -297,7 +321,7 @@ def process_file(args,data):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if l[i+1] == "Oxidation":
-							modpeptide[int(l[i])] = 19
+							modpeptide[int(l[i])-1] = 19
 				if k:
 					continue
 
@@ -308,14 +332,8 @@ def process_file(args,data):
 				peaks = np.array(np.log2(peaks+0.001))
 				peaks = peaks.astype(np.float32)
 
-				tmptmp = np.argsort(msms)
-				msms = msms[tmptmp]
-				peaks = peaks[tmptmp]
-				
 				# find the b- and y-ion peak intensities in the MS2 spectrum
 				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
-				#if (np.max(b+y)<-9):
-				#	print title + " " + str(np.max(b+y))
 
 				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
@@ -345,7 +363,6 @@ def process_file(args,data):
 					tmp['prediction'] = resultB + resultY
 					tmp['spec_id'] = [title]*len(tmp)
 					pcount += 1
-					
 					result.append(tmp)
 
 	if args.vector_file:
