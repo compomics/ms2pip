@@ -130,7 +130,7 @@ def main():
 		myPool.close()
 		myPool.join()
 
-		sys.stdout.write('\nmerging results and writing files...\n')
+		sys.stdout.write('\nmerging results and writing csv file...\n')
 
 		all_preds = pd.DataFrame()
 		for r in results:
@@ -139,18 +139,20 @@ def main():
 		# print all_preds
 
 		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
-
-		mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
-		for sp in all_preds.spec_id.unique():
-			tmp = all_preds[all_preds.spec_id == sp]
-			tmp = tmp.sort_values('mz')
-			mgf_output.write('BEGIN IONS\n')
-			mgf_output.write('TITLE=' + str(sp) + '\n')
-			mgf_output.write('CHARGE=' + str(tmp.charge[0]) +'\n')
-			for i in range(len(tmp)):
-				mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
-			mgf_output.write('END IONS\n')
-		mgf_output.close()
+		mgf = False # prevent writing big mgf files
+		if mgf:
+			sys.stdout.write('\nwriting mgf file...\n')
+			mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
+			for sp in all_preds.spec_id.unique():
+				tmp = all_preds[all_preds.spec_id == sp]
+				tmp = tmp.sort_values('mz')
+				mgf_output.write('BEGIN IONS\n')
+				mgf_output.write('TITLE=' + str(sp) + '\n')
+				mgf_output.write('CHARGE=' + str(tmp.charge[0]) +'\n')
+				for i in range(len(tmp)):
+					mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
+				mgf_output.write('END IONS\n')
+			mgf_output.close()
 
 
 #peak intensity prediction without spectrum file (under construction)
@@ -178,7 +180,8 @@ def process_peptides(worker_num,data):
 	final_result = pd.DataFrame(columns=['peplen','charge','ion','mz', 'ionnumber', 'prediction', 'spec_id'])
 	sp_count = 0
 	total = len(peptides)
-	for (pepid,modsid) in zip(peptides,modifications):
+
+	for pepid in peptides:
 
 		ch = charges[pepid]
 
@@ -189,7 +192,7 @@ def process_peptides(worker_num,data):
 		peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
 		# modpeptide is the same as peptide but with modified amino acids
 		# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
-		mods = modifications[modsid]
+		mods = modifications[pepid]
 		modpeptide = np.array(peptide[:],dtype=np.uint16)
 		peplen = len(peptide)
 		if mods != '-':
@@ -222,7 +225,7 @@ def process_peptides(worker_num,data):
 
 		final_result = final_result.append(tmp)
 		sp_count+=1
-		if ((1.0 * sp_count)/total) * 100 % 20 == 0: print('worker ' + str(worker_num) + ': ' + str(sp_count) + ' peptides done'); sys.stdout.flush()
+		if int(((1.0 * sp_count)/total) * 100) % 20 == 0: print('worker ' + str(worker_num) + ': ' + str(sp_count) + ' peptides done'); sys.stdout.flush()
 
 	return final_result
 
