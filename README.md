@@ -39,25 +39,30 @@ optional arguments:
   -c INT          number of cpu's to use
 ```
 
-To apply the pre-trained models you only need to pass a `<peptide file>`
+###Getting predictions from peptide file
+
+To apply the pre-trained models you need to pass *only*  a `<peptide file>`
 to `ms2pipC.py`. This file contains the peptide sequences for which you
 want to predict the b- and y-ion peak intensities. The file is space
 separated and contains four columns with the following header names:
 
-- `spec_id`: the id (TITLE) of the spectrum in the `.mgf` MS2 file
+- `spec_id`: an id for the peptide/spectrum
 - `modifications`: a string indicating the modified amino acids
 - `peptide`: the unmodified amino acid sequence
 - `charge`: charge state to predict
 
+The predictions are saved in a `.csv` file with the name `<peptide_file>_predictions.csv`.
+If you want the output to be in the form of an `.mgf` file, replace the variable
+`mgf` in line 142 of `ms2pipC.py`.
+
 The *spec_id* column is a unique identifier for each peptide that will
-be used in the title field of the predicted MS2 .mgf file. The
+be used in the TITLE field of the predicted MS2 `.mgf` file. The
 `modifications` column is a string that lists what amino acid positions
 (starting with 1, position 0 is reserved for n-terminal modifications).
 For instance the string "3|CAM|11|Oxidation" represents a Carbamidomethyl
 modification of the 3th amino acid and a Oxidation modification of the
 11th amino acid.
 
-!! PREDICTION FROM PEPTIDE FILE ONLY IS NOT IMPLEMENTED YET !!
 !! ONLY CAM and Oxidation are implemented (and CAM is considered fixed) !!
 
 ###Writing feature vectors for model training
