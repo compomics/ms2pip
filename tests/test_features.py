@@ -23,4 +23,4 @@ def test_get_targetsY():
 def test_get_psmid():
     assert test_data[test_data.columns[-1]].equals(target_data[target_data.columns[-1]])
 
-call(['rm', 'test_vectors.h5'])
+call(['rm', 'test.h5'])
