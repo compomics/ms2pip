@@ -37,13 +37,13 @@ def main():
 	#print data.peptide.value_counts()
 	#ddd
 	if args.spec_file:
-		# This code runs if we give an mgf file as input. One of two things can happen after:
-		# if args.vector_file, we save a file with the feature vectors and targets
-		# else, we predict spectra and return a file with the target and predicted values for each ion
+		# Process the mgf file. In process_spectra, there is a check for
+		# args.vector_file that determines what is returned (feature vectors or
+		# evaluation of predictions)
 
 		# processing the mgf file:
 		# this is parallelized at the spectrum TITLE level
-		sys.stdout.write('scanning spectrum file...')
+		sys.stdout.write('scanning spectrum file... ')
 		titles = scan_spectrum_file(args.spec_file)
 		num_spectra_per_cpu = int(len(titles)/(num_cpu))
 		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
@@ -58,19 +58,15 @@ def main():
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
 			"""
-
-			process_file(
-										args,
-										data[data.spec_id.isin(tmp)]
-										)
+			process_spectra(args, data[data.spec_id.isin(tmp)])
 			"""
-			results.append(myPool.apply_async(process_file,args=(
+			results.append(myPool.apply_async(process_spectra,args=(
 										args,
 										data[data.spec_id.isin(tmp)]
 										)))
 		i+=1
 		tmp = titles[i*num_spectra_per_cpu:]
-		results.append(myPool.apply_async(process_file,args=(
+		results.append(myPool.apply_async(process_spectra,args=(
 								args,
 								data[data.spec_id.isin(tmp)]
 								)))
@@ -79,15 +75,17 @@ def main():
 		myPool.join()
 
 		# workers done...merging results
-		sys.stdout.write('\nmerging results and writing files...\n')
 
 		if args.vector_file:
+			sys.stdout.write('\nmerging results...\n')
 			# i.e. if we want to save the features + targets:
 			# read feature vectors from workers and concatenate
 			all_vectors = []
 			for r in results:
 				all_vectors.extend(r.get())
 			all_vectors = pd.concat(all_vectors)
+
+			sys.stdout.write('writing file... \n')
   			# write result. write format depends on extension:
   			ext = args.vector_file.split('.')[-1]
   			if ext == 'pkl':
@@ -99,8 +97,10 @@ def main():
   			else: # if none of the two, default to .h5
 				all_vectors.to_hdf(args.vector_file, 'table')
 
+			sys.stdout.write('done! \n')
+
 	else:
-		# For when we only give the PEPREC file and want the predictions
+		# Get predictions from a pep_file
 		sys.stdout.write('scanning peptide file...')
 
 		titles = data.spec_id
@@ -230,7 +230,7 @@ def process_peptides(worker_num,data):
 	return final_result
 
 #peak intensity prediction with spectrum file (for evaluation)
-def process_file(args,data):
+def process_spectra(args,data):
 
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
