@@ -48,6 +48,8 @@ def main():
 		num_spectra_per_cpu = int(len(titles)/(num_cpu))
 		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
+		process_spectra(args, data)
+
 		sys.stdout.write('starting workers...\n')
 
 		myPool = multiprocessing.Pool(num_cpu)
@@ -97,7 +99,16 @@ def main():
   			else: # if none of the two, default to .h5
 				all_vectors.to_hdf(args.vector_file, 'table')
 
-			sys.stdout.write('done! \n')
+		else:
+			sys.stdout.write('\nmerging results...\n')
+			all_spectra = []
+			for r in results:
+				all_spectra.extend(r.get())
+			all_spectra = pd.concat(all_spectra)
+			sys.stdout.write('writing file...\n')
+			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
+
+		sys.stdout.write('done! \n')
 
 	else:
 		# Get predictions from a pep_file
@@ -229,7 +240,7 @@ def process_peptides(worker_num,data):
 
 	return final_result
 
-#peak intensity prediction with spectrum file (for evaluation)
+# peak intensity prediction with spectrum file (for evaluation) OR feature extraction
 def process_spectra(args,data):
 
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
@@ -357,8 +368,8 @@ def process_spectra(args,data):
 					tmp = pd.DataFrame()
 					tmp['peplen'] = [peplen]*(2*len(b))
 					tmp['charge'] = [charge]*(2*len(b))
-					tmp['ion'] = ['b']*len(b)+['y']*len(y)
-					tmp['ionnumber'] = range(len(b))+range(len(y))
+					tmp['ion'] = ['b']*len(b) + ['y']*len(y)
+					tmp['ionnumber'] = [a+1 for a in range(len(b))+range(len(y)-1,-1,-1)]
 					tmp['target'] = b + y
 					tmp['prediction'] = resultB + resultY
 					tmp['spec_id'] = [title]*len(tmp)
