@@ -105,14 +105,15 @@ def main():
 			for r in results:
 				all_spectra.extend(r.get())
 			all_spectra = pd.concat(all_spectra)
+			# TODO compute correlations
 			sys.stdout.write('writing file...\n')
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
 		sys.stdout.write('done! \n')
 
 	else:
-		# Get predictions from a pep_file
-		sys.stdout.write('scanning peptide file...')
+		# Get only predictions from a pep_file
+		sys.stdout.write('scanning peptide file... ')
 
 		titles = data.spec_id
 		num_pep_per_cpu = int(len(titles)/(num_cpu))
@@ -141,14 +142,14 @@ def main():
 		myPool.close()
 		myPool.join()
 
-		sys.stdout.write('\nmerging results and writing csv file...\n')
+		sys.stdout.write('\nmerging results...\n')
 
 		all_preds = pd.DataFrame()
 		for r in results:
 			all_preds = all_preds.append(r.get())
 
 		# print all_preds
-
+		sys.stdout.write('writing files...\n')
 		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
 		mgf = False # prevent writing big mgf files
 		if mgf:
@@ -164,6 +165,7 @@ def main():
 					mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
 				mgf_output.write('END IONS\n')
 			mgf_output.close()
+		sys.stdout.write('done!\n')
 
 
 #peak intensity prediction without spectrum file (under construction)
@@ -269,7 +271,7 @@ def process_spectra(args,data):
 	pcount = 0
 	while (1):
 		rows = f.readlines(3000000)
-		sys.stdout.write('.')
+		# sys.stdout.write('.')
 		if not rows: break
 		for row in rows:
 			row = row.rstrip()
