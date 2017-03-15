@@ -48,8 +48,6 @@ def main():
 		num_spectra_per_cpu = int(len(titles)/(num_cpu))
 		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
-		process_spectra(args, data)
-
 		sys.stdout.write('starting workers...\n')
 
 		myPool = multiprocessing.Pool(num_cpu)
@@ -105,9 +103,16 @@ def main():
 			for r in results:
 				all_spectra.extend(r.get())
 			all_spectra = pd.concat(all_spectra)
-			# TODO compute correlations
+
 			sys.stdout.write('writing file...\n')
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
+
+			sys.stdout.write('computing correlations...\n')
+			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
+			corr_boxplot = correlations.plot('box')
+			corr_boxplot = corr_boxplot.get_figure()
+			corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
+			corr_boxplot.savefig(args.pep_file + '_correlations.png')
 
 		sys.stdout.write('done! \n')
 
