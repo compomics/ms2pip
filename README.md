@@ -87,7 +87,7 @@ In the folder `tests`, run `pytest`. This will run the tests in
 working properly. (The tests must be updated when we add or remove features!)
 To do this the `pytest` package must be installed (`pip install pytest`)
 
-###Convert spectral library .msp
+### Convert spectral library .msp
 
 The python script
 
@@ -99,7 +99,7 @@ converts a spectral library in `.msp` format into a spectrum `.mgf` file,
  a `<peptide file>` and a `<meta>` file.
 
 
-## #Optimize and Train XGBoost models
+### Optimize and Train XGBoost models
 
 The script
 
