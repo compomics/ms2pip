@@ -1,4 +1,4 @@
-#MS2PIPC
+# MS2PIPC
 
 ### Install
 
@@ -40,7 +40,7 @@ optional arguments:
   -c INT          number of cpu's to use
 ```
 
-###Getting predictions from peptide file
+### Getting predictions from peptide file
 
 To apply the pre-trained models you need to pass *only*  a `<peptide file>`
 to `ms2pipC.py`. This file contains the peptide sequences for which you
@@ -72,7 +72,7 @@ ptm=Cam,57.02146,C
 
 Then a modifications string could like `2|Cam|5|Cam` means that the third and sixth amin acid is modified.
 
-###Writing feature vectors for model training
+### Writing feature vectors for model training
 
 To compile a feature vector dataset you need to supply the
 MS2 .mgf file (option `-s`) and the name of the file to write the feature
@@ -81,7 +81,7 @@ The `spec_id` column in the `<peptide file>` should match the TITLE field
 of the corresponding MS2 spectrum in the .mgf file and is used to find
 the targets for the feature vectors.
 
-####Testing feature extraction
+#### Testing feature extraction
 In the folder `tests`, run `pytest`. This will run the tests in
 `test_features.py`, which verify if the feature and target extraction are
 working properly. (The tests must be updated when we add or remove features!)
@@ -99,7 +99,7 @@ converts a spectral library in `.msp` format into a spectrum `.mgf` file,
  a `<peptide file>` and a `<meta>` file.
 
 
-###Optimize and Train XGBoost models
+## #Optimize and Train XGBoost models
 
 The script
 
