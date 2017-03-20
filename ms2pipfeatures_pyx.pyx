@@ -5,6 +5,7 @@ cimport numpy as np
 cdef extern from "ms2pipfeatures_c.c":
 	#uncomment for Omega
 	#void init(char* amino_masses_fname, char* modifications_fname, char* modifications_fname_sptm)
+	void init(char* amino_masses_fname)
 	unsigned int* get_v(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
@@ -14,6 +15,8 @@ cdef extern from "ms2pipfeatures_c.c":
 #def ms2pip_init(amino_masses_fname, modifications_fname,modifications_fname_sptm):
 #	init(amino_masses_fname, modifications_fname,modifications_fname_sptm)
 
+def ms2pip_init(amino_masses_fname):
+	init(amino_masses_fname)
 
 def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
 	cdef unsigned int* result = get_v(len(peptide),&peptide[0],&modpeptide[0],charge)

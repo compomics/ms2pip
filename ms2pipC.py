@@ -9,22 +9,53 @@ import xgboost as xgb
 import matplotlib.pyplot as plt
 
 from scipy.stats import pearsonr
+import tempfile
 
 def main():
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('pep_file', metavar='<peptide file>',
 					 help='list of peptides')
+	parser.add_argument('-c','--config', metavar='FILE',action="store", dest='c',
+					 help='config file')
 	parser.add_argument('-s', metavar='FILE',action="store", dest='spec_file',
 					 help='.mgf MS2 spectrum file (optional)')
 	parser.add_argument('-w', metavar='FILE',action="store", dest='vector_file',
 					 help='write feature vectors to FILE.pkl (optional)')
-	parser.add_argument('-c', metavar='INT',action="store", dest='num_cpu',default='23',
+	parser.add_argument('-p', metavar='INT',action="store", dest='num_cpu',default='23',
 					 help="number of cpu's to use")
 
 	args = parser.parse_args()
 
 	num_cpu = int(args.num_cpu)
+	
+	if not args.c:
+		print "no config file specified"
+		exit(1)
+		
+	masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
+	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
+	a_map = {}
+	for i,a in enumerate(aminos):
+		a_map[a] = i
+
+	PTMmap = {}
+	fa = tempfile.NamedTemporaryFile(delete=False)
+	numptms = 0
+	with open(args.c) as f:
+		for row in f:
+			if row.startswith("ptm="): numptms+=1
+	fa.write("%i\n"%numptms)
+	pos = 19
+	with open(args.c) as f:
+		for row in f:
+			if row.startswith("ptm="):
+				l=row.rstrip().split('=')[1].split(',')
+				fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
+				PTMmap[l[0]] = pos
+				pos+=1
+	fa.close()
+	ms2pipfeatures_pyx.ms2pip_init(fa.name)
 
 	# read peptide information
 	# the file contains the following columns: spec_id, modifications, peptide and charge
@@ -62,13 +93,15 @@ def main():
 			"""
 			results.append(myPool.apply_async(process_spectra,args=(
 										args,
-										data[data.spec_id.isin(tmp)]
+										data[data.spec_id.isin(tmp)],
+										PTMmap
 										)))
 		i+=1
 		tmp = titles[i*num_spectra_per_cpu:]
 		results.append(myPool.apply_async(process_spectra,args=(
 								args,
-								data[data.spec_id.isin(tmp)]
+								data[data.spec_id.isin(tmp)],
+								PTMmap
 								)))
 
 		myPool.close()
@@ -108,7 +141,11 @@ def main():
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
 			sys.stdout.write('computing correlations...\n')
+			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr()
+			print correlations
 			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
+			
+			correlations.to_csv("cor.csv",index=False)
 			corr_boxplot = correlations.plot('box')
 			corr_boxplot = corr_boxplot.get_figure()
 			corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
@@ -248,7 +285,7 @@ def process_peptides(worker_num,data):
 	return final_result
 
 # peak intensity prediction with spectrum file (for evaluation) OR feature extraction
-def process_spectra(args,data):
+def process_spectra(args,data, PTMmap):
 
 	# a_map converts the peptide amio acids to integers, note how 'L' is removed
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
@@ -334,15 +371,11 @@ def process_spectra(args,data):
 				# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
 				modpeptide = np.array(peptide[:],dtype=np.uint16)
 				peplen = len(peptide)
-				k = False
+
 				if mods != '-':
 					l = mods.split('|')
 					for i in range(0,len(l),2):
-						if l[i+1] == "Oxidation":
-							#modpeptide[int(l[i])-1] = 19 BUG!!!
-							modpeptide[int(l[i])] = 19
-				if k:
-					continue
+						modpeptide[int(l[i])] = PTMmap[l[i+1]]
 
 				# normalize and convert MS2 peaks
 				msms = np.array(msms,dtype=np.float32)
@@ -497,7 +530,6 @@ def get_feature_names_chem(peplen):
 	names.append("charge")
 
 	return names
-
 
 def scan_spectrum_file(filename):
 	titles = []
