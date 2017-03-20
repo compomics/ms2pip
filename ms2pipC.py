@@ -339,7 +339,8 @@ def process_spectra(args,data):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if l[i+1] == "Oxidation":
-							modpeptide[int(l[i])-1] = 19
+							#modpeptide[int(l[i])-1] = 19 BUG!!!
+							modpeptide[int(l[i])] = 19
 				if k:
 					continue
 

@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "models/modelBnew.c"
-//#include "models/modelYnew.c"
+#include "models/modelBnew.c"
+#include "models/modelYnew.c"
 
-#include "models/dB.c"
-#include "models/dY.c"
+//#include "models/dB.c"
+//#include "models/dY.c"
 
 float membuffer[10000];
 unsigned int v[30000];
