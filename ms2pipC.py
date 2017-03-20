@@ -16,7 +16,7 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('pep_file', metavar='<peptide file>',
 					 help='list of peptides')
-	parser.add_argument('-c','--config', metavar='FILE',action="store", dest='c',
+	parser.add_argument('-c', metavar='FILE',action="store", dest='c',
 					 help='config file')
 	parser.add_argument('-s', metavar='FILE',action="store", dest='spec_file',
 					 help='.mgf MS2 spectrum file (optional)')
@@ -28,11 +28,7 @@ def main():
 	args = parser.parse_args()
 
 	num_cpu = int(args.num_cpu)
-	
-	if not args.c:
-		print "no config file specified"
-		exit(1)
-		
+			
 	masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 	a_map = {}

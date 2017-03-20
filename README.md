@@ -1,6 +1,6 @@
 #MS2PIPC
 
-###Install
+### Install
 
 Requirements:
 
@@ -18,7 +18,7 @@ sh compile.sh
 ```
 
 
-###MS2 peak intensity predictions
+### MS2 peak intensity predictions
 
 Pre-trained HCD models for the b- and y-ions can be found in
 the `/models` folder. These C-coded decision tree models are compiled
@@ -34,6 +34,7 @@ positional arguments:
 
 optional arguments:
   -h, --help      show this help message and exit
+  -c FILE         config file
   -s FILE         .mgf MS2 spectrum file (optional)
   -w FILE         write feature vectors to FILE.ext (.pkl or .h5) (optional)
   -c INT          number of cpu's to use
@@ -57,13 +58,19 @@ If you want the output to be in the form of an `.mgf` file, replace the variable
 
 The *spec_id* column is a unique identifier for each peptide that will
 be used in the TITLE field of the predicted MS2 `.mgf` file. The
-`modifications` column is a string that lists what amino acid positions
-(starting with 1, position 0 is reserved for n-terminal modifications).
-For instance the string "3|CAM|11|Oxidation" represents a Carbamidomethyl
-modification of the 3th amino acid and a Oxidation modification of the
-11th amino acid.
+`modifications` column is a string that lists the PTMs in the peptide. Each PTM is written as
+`A|B` where A is the location of the PTM in the peptide (the first amino acid has location 0)
+and B is a string that represent the PTM and is defined in a configfile supplied with the `-c` command line argument.
+This file contains one line `ptm=X,Y,Z` for each PTM where X is a string that represents 
+the PTM, Y is the difference in Da associated with tthe PTM and Z is the amino 
+acid that is modified by the PTM. Multiple PTMs in the `modifications` column are concatenated with '|'.
+Suppose the configfile ccontanis the line
 
-!! ONLY CAM and Oxidation are implemented (and CAM is considered fixed) !!
+```
+ptm=Cam,57.02146,C
+```
+
+Then a modifications string could like `2|Cam|5|Cam` means that the third and sixth amin acid is modified.
 
 ###Writing feature vectors for model training
 
@@ -121,3 +128,4 @@ This script will write the XGBoost models as `.c` files that can be compiled
 and linked through Cython. Just put the models in the `/models` folder
 , change the `#include` directives in `ms2pipfeatures_c.c`, and recompile
 the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script.
+ 
