@@ -168,13 +168,15 @@ def main():
 
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
-										data[data.spec_id.isin(tmp)]
+										data[data.spec_id.isin(tmp)],
+										PTMmap
 										)))
 		i+=1
 		tmp = titles[i*num_pep_per_cpu:]
 		results.append(myPool.apply_async(process_peptides,args=(
 								i,
-								data[data.spec_id.isin(tmp)]
+								data[data.spec_id.isin(tmp)],
+								PTMmap
 								)))
 
 		myPool.close()
@@ -207,7 +209,7 @@ def main():
 
 
 #peak intensity prediction without spectrum file (under construction)
-def process_peptides(worker_num,data):
+def process_peptides(worker_num,data,PTMmap):
 	"""
 	Take the PEPREC file and predict spectra.
 	"""
@@ -249,8 +251,7 @@ def process_peptides(worker_num,data):
 		if mods != '-':
 			l = mods.split('|')
 			for i in range(0,len(l),2):
-				if l[i+1] == "Oxidation":
-					modpeptide[int(l[i])] = 19
+				modpeptide[int(l[i])] = PTMmap[l[i+1]]
 
 		b_mz = [None] * (len(modpeptide)-1)
 		y_mz = [None] * (len(modpeptide)-1)
