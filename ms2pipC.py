@@ -251,14 +251,14 @@ def process_peptides(worker_num,data,PTMmap):
 		if mods != '-':
 			l = mods.split('|')
 			for i in range(0,len(l),2):
-				modpeptide[int(l[i])] = PTMmap[l[i+1]]
+				modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
 
 		b_mz = [None] * (len(modpeptide)-1)
 		y_mz = [None] * (len(modpeptide)-1)
 		b_mz[0] = a_mass[modpeptide[0]] + 1.007236
 		y_mz[0] = a_mass[modpeptide[len(modpeptide)-1]] + 18.0105647 + 1.007236
 		for i in range(1, len(modpeptide)-1):
-			b_mz[i] = b_mz[i-1] + a_mass[modpeptide[i]]
+			b_mz[i] = b_mz[i-1] + a_mass[modpeptide[i]]   # STILL PROBLEM HERE
 			y_mz[i] = y_mz[i-1] + a_mass[modpeptide[-(i+1)]]
 
 		# get ion intensities
@@ -369,10 +369,17 @@ def process_spectra(args,data, PTMmap):
 				modpeptide = np.array(peptide[:],dtype=np.uint16)
 				peplen = len(peptide)
 
+				nptm = 0
+				cptm = 0
 				if mods != '-':
 					l = mods.split('|')
 					for i in range(0,len(l),2):
-						modpeptide[int(l[i])] = PTMmap[l[i+1]]
+						if int(l[i]) == 0:
+							nptm +== ntermptm
+						elif int(l[i]) == -1:
+							cptm += ctermptm
+						else:
+							modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
 
 				# normalize and convert MS2 peaks
 				msms = np.array(msms,dtype=np.float32)
@@ -382,7 +389,7 @@ def process_spectra(args,data, PTMmap):
 				peaks = peaks.astype(np.float32)
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
-				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks)
+				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks,nptm,cptm)
 
 				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)

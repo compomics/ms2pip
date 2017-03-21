@@ -118,7 +118,7 @@ void init(char* amino_masses_fname, char* modifications_fname, char* modificatio
 */
 
 //get fragment ion peaks from spectrum
-float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks)
+float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float nptm, float cptm)
 	{
 	int i,j,tmp;
 	float mz;
@@ -133,7 +133,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 		//ions[i] = 0; //HARD CODED!!
 	}
 
-	mz = 0.;
+	mz = nptm;
 	for (i=0; i < peplen-1; i++) {
 		mz += amino_masses[modpeptide[i]];
 		membuffer[i] = mz+1.007236;
@@ -177,7 +177,7 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 
 	// y-ions
 
-	mz = 0.;
+	mz = cptm;
 	j=0;
 	for (i=peplen-1; i >= 1; i--) {
 		mz += amino_masses[modpeptide[i]];
