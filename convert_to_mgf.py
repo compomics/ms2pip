@@ -32,14 +32,6 @@ AminoMass['V']= 99.068414
 AminoMass['W']= 186.079313
 AminoMass['Y']= 163.063329
 
-PTMmap = {}
-PTMmap['Carbamidomethyl'] = 'cmm'
-PTMmap['Glu->pyro-Glu'] = 'glu'
-PTMmap['Oxidation'] = 'mox'
-PTMmap['Pyro-carbamidomethyl'] = 'pyr'
-PTMmap['Gln->pyro-Glu'] = 'gln'
-PTMmap['Acetyl'] = 'ace'
-
 fpip = open(sys.argv[1]+'.PEPREC','w')
 fpip.write("spec_id modifications peptide\n")
 fmgf = open(sys.argv[1]+'.PEPREC.mgf','w')
@@ -73,6 +65,8 @@ with open(sys.argv[1]) as f:
 					for i in range(1,len(tmp)):
 						tmp2=tmp[i].split(',')
 						m += tmp2[0]+'|'+tmp2[2] + '|'
+						if not tmp2[2] in PTMs: PTMs[tmp2[2]] = 0
+						PTMs[tmp2[2]] += 1
 					fpip.write('%s%i %s %s\n'%(sys.argv[2],specid,m[:-1],peptide))
 				else:
 					fpip.write('%s%i  %s\n'%(sys.argv[2],specid,peptide))
@@ -131,3 +125,5 @@ with open(sys.argv[1]) as f:
 fmgf.close()
 fpip.close()
 fmeta.close()
+
+print PTMs
