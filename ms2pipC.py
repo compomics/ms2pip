@@ -40,6 +40,8 @@ def main():
 	num_cpu = int(args.num_cpu)
 			
 	PTMmap = {}
+	Ntermmap = {}
+	Ctermmap = {}
 	if args.c:
 		# reading the configfile (-c) and configure the ms2pipfeatures_pyx module's datastructures
 		fa = tempfile.NamedTemporaryFile(delete=False)
@@ -56,6 +58,12 @@ def main():
 					fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
 					PTMmap[l[0]] = pos
 					pos+=1
+				if row.startswith("nterm="):
+					l=row.rstrip().split('=')[1].split(',')
+					Ntermmap[l[0]] = float(l[1])
+				if row.startswith("cterm="):
+					l=row.rstrip().split('=')[1].split(',')
+					Ctermmap[l[0]] = float(l[1])
 		fa.close()
 		ms2pipfeatures_pyx.ms2pip_init(fa.name)
 
@@ -92,13 +100,13 @@ def main():
 			#select titles for this worker
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
-			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap)
+			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap)
 			#send worker to myPool
 			results.append(myPool.apply_async(process_spectra,args=(
 										i,
 										args,
 										data[data.spec_id.isin(tmp)],
-										PTMmap
+										PTMmap,Ntermmap,Ctermmap
 										)))
 		i+=1
 		#some titles might be left
@@ -107,7 +115,7 @@ def main():
 								i,
 								args,
 								data[data.spec_id.isin(tmp)],
-								PTMmap
+								PTMmap,Ntermmap,Ctermmap
 								)))
 
 		myPool.close()
@@ -176,12 +184,12 @@ def main():
 			#select titles for this worker			
 			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
 			"""
-			process_peptides(i,data[data.spec_id.isin(tmp)],PTMmap)
+			process_peptides(i,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap)
 			"""
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
 										data[data.spec_id.isin(tmp)],
-										PTMmap
+										PTMmap,Ntermmap,Ctermmap
 										)))
 		#some titles might be left
 		i+=1
@@ -189,7 +197,7 @@ def main():
 		results.append(myPool.apply_async(process_peptides,args=(
 								i,
 								data[data.spec_id.isin(tmp)],
-								PTMmap
+								PTMmap,Ntermmap,Ctermmap
 								)))
 
 		myPool.close()
@@ -222,7 +230,7 @@ def main():
 
 
 #peak intensity prediction without spectrum file (under construction)
-def process_peptides(worker_num,data,PTMmap):
+def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap):
 	"""
 	Read the PEPREC file and predict spectra.
 	"""
@@ -257,9 +265,9 @@ def process_peptides(worker_num,data,PTMmap):
 			l = mods.split('|')
 			for i in range(0,len(l),2):
 				if int(l[i]) == 0:
-					nptm += ntermptm
+					nptm += Ntermmap[l[i+1]]
 				elif int(l[i]) == -1:
-					cptm += ctermptm
+					cptm += Ctermmap[l[i+1]]
 				else:
 					modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
 
@@ -285,7 +293,7 @@ def process_peptides(worker_num,data,PTMmap):
 	return final_result
 
 # peak intensity prediction with spectrum file (for evaluation) OR feature extraction
-def process_spectra(worker_num,args,data, PTMmap):
+def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap):
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
@@ -363,9 +371,9 @@ def process_spectra(worker_num,args,data, PTMmap):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if int(l[i]) == 0:
-							nptm += ntermptm
+							nptm += Ntermmap[l[i+1]]
 						elif int(l[i]) == -1:
-							cptm += ctermptm
+							cptm += Ctermmap[l[i+1]]
 						else:
 							modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
 
