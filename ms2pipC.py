@@ -1,15 +1,14 @@
 import sys
 import numpy as np
 import pandas as pd
-import ms2pipfeatures_pyx
 import pickle
 import argparse
 import multiprocessing
-import xgboost as xgb
-import matplotlib.pyplot as plt
 from random import shuffle
-from scipy.stats import pearsonr
 import tempfile
+#import xgboost as xgb
+
+import ms2pipfeatures_pyx
 
 #some globals
 
@@ -18,11 +17,9 @@ aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W
 masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,
 		113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,
 		87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
-a_mass = []
 a_map = {}
 for i,a in enumerate(aminos):
 	a_map[a] = i
-	a_mass.append(masses[i])
 	
 def main():
 
@@ -95,10 +92,10 @@ def main():
 			#select titles for this worker
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
-			#process_spectra(args, data[data.spec_id.isin(tmp)],PTMmap)
-
+			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap)
 			#send worker to myPool
 			results.append(myPool.apply_async(process_spectra,args=(
+										i,
 										args,
 										data[data.spec_id.isin(tmp)],
 										PTMmap
@@ -107,6 +104,7 @@ def main():
 		#some titles might be left
 		tmp = titles[i*num_spectra_per_cpu:]
 		results.append(myPool.apply_async(process_spectra,args=(
+								i,
 								args,
 								data[data.spec_id.isin(tmp)],
 								PTMmap
@@ -148,14 +146,12 @@ def main():
 			sys.stdout.write('writing file...\n')
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
-			sys.stdout.write('computing correlations...\n')
-			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
-			
-			correlations.to_csv("cor.csv",index=False)
-			corr_boxplot = correlations.plot('box')
-			corr_boxplot = corr_boxplot.get_figure()
-			corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
-			corr_boxplot.savefig(args.pep_file + '_correlations.png')
+			#sys.stdout.write('computing correlations...\n')
+			#correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']			
+			#corr_boxplot = correlations.plot('box')
+			#corr_boxplot = corr_boxplot.get_figure()
+			#corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
+			#corr_boxplot.savefig(args.pep_file + '_correlations.png')
 
 		sys.stdout.write('done! \n')
 
@@ -283,23 +279,25 @@ def process_peptides(worker_num,data,PTMmap):
 		tmp['spec_id'] = [pepid]*len(tmp)
 		final_result = final_result.append(tmp)
 		sp_count+=1
-		if int(((1.0 * sp_count)/total) * 100) % 20 == 0: print('worker ' + str(worker_num) + ': ' + str(sp_count) + ' peptides done'); sys.stdout.flush()
+		if int(((1.0 * sp_count)/total) * 100) % 20 == 0: 
+			sys.stderr.write('w' + str(worker_num) + '( ' + str(sp_count) + ') ')
 
 	return final_result
 
 # peak intensity prediction with spectrum file (for evaluation) OR feature extraction
-def process_spectra(args,data, PTMmap):
+def process_spectra(worker_num,args,data, PTMmap):
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
 	modifications = specdict['modifications']
 
+	total = len(peptides)
+	
 	# cols contains the names of the computed features
 	cols_n = get_feature_names()
-
+	
 	title = ""
-	parent_mz = 0.
 	charge = 0
 	msms = []
 	peaks = []
@@ -339,14 +337,13 @@ def process_spectra(args,data, PTMmap):
 			elif row[0] == "C":
 				if row[:6] == "CHARGE":
 					charge = int(row[7:9].replace("+",""))
-			elif row[0] == "P":
-				if row[:7] == "PEPMASS":
-					parent_mz = float(row[8:].split()[0])
 			elif row[:8] == "END IONS":
 				#process
 				if not title in peptides: continue
 
-				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
+				#with counter.get_lock():
+				#	counter.value += 1
+				#sys.stderr.write("%i ",counter.value)
 
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
@@ -402,15 +399,25 @@ def process_spectra(args,data, PTMmap):
 					resultY = resultY[::-1]
 
 					tmp = pd.DataFrame()
+					tmp['spec_id'] = [title]*(2*len(b))
 					tmp['peplen'] = [peplen]*(2*len(b))
+					tmp['peplen'] = tmp['peplen'].astype(np.uint8)
 					tmp['charge'] = [charge]*(2*len(b))
-					tmp['ion'] = ['b']*len(b) + ['y']*len(y)
+					tmp['charge'] = tmp['charge'].astype(np.uint8)
+					tmp['ion'] = [0]*len(b) + [1]*len(y)
+					tmp['ion'] = tmp['ion'].astype(np.uint8)
 					tmp['ionnumber'] = [a+1 for a in range(len(b))+range(len(y)-1,-1,-1)]
+					tmp['ionnumber'] = tmp['ionnumber'].astype(np.uint8)
 					tmp['target'] = b + y
+					tmp['target'] = tmp['target'].astype(np.float32)					
 					tmp['prediction'] = resultB + resultY
-					tmp['spec_id'] = [title]*len(tmp)
-					pcount += 1
+					tmp['prediction'] = tmp['prediction'].astype(np.float32)					
 					result.append(tmp)
+				
+				pcount += 1
+				#print (100*(float(pcount))/total)
+				if (pcount % 500) == 0: 
+					sys.stderr.write('w' + str(worker_num) + '(' + str(pcount) + ') ')
 
 	if args.vector_file:
 		return vectors
