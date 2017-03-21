@@ -10,6 +10,7 @@ cdef extern from "ms2pipfeatures_c.c":
 	unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float nptm, float cptm)
+	float* get_mz(int peplen, unsigned short* modpeptide, float nptm, float cptm)
 
 #uncomment for Omega
 #def ms2pip_init(amino_masses_fname, modifications_fname,modifications_fname_sptm):
@@ -42,6 +43,19 @@ def get_vector_bof_chem(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, in
 		r.append(v)
 	return r
 
+def get_mzs(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,float nptm,float cptm):
+	cdef int pos = 0
+	cdef float* result = get_mz(len(modpeptide), &modpeptide[0], nptm, cptm)
+	b = []
+	for i in range(len(modpeptide)-1):
+		b.append(result[pos])
+		pos += 1
+	y = []
+	for i in range(len(modpeptide)-1):
+		y.append(result[pos])
+		pos+=1
+	return(b,y)
+	
 def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks,float nptm,float cptm):
 	cdef float* result = get_t(len(modpeptide),&modpeptide[0],len(peaks),&msms[0],&peaks[0],nptm,cptm)
 	b = []
@@ -52,6 +66,7 @@ def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndar
 		y.append(result[2*len(modpeptide)-3-i])
 	return(b,y)
 
+"""
 def get_score(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks, charge):
 	cdef float* targets = get_t(len(modpeptide),&modpeptide[0],len(peaks),&msms[0],&peaks[0])
 	cdef float* predictions = get_p(len(peptide),&peptide[0],&modpeptide[0],charge)
@@ -65,7 +80,7 @@ def get_score(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[un
 	mae /= (len(modpeptide)-1)
 	#print mae
 	return mae
-
+"""
 def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
 	cdef float* predictions = get_p(len(peptide),&peptide[0],&modpeptide[0],charge)
 	resultB = []

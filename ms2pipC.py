@@ -7,10 +7,23 @@ import argparse
 import multiprocessing
 import xgboost as xgb
 import matplotlib.pyplot as plt
-
+from random import shuffle
 from scipy.stats import pearsonr
 import tempfile
 
+#some globals
+
+# a_map converts the peptide amio acids to integers, note how 'L' is removed
+aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
+masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,
+		113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,
+		87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
+a_mass = []
+a_map = {}
+for i,a in enumerate(aminos):
+	a_map[a] = i
+	a_mass.append(masses[i])
+	
 def main():
 
 	parser = argparse.ArgumentParser()
@@ -29,29 +42,25 @@ def main():
 
 	num_cpu = int(args.num_cpu)
 			
-	masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
-	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
-	a_map = {}
-	for i,a in enumerate(aminos):
-		a_map[a] = i
-
 	PTMmap = {}
-	fa = tempfile.NamedTemporaryFile(delete=False)
-	numptms = 0
-	with open(args.c) as f:
-		for row in f:
-			if row.startswith("ptm="): numptms+=1
-	fa.write("%i\n"%numptms)
-	pos = 19
-	with open(args.c) as f:
-		for row in f:
-			if row.startswith("ptm="):
-				l=row.rstrip().split('=')[1].split(',')
-				fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
-				PTMmap[l[0]] = pos
-				pos+=1
-	fa.close()
-	ms2pipfeatures_pyx.ms2pip_init(fa.name)
+	if args.c:
+		# reading the configfile (-c) and configure the ms2pipfeatures_pyx module's datastructures
+		fa = tempfile.NamedTemporaryFile(delete=False)
+		numptms = 0
+		with open(args.c) as f:
+			for row in f:
+				if row.startswith("ptm="): numptms+=1
+		fa.write("%i\n"%numptms)
+		pos = 19 #modified amino acids have numbers starting at 19
+		with open(args.c) as f:
+			for row in f:
+				if row.startswith("ptm="):
+					l=row.rstrip().split('=')[1].split(',')
+					fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
+					PTMmap[l[0]] = pos
+					pos+=1
+		fa.close()
+		ms2pipfeatures_pyx.ms2pip_init(fa.name)
 
 	# read peptide information
 	# the file contains the following columns: spec_id, modifications, peptide and charge
@@ -61,8 +70,6 @@ def main():
 						dtype={'spec_id':str,'modifications':str})
 	data = data.fillna('-') # for some reason the missing values are converted to float otherwise
 
-	#print data.peptide.value_counts()
-	#ddd
 	if args.spec_file:
 		# Process the mgf file. In process_spectra, there is a check for
 		# args.vector_file that determines what is returned (feature vectors or
@@ -72,6 +79,9 @@ def main():
 		# this is parallelized at the spectrum TITLE level
 		sys.stdout.write('scanning spectrum file... ')
 		titles = scan_spectrum_file(args.spec_file)
+		#titles might be ordered from small to large peptides,
+		#shuffling improves parallel speeds
+		shuffle(titles)
 		num_spectra_per_cpu = int(len(titles)/(num_cpu))
 		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
 
@@ -82,17 +92,19 @@ def main():
 		results = []
 		i = 0
 		for i in range(num_cpu-1):
+			#select titles for this worker
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
-			"""
-			process_spectra(args, data[data.spec_id.isin(tmp)])
-			"""
+			#process_spectra(args, data[data.spec_id.isin(tmp)],PTMmap)
+
+			#send worker to myPool
 			results.append(myPool.apply_async(process_spectra,args=(
 										args,
 										data[data.spec_id.isin(tmp)],
 										PTMmap
 										)))
 		i+=1
+		#some titles might be left
 		tmp = titles[i*num_spectra_per_cpu:]
 		results.append(myPool.apply_async(process_spectra,args=(
 								args,
@@ -137,8 +149,6 @@ def main():
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
 			sys.stdout.write('computing correlations...\n')
-			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr()
-			print correlations
 			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
 			
 			correlations.to_csv("cor.csv",index=False)
@@ -153,7 +163,10 @@ def main():
 		# Get only predictions from a pep_file
 		sys.stdout.write('scanning peptide file... ')
 
-		titles = data.spec_id
+		#titles might be ordered from small to large peptides,
+		#shuffling improves parallel speeds
+		titles = data.spec_id.tolist()
+		shuffle(titles)
 		num_pep_per_cpu = int(len(titles)/(num_cpu))
 		sys.stdout.write("%i peptides (%i per cpu)\n"%(len(titles),num_pep_per_cpu))
 
@@ -164,13 +177,17 @@ def main():
 		results = []
 		i = 0
 		for i in range(num_cpu-1):
+			#select titles for this worker			
 			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
-
+			"""
+			process_peptides(i,data[data.spec_id.isin(tmp)],PTMmap)
+			"""
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
 										data[data.spec_id.isin(tmp)],
 										PTMmap
 										)))
+		#some titles might be left
 		i+=1
 		tmp = titles[i*num_pep_per_cpu:]
 		results.append(myPool.apply_async(process_peptides,args=(
@@ -211,19 +228,9 @@ def main():
 #peak intensity prediction without spectrum file (under construction)
 def process_peptides(worker_num,data,PTMmap):
 	"""
-	Take the PEPREC file and predict spectra.
+	Read the PEPREC file and predict spectra.
 	"""
 
-	# a_map converts the peptide amino acids to integers, note how 'L' is removed
-	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
-	masses = [71.037114,160.030645,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329,147.0354]
-	a_map = {}
-	a_mass = {}
-	for i,a in enumerate(aminos):
-		a_map[a] = i
-		a_mass[i] = masses[i]
-
-	a_mass[19] = masses[19]
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
@@ -248,33 +255,32 @@ def process_peptides(worker_num,data,PTMmap):
 		mods = modifications[pepid]
 		modpeptide = np.array(peptide[:],dtype=np.uint16)
 		peplen = len(peptide)
+		nptm = 0
+		cptm = 0
 		if mods != '-':
 			l = mods.split('|')
 			for i in range(0,len(l),2):
-				modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
+				if int(l[i]) == 0:
+					nptm += ntermptm
+				elif int(l[i]) == -1:
+					cptm += ctermptm
+				else:
+					modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
 
-		b_mz = [None] * (len(modpeptide)-1)
-		y_mz = [None] * (len(modpeptide)-1)
-		b_mz[0] = a_mass[modpeptide[0]] + 1.007236
-		y_mz[0] = a_mass[modpeptide[len(modpeptide)-1]] + 18.0105647 + 1.007236
-		for i in range(1, len(modpeptide)-1):
-			b_mz[i] = b_mz[i-1] + a_mass[modpeptide[i]]   # STILL PROBLEM HERE
-			y_mz[i] = y_mz[i-1] + a_mass[modpeptide[-(i+1)]]
+		(b_mz,y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide,nptm,cptm)
 
 		# get ion intensities
 		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 
 		# return results as a DataFrame
 		tmp = pd.DataFrame()
-		tmp['peplen'] = [len(peptide)]*(2*len(resultB))
+		tmp['peplen'] = [peplen]*(2*len(resultB))
 		tmp['charge'] = [ch]*(2*len(resultB))
 		tmp['ion'] = ['b']*len(resultB)+['y']*len(resultY)
 		tmp['mz'] = b_mz + y_mz
 		tmp['ionnumber'] = range(1,len(resultB)+1)+range(len(resultY),0,-1)
-		# tmp['target'] = b + y
 		tmp['prediction'] = resultB + resultY
 		tmp['spec_id'] = [pepid]*len(tmp)
-
 		final_result = final_result.append(tmp)
 		sp_count+=1
 		if int(((1.0 * sp_count)/total) * 100) % 20 == 0: print('worker ' + str(worker_num) + ': ' + str(sp_count) + ' peptides done'); sys.stdout.flush()
@@ -283,12 +289,6 @@ def process_peptides(worker_num,data,PTMmap):
 
 # peak intensity prediction with spectrum file (for evaluation) OR feature extraction
 def process_spectra(args,data, PTMmap):
-
-	# a_map converts the peptide amio acids to integers, note how 'L' is removed
-	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
-	a_map = {}
-	for i,a in enumerate(aminos):
-		a_map[a] = i
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
@@ -345,21 +345,12 @@ def process_spectra(args,data, PTMmap):
 			elif row[:8] == "END IONS":
 				#process
 				if not title in peptides: continue
-				#if title != "human684921": continue
-
 
 				parent_mz = (float(parent_mz) * (charge)) - ((charge)*1.007825035) #or 0.0073??
 
 				peptide = peptides[title]
-				#if not peptide == "FVFCAEAIYK":continue
-				#if not charge == 2: continue
 				peptide = peptide.replace('L','I')
 				mods = modifications[title]
-
-				#processing unmodified identification
-				#if mods != '-': continue
-				#processing charge 2 only !!!!!!!!!!!!!!!!!!!!!!!!
-				#if charge != 2: continue
 
 				# convert peptide string to integer list to speed up C code
 				peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
@@ -375,7 +366,7 @@ def process_spectra(args,data, PTMmap):
 					l = mods.split('|')
 					for i in range(0,len(l),2):
 						if int(l[i]) == 0:
-							nptm +== ntermptm
+							nptm += ntermptm
 						elif int(l[i]) == -1:
 							cptm += ctermptm
 						else:
