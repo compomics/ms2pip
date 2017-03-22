@@ -8,8 +8,6 @@ from random import shuffle
 import tempfile
 #import xgboost as xgb
 
-import ms2pipfeatures_pyx
-
 #some globals
 
 # a_map converts the peptide amio acids to integers, note how 'L' is removed
@@ -20,7 +18,7 @@ masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058
 a_map = {}
 for i,a in enumerate(aminos):
 	a_map[a] = i
-	
+		
 def main():
 
 	parser = argparse.ArgumentParser()
@@ -37,35 +35,56 @@ def main():
 
 	args = parser.parse_args()
 
+	if not args.c:
+		print "Please provide a configfile (-c)!"
+		exit(1)
+
 	num_cpu = int(args.num_cpu)
 			
 	PTMmap = {}
 	Ntermmap = {}
 	Ctermmap = {}
-	if args.c:
-		# reading the configfile (-c) and configure the ms2pipfeatures_pyx module's datastructures
-		fa = tempfile.NamedTemporaryFile(delete=False)
-		numptms = 0
-		with open(args.c) as f:
-			for row in f:
-				if row.startswith("ptm="): numptms+=1
-		fa.write("%i\n"%numptms)
-		pos = 19 #modified amino acids have numbers starting at 19
-		with open(args.c) as f:
-			for row in f:
-				if row.startswith("ptm="):
-					l=row.rstrip().split('=')[1].split(',')
-					fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
-					PTMmap[l[0]] = pos
-					pos+=1
-				if row.startswith("nterm="):
-					l=row.rstrip().split('=')[1].split(',')
-					Ntermmap[l[0]] = float(l[1])
-				if row.startswith("cterm="):
-					l=row.rstrip().split('=')[1].split(',')
-					Ctermmap[l[0]] = float(l[1])
-		fa.close()
-		ms2pipfeatures_pyx.ms2pip_init(fa.name)
+	fragmethod = "none" # CID or HCD
+	fragerror = 0
+	# reading the configfile (-c) and configure the ms2pipfeatures_pyx module's datastructures
+	fa = tempfile.NamedTemporaryFile(delete=False)
+	numptms = 0
+	with open(args.c) as f:
+		for row in f:
+			if row.startswith("ptm="): numptms+=1
+	fa.write("%i\n"%numptms)
+	pos = 19 #modified amino acids have numbers starting at 19
+	with open(args.c) as f:
+		for row in f:
+			if row.startswith("ptm="):
+				l=row.rstrip().split('=')[1].split(',')
+				fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
+				PTMmap[l[0]] = pos
+				pos+=1
+			if row.startswith("nterm="):
+				l=row.rstrip().split('=')[1].split(',')
+				Ntermmap[l[0]] = float(l[1])
+			if row.startswith("cterm="):
+				l=row.rstrip().split('=')[1].split(',')
+				Ctermmap[l[0]] = float(l[1])
+			if row.startswith("frag_method="):
+				fragmethod=row.rstrip().split('=')[1]
+			if row.startswith("frag_error="):
+				fragerror=float(row.rstrip().split('=')[1])
+
+	fa.close()
+
+	if fragmethod == "CID":
+		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
+	elif fragmethod == "HCD":
+		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+	else:
+		print "Unknown fragmentation method in configfile: %s"%fragmethod
+		exit(1)
+		
+	print "using %s models..."%fragmethod
+	
+	ms2pipfeatures_pyx.ms2pip_init(fa.name)
 
 	# read peptide information
 	# the file contains the following columns: spec_id, modifications, peptide and charge
@@ -100,13 +119,13 @@ def main():
 			#select titles for this worker
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
-			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap)
+			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
 			#send worker to myPool
 			results.append(myPool.apply_async(process_spectra,args=(
 										i,
 										args,
 										data[data.spec_id.isin(tmp)],
-										PTMmap,Ntermmap,Ctermmap
+										PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror
 										)))
 		i+=1
 		#some titles might be left
@@ -115,7 +134,7 @@ def main():
 								i,
 								args,
 								data[data.spec_id.isin(tmp)],
-								PTMmap,Ntermmap,Ctermmap
+								PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror
 								)))
 
 		myPool.close()
@@ -184,12 +203,12 @@ def main():
 			#select titles for this worker			
 			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
 			"""
-			process_peptides(i,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap)
+			process_peptides(i,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
 			"""
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
 										data[data.spec_id.isin(tmp)],
-										PTMmap,Ntermmap,Ctermmap
+										PTMmap,Ntermmap,Ctermmap,fragmethod
 										)))
 		#some titles might be left
 		i+=1
@@ -197,7 +216,7 @@ def main():
 		results.append(myPool.apply_async(process_peptides,args=(
 								i,
 								data[data.spec_id.isin(tmp)],
-								PTMmap,Ntermmap,Ctermmap
+								PTMmap,Ntermmap,Ctermmap,fragmethod
 								)))
 
 		myPool.close()
@@ -230,10 +249,15 @@ def main():
 
 
 #peak intensity prediction without spectrum file (under construction)
-def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap):
+def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	"""
 	Read the PEPREC file and predict spectra.
 	"""
+
+	if fragmethod == "CID":
+		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
+	elif fragmethod == "HCD":
+		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
@@ -293,7 +317,12 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap):
 	return final_result
 
 # peak intensity prediction with spectrum file (for evaluation) OR feature extraction
-def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap):
+def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror):
+
+	if fragmethod == "CID":
+		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
+	elif fragmethod == "HCD":
+		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
@@ -385,7 +414,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap):
 				peaks = peaks.astype(np.float32)
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
-				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks,nptm,cptm)
+				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks,nptm,cptm,fragerror)
 
 				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)

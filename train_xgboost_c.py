@@ -16,6 +16,9 @@ from scipy.stats import pearsonr
 
 import ms2pipfeatures_pyx
 
+
+print xgb.__version__
+
 def evalerror(preds, dtrain):
     labels = dtrain.get_label()
     return 'pearsonr', pearsonr(preds,labels)[0]
@@ -69,7 +72,7 @@ def main():
 	num_psms = len(upeps)
 	np.random.shuffle(upeps)
 
-	test_psms = upeps[:int(num_psms*0.2)]
+	test_psms = upeps[:int(num_psms*0.1)]
 
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")
@@ -126,11 +129,11 @@ def main():
 	param = {"objective":"reg:linear",
 	         "nthread":int(args.num_cpu),
 	         "silent":1,
-	         "eta":0.7,
-	         "max_delta_step":12,
-	         "max_depth":7,
+	         "eta":1,
+	         #"max_delta_step":12,
+	         "max_depth":14,
 			 "gamma":1,	
-			 "min_child_weight":1000,
+			 "min_child_weight":700,
 			 "subsample":1,
 			 "colsample_bytree":1,
 			 #"scale_pos_weight":num_neg/num_pos

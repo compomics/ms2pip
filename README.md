@@ -40,6 +40,20 @@ optional arguments:
   -c INT          number of cpu's to use
 ```
 
+### configfile (-c option)
+
+Several ms2pipC options need to be set in this configfile.
+
+The models that should be used are set as `frag_method=X` where X is either `CID` or `HCD`.
+The fragment ion error tolerance is set as `frag_error=X` where is X is the tolerance in Da.
+
+PTMs (see further) are set as `ptm=X,Y,Z` for each internal PTM where X is a string that represents 
+the PTM, Y is the difference in Da associated with the PTM and Z is the amino 
+acid that is modified by the PTM. N-terminal modifications are specified as `nterm=X,Y` 
+where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
+Similarly, c-terminal modifications are specified as `cterm=X,Y` 
+where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
+
 ### Getting predictions from peptide file
 
 To apply the pre-trained models you need to pass *only*  a `<peptide file>`
@@ -59,15 +73,10 @@ If you want the output to be in the form of an `.mgf` file, replace the variable
 The *spec_id* column is a unique identifier for each peptide that will
 be used in the TITLE field of the predicted MS2 `.mgf` file. The
 `modifications` column is a string that lists the PTMs in the peptide. Each PTM is written as
-`A|B` where A is the location of the PTM in the peptide (the first amino acid has location 1, location 0 is for n-term
+`A|B` where A is the location of the PTM in the peptide (the first amino acid has location 1, 
+location 0 is used for n-term
 modificatios, while -1 is used for c-term modifications) and B is a string that represent the PTM 
-and is defined in a configfile supplied with the `-c` command line argument.
-This file contains one line `ptm=X,Y,Z` for each internal PTM where X is a string that represents 
-the PTM, Y is the difference in Da associated with the PTM and Z is the amino 
-acid that is modified by the PTM. N-terminal modifications are specified as `nterm=X,Y` 
-where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
-Similarly, c-terminal modifications are specified as `cterm=X,Y` 
-where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
+as defined in the configfile (`-c` command line argument).
 Multiple PTMs in the `modifications` column are concatenated with '|'.
 As an example, suppose the configfile contains the line
 
