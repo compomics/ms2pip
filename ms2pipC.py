@@ -148,7 +148,7 @@ def main():
 			# read feature vectors from workers and concatenate
 			all_vectors = []
 			for r in results:
-				all_vectors.extend(r.get())
+				all_vectors.append(r.get())
 			all_vectors = pd.concat(all_vectors)
 
 			sys.stdout.write('writing file... \n')
@@ -167,7 +167,7 @@ def main():
 			sys.stdout.write('\nmerging results...\n')
 			all_spectra = []
 			for r in results:
-				all_spectra.extend(r.get())
+				all_spectra.append(r.get())
 			all_spectra = pd.concat(all_spectra)
 
 			sys.stdout.write('writing file...\n')
@@ -338,6 +338,14 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	# cols contains the names of the computed features
 	cols_n = get_feature_names()
 	
+	dataresult = pd.DataFrame(columns=['spec_id','peplen','charge','ion','ionnumber','target','prediction'])
+	dataresult['peplen'] = dataresult['peplen'].astype(np.uint8)
+	dataresult['charge'] = dataresult['charge'].astype(np.uint8)
+	dataresult['ion'] = dataresult['ion'].astype(np.uint8)
+	dataresult['ionnumber'] = dataresult['ionnumber'].astype(np.uint8)
+	dataresult['target'] = dataresult['target'].astype(np.float32)					
+	dataresult['prediction'] = dataresult['prediction'].astype(np.float32)					
+		
 	title = ""
 	charge = 0
 	msms = []
@@ -429,8 +437,8 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 					tmp["psmid"] = [title]*len(tmp)
 					tmp["targetsB"] = b
 					tmp["targetsY"] = y[::-1]
-					tmp["targetsB"] = b2
-					tmp["targetsY"] = y2[::-1]
+					tmp["targetsB2"] = b2
+					tmp["targetsY2"] = y2[::-1]
 					vectors.append(tmp)
 				else:
 					# predict the b- and y-ion intensities from the peptide
@@ -440,31 +448,30 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
 
-					tmp = pd.DataFrame()
+					tmp = pd.DataFrame()					
 					tmp['spec_id'] = [title]*(2*len(b))
 					tmp['peplen'] = [peplen]*(2*len(b))
-					tmp['peplen'] = tmp['peplen'].astype(np.uint8)
 					tmp['charge'] = [charge]*(2*len(b))
-					tmp['charge'] = tmp['charge'].astype(np.uint8)
 					tmp['ion'] = [0]*len(b) + [1]*len(y)
-					tmp['ion'] = tmp['ion'].astype(np.uint8)
 					tmp['ionnumber'] = [a+1 for a in range(len(b))+range(len(y)-1,-1,-1)]
-					tmp['ionnumber'] = tmp['ionnumber'].astype(np.uint8)
 					tmp['target'] = b + y
-					tmp['target'] = tmp['target'].astype(np.float32)					
 					tmp['prediction'] = resultB + resultY
+					tmp['peplen'] = tmp['peplen'].astype(np.uint8)
+					tmp['charge'] = tmp['charge'].astype(np.uint8)
+					tmp['ion'] = tmp['ion'].astype(np.uint8)
+					tmp['ionnumber'] = tmp['ionnumber'].astype(np.uint8)
+					tmp['target'] = tmp['target'].astype(np.float32)					
 					tmp['prediction'] = tmp['prediction'].astype(np.float32)					
-					result.append(tmp)
-				
+					dataresult = dataresult.append(tmp,ignore_index=True)
+								
 				pcount += 1
-				#print (100*(float(pcount))/total)
-				if (pcount % 500) == 0: 
+				if (pcount % 500) == 0:
 					sys.stderr.write('w' + str(worker_num) + '(' + str(pcount) + ') ')
 
 	if args.vector_file:
-		return vectors
+		return pd.concat(vectors)
 	else:
-		return result
+		return dataresult
 
 #feature names
 def get_feature_names():
