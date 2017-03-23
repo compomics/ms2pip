@@ -299,6 +299,10 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 
 		# get ion intensities
 		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
+		for ii in range(len(resultB)):
+			resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
+		for ii in range(len(resultY)):
+			resultY[ii] = resultY[ii]+0.5
 
 		# return results as a DataFrame
 		tmp = pd.DataFrame()
@@ -414,7 +418,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 				peaks = peaks.astype(np.float32)
 
 				# find the b- and y-ion peak intensities in the MS2 spectrum
-				(b,y) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks,nptm,cptm,fragerror)
+				(b,y,b2,y2) = ms2pipfeatures_pyx.get_targets(modpeptide,msms,peaks,nptm,cptm,fragerror)
 
 				#for debugging!!!!
 				#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols,dtype=np.uint32)
@@ -422,9 +426,11 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 
 				if args.vector_file:
 					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide,modpeptide,charge),columns=cols_n,dtype=np.uint16)
-					tmp["targetsB"] = b
-					tmp["targetsY"] = y
 					tmp["psmid"] = [title]*len(tmp)
+					tmp["targetsB"] = b
+					tmp["targetsY"] = y[::-1]
+					tmp["targetsB"] = b2
+					tmp["targetsY"] = y2[::-1]
 					vectors.append(tmp)
 				else:
 					# predict the b- and y-ion intensities from the peptide
@@ -433,7 +439,6 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 						resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
-					resultY = resultY[::-1]
 
 					tmp = pd.DataFrame()
 					tmp['spec_id'] = [title]*(2*len(b))

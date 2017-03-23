@@ -2,9 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "models/modelBnew.c"
-//#include "models/modelYnew.c"
-
 #include "models/CID/modelB.c"
 #include "models/CID/modelY.c"
 
@@ -13,8 +10,8 @@
 
 float membuffer[10000];
 unsigned int v[30000];
-float ions[1000];
-float predictions[1000];
+float ions[5000];
+float predictions[5000];
 
 //for Omega: comment and uncomment
 float amino_masses_tmp[19] = {71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,113.084064,128.094963,131.040485,114.042927,97.052764,128.058578,156.101111,87.032028,101.047679,99.068414,186.079313,163.063329};
@@ -140,20 +137,20 @@ float* get_mz(int peplen, unsigned short* modpeptide, float nptm, float cptm)
 }
 
 //get fragment ion peaks from spectrum
-float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float nptm, float cptm)
+float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float nptm, float cptm,float tolmz)
 	{
 	int i,j,tmp;
 	float mz;
 	int msms_pos;
 	int mem_pos;
-	float tolmz = 0.8;
 	float max, tmp2;
 
-	//b-ions
-	for (i=0; i < 2*peplen; i++) {
+	for (i=0; i < 4*(peplen-1); i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 		//ions[i] = 0; //HARD CODED!!
 	}
+
+	//b-ions
 
 	mz = nptm;
 	for (i=0; i < peplen-1; i++) {
@@ -247,8 +244,102 @@ float* get_t(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, 
 		}
 	}
 
+	//b++-ions
+
+	mz = nptm;
+	for (i=0; i < peplen-1; i++) {
+		mz += amino_masses[modpeptide[i]];
+		membuffer[i] = (mz+2*1.007236)/2;
+	}
+
+	msms_pos = 0;
+	mem_pos = 0;
+	while (1) {
+		if (msms_pos >= numpeaks) {
+			break;
+		}
+		if (mem_pos >= peplen) {
+			break;
+		}
+		mz = membuffer[mem_pos];
+		if (msms[msms_pos] > (mz+tolmz)) {
+			mem_pos += 1;
+		}
+		else if (msms[msms_pos] < (mz-tolmz)) {
+			msms_pos += 1;
+		}
+		else {
+			max = peaks[msms_pos];
+			tmp = msms_pos + 1;
+			if (tmp < numpeaks) {
+				while (msms[tmp] <= (mz+tolmz)) {
+					tmp2 = peaks[tmp];
+					if (max < tmp2) {
+						max = tmp2;
+					}
+					tmp += 1;
+					if (tmp == numpeaks) {
+						break;
+					}
+				}
+			}
+			ions[2*(peplen-1)+mem_pos] = max;
+			mem_pos += 1;
+		}
+	}
+
+	// y++-ions
+
+	mz = cptm;
+	j=0;
+	for (i=peplen-1; i >= 1; i--) {
+		mz += amino_masses[modpeptide[i]];
+		membuffer[j] = (18.0105647+mz+2*1.007236)/2;
+		//printf("%f ",membuffer[j]);
+		j++;
+	}
+
+	msms_pos = 0;
+	mem_pos = 0;
+	while (1) {
+		if (msms_pos >= numpeaks) {
+			break;
+		}
+		if (mem_pos >= peplen) {
+			break;
+		}
+		mz = membuffer[mem_pos];
+		if (msms[msms_pos] > (mz+tolmz)) {
+			mem_pos += 1;
+		}
+		else if (msms[msms_pos] < (mz-tolmz)) {
+			msms_pos += 1;
+		}
+		else {
+			max = peaks[msms_pos];
+			tmp = msms_pos + 1;
+			if (tmp < numpeaks) {
+				while (msms[tmp] <= (mz+tolmz)) {
+					tmp2 = peaks[tmp];
+					if (max < tmp2) {
+						max = tmp2;
+					}
+					tmp += 1;
+					if (tmp == numpeaks) {
+						break;
+					}
+				}
+			}
+			ions[3*(peplen-1)+mem_pos] = max;
+			//printf("F %f %f\n",mz,max);
+			mem_pos += 1;
+		}
+	}
+
 	return ions;
 }
+
+
 
 //Experiment: features that assume fixed length peptide datasets
 unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
@@ -1550,7 +1641,7 @@ float* get_p(int peplen, unsigned short* peptide, unsigned short* modpeptide, in
 		v[fnum++] = charge;
 
 		predictions[i] = score_B(v);
-		predictions[2*peplen-2-i] = score_Y(v);
+		predictions[2*(peplen-1)-i-1] = score_Y(v);
 	}
 	return predictions;
 }
