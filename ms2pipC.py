@@ -30,6 +30,8 @@ def main():
 					 help='.mgf MS2 spectrum file (optional)')
 	parser.add_argument('-w', metavar='FILE',action="store", dest='vector_file',
 					 help='write feature vectors to FILE.pkl (optional)')
+ 	parser.add_argument('-i','--iTRAQ', metavar='INT', action="store", dest='itraq', 
+					 help='enable iTRAQ {4,6,8}')
 	parser.add_argument('-p', metavar='INT',action="store", dest='num_cpu',default='23',
 					 help="number of cpu's to use")
 
@@ -288,12 +290,22 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 		if mods != '-':
 			l = mods.split('|')
 			for i in range(0,len(l),2):
+				tl = l[i+1]
 				if int(l[i]) == 0:
-					nptm += Ntermmap[l[i+1]]
+					if tl in Ntermmap:
+						nptm += Ntermmap[tl]
+					else:
+						nptm += Ntermmap[tl[:-1]]
 				elif int(l[i]) == -1:
-					cptm += Ctermmap[l[i+1]]
+					if tl in Ctermmap:
+						cptm += Ctermmap[tl]
+					else:
+						cptm += Ctermmap[tl[:-1]]
 				else:
-					modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
+					if tl in PTMmap:
+						modpeptide[int(l[i])-1] = PTMmap[tl]
+					else:
+						modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
 
 		(b_mz,y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide,nptm,cptm)
 
@@ -411,12 +423,28 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 				if mods != '-':
 					l = mods.split('|')
 					for i in range(0,len(l),2):
+						tl = l[i+1]
 						if int(l[i]) == 0:
-							nptm += Ntermmap[l[i+1]]
+							if tl in Ntermmap:
+								nptm += Ntermmap[tl]
+							else:
+								nptm += Ntermmap[tl[:-1]]
 						elif int(l[i]) == -1:
-							cptm += Ctermmap[l[i+1]]
+							if tl in Ctermmap:
+								cptm += Ctermmap[tl]
+							else:
+								cptm += Ctermmap[tl[:-1]]
 						else:
-							modpeptide[int(l[i])-1] = PTMmap[l[i+1]]
+							if tl in PTMmap:
+								modpeptide[int(l[i])-1] = PTMmap[tl]
+							else:
+								modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
+
+				if args.itraq:
+					#remove reporter ionsi
+					for mi,mp in enumerate(msms):
+						if (mp >= 114.09) & (mp <= 117.2):
+							peaks[mi]=0
 
 				# normalize and convert MS2 peaks
 				msms = np.array(msms,dtype=np.float32)

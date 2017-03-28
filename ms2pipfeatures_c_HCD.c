@@ -5,6 +5,10 @@
 #include "models/modelBnew.c"
 #include "models/modelYnew.c"
 
+//#include "models/iTRAQ/modelB.c"
+//#include "models/iTRAQ/modelY.c"
+
+
 //#include "models/dB.c"
 //#include "models/dY.c"
 
