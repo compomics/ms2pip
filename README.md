@@ -36,9 +36,15 @@ optional arguments:
   -h, --help      show this help message and exit
   -c FILE         config file
   -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE.ext (.pkl or .h5) (optional)
-  -c INT          number of cpu's to use
+  -w FILE         write feature vectors to FILE.pkl (optional)
+  -i              iTRAQ models
+  -p              phospho models
+  -m INT          number of cpu's to use
 ```
+
+The `-i` flag makes ms2pipC use the NIST iTRAQ4 models (HCD onnly).
+
+The `-i` flag in combination with the `-p` flag makes ms2pipC use the NIST iTRAQ4 phospho models (HCD onnly).
 
 ### configfile (-c option)
 

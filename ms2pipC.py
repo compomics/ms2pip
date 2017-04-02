@@ -30,11 +30,9 @@ def main():
 					 help='.mgf MS2 spectrum file (optional)')
 	parser.add_argument('-w', metavar='FILE',action="store", dest='vector_file',
 					 help='write feature vectors to FILE.pkl (optional)')
- 	parser.add_argument('-i','--iTRAQ', metavar='INT', action="store", dest='itraq', 
-					 help='enable iTRAQ {4,6,8}')
- 	parser.add_argument('-p','--phospho', metavar='INT', action="store", dest='phospho', 
-					 help='enable iTRAQ {4,6,8}')
-	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default='23',
+ 	parser.add_argument('-i', action="store_true", default=False, help='iTRAQ models')
+ 	parser.add_argument('-p', action="store_true", default = False, help='phospho models')
+i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default='23',
 					 help="number of cpu's to use")
 
 	args = parser.parse_args()
@@ -80,20 +78,22 @@ def main():
 
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
+		print "using CID models..."
 	elif fragmethod == "HCD":
-		if args.itraq:
-			if args.phospho:
+		if args.i:
+			if args.p:
 				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
+			print "using HCD iTRAQ phospho models..."
 			else:
 				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
+				print "using HCD iTRAQ pmodels..."
 		else:
 			import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+			print "using HCD..."
 	else:
 		print "Unknown fragmentation method in configfile: %s"%fragmethod
 		exit(1)
-		
-	print "using %s models..."%fragmethod
-	
+			
 	ms2pipfeatures_pyx.ms2pip_init(fa.name)
 
 	# read peptide information
@@ -268,8 +268,8 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
-		if args.itraq:
-			if args.phospho:
+		if args.i:
+			if args.p:
 				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
 			else:
 				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
@@ -356,8 +356,8 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
-		if args.itraq:
-			if args.phospho:
+		if args.i:
+			if args.p:
 				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
 			else:
 				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
@@ -467,7 +467,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 							else:
 								modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
 
-				if args.itraq:
+				if args.ia:
 					#remove reporter ionsi
 					for mi,mp in enumerate(msms):
 						if (mp >= 113) & (mp <= 118):
