@@ -32,7 +32,9 @@ def main():
 					 help='write feature vectors to FILE.pkl (optional)')
  	parser.add_argument('-i','--iTRAQ', metavar='INT', action="store", dest='itraq', 
 					 help='enable iTRAQ {4,6,8}')
-	parser.add_argument('-p', metavar='INT',action="store", dest='num_cpu',default='23',
+ 	parser.add_argument('-p','--phospho', metavar='INT', action="store", dest='phospho', 
+					 help='enable iTRAQ {4,6,8}')
+	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default='23',
 					 help="number of cpu's to use")
 
 	args = parser.parse_args()
@@ -79,7 +81,13 @@ def main():
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
-		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+		if args.itraq:
+			if args.phospho:
+				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
+			else:
+				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
+		else:
+			import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
 	else:
 		print "Unknown fragmentation method in configfile: %s"%fragmethod
 		exit(1)
@@ -123,6 +131,7 @@ def main():
 			# this commented part of code can be used for debugging by avoiding parallel processing
 			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
 			#send worker to myPool
+			
 			results.append(myPool.apply_async(process_spectra,args=(
 										i,
 										args,
@@ -259,7 +268,16 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
-		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+		if args.itraq:
+			if args.phospho:
+				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
+			else:
+				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
+		else:
+			import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+	else:
+		print "Unknown fragmentation method in configfile: %s"%fragmethod
+		exit(1)
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
@@ -338,7 +356,16 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
-		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+		if args.itraq:
+			if args.phospho:
+				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
+			else:
+				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
+		else:
+			import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+	else:
+		print "Unknown fragmentation method in configfile: %s"%fragmethod
+		exit(1)
 
 	# transform pandas datastructure into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications']].set_index('spec_id').to_dict()
@@ -443,7 +470,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 				if args.itraq:
 					#remove reporter ionsi
 					for mi,mp in enumerate(msms):
-						if (mp >= 114.09) & (mp <= 117.2):
+						if (mp >= 113) & (mp <= 118):
 							peaks[mi]=0
 
 				# normalize and convert MS2 peaks

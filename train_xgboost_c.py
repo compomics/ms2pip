@@ -72,7 +72,7 @@ def main():
 	num_psms = len(upeps)
 	np.random.shuffle(upeps)
 
-	test_psms = upeps[:int(num_psms*0.4)]
+	test_psms = upeps[:int(num_psms*0.3)]
 
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")
@@ -131,7 +131,7 @@ def main():
 	         "silent":1,
 	         "eta":1,
 	         #"max_delta_step":12,
-	         "max_depth":7,
+	         "max_depth":8,
 			 "gamma":1,	
 			 "min_child_weight":700,
 			 "subsample":1,
@@ -144,7 +144,7 @@ def main():
 
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
-	bst = xgb.train( plst, xtrain, 200, evallist,early_stopping_rounds=10,feval=evalerror,maximize=True)
+	bst = xgb.train( plst, xtrain, 300, evallist,early_stopping_rounds=10,feval=evalerror,maximize=True)
 	#bst = xgb.train( plst, xtrain, 500, evallist,early_stopping_rounds=10)
 	#bst = xgb.train( plst, xtrain, 30, evallist)
 
@@ -253,7 +253,7 @@ def convert_model_to_c(bst,args,numf):
 
 		tmp = args.vectors.replace('.','_')
 		tmp2 = tmp.split('/')
-		with open(tmp+'_c.c','w') as fout:
+		with open(tmp+args.type+'_c.c','w') as fout:
 			fout.write("static float score_"+args.type+"(unsigned int* v){\n")
 			fout.write("float s = 0.;\n")
 			#for tt in [0]:

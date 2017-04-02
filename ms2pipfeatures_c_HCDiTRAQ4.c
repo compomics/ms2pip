@@ -2,9 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-
-#include "models/vectors_train_h5B_c.c"
-#include "models/vectors_train_h5Y_c.c"
+#include "models/vectors_train_h5B_iTRAQ_c.c"
+#include "models/vectors_train_h5Y_iTRAQ_c.c"
 
 //#include "models/dB.c"
 //#include "models/dY.c"
