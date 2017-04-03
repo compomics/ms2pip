@@ -36,9 +36,29 @@ optional arguments:
   -h, --help      show this help message and exit
   -c FILE         config file
   -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE.ext (.pkl or .h5) (optional)
-  -c INT          number of cpu's to use
+  -w FILE         write feature vectors to FILE.pkl (optional)
+  -i              iTRAQ models
+  -p              phospho models
+  -m INT          number of cpu's to use
 ```
+
+The `-i` flag makes ms2pipC use the NIST iTRAQ4 models (HCD onnly).
+
+The `-i` flag in combination with the `-p` flag makes ms2pipC use the NIST iTRAQ4 phospho models (HCD onnly).
+
+### configfile (-c option)
+
+Several ms2pipC options need to be set in this configfile.
+
+The models that should be used are set as `frag_method=X` where X is either `CID` or `HCD`.
+The fragment ion error tolerance is set as `frag_error=X` where is X is the tolerance in Da.
+
+PTMs (see further) are set as `ptm=X,Y,Z` for each internal PTM where X is a string that represents 
+the PTM, Y is the difference in Da associated with the PTM and Z is the amino 
+acid that is modified by the PTM. N-terminal modifications are specified as `nterm=X,Y` 
+where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
+Similarly, c-terminal modifications are specified as `cterm=X,Y` 
+where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
 
 ### Getting predictions from peptide file
 
@@ -59,18 +79,23 @@ If you want the output to be in the form of an `.mgf` file, replace the variable
 The *spec_id* column is a unique identifier for each peptide that will
 be used in the TITLE field of the predicted MS2 `.mgf` file. The
 `modifications` column is a string that lists the PTMs in the peptide. Each PTM is written as
-`A|B` where A is the location of the PTM in the peptide (the first amino acid has location 0)
-and B is a string that represent the PTM and is defined in a configfile supplied with the `-c` command line argument.
-This file contains one line `ptm=X,Y,Z` for each PTM where X is a string that represents 
-the PTM, Y is the difference in Da associated with tthe PTM and Z is the amino 
-acid that is modified by the PTM. Multiple PTMs in the `modifications` column are concatenated with '|'.
-Suppose the configfile ccontanis the line
+`A|B` where A is the location of the PTM in the peptide (the first amino acid has location 1, 
+location 0 is used for n-term
+modificatios, while -1 is used for c-term modifications) and B is a string that represent the PTM 
+as defined in the configfile (`-c` command line argument).
+Multiple PTMs in the `modifications` column are concatenated with '|'.
+As an example, suppose the configfile contains the line
 
 ```
 ptm=Cam,57.02146,C
+nterm=Ace,42.010565
+cterm=Glyloss,-58.005479
 ```
 
-Then a modifications string could like `2|Cam|5|Cam` means that the third and sixth amin acid is modified.
+then a modifications string could like `0|Ace|2|Cam|5|Cam|-1|Glyloss` which means that the second 
+and fifth amin acid is modified with `Cam`,  
+that there is a n-terminal modification `Ace`,
+and that there is a c-terminal modification `Glyloss`,
 
 ### Writing feature vectors for model training
 

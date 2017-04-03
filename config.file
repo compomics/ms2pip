@@ -1,5 +1,8 @@
+frag_method=HCD
+frag_error=0.02
+
 ptm=Oxidation,15.994915,M
 ptm=Cam,57.02146,C
-#ptm=phosphS,79.966331,S
+#ptm=PhosphoS,79.966331,S
 #ptm=phosphT,79.966331,T
 #ptm=phosphY,79.966331,Y
