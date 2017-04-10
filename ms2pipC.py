@@ -32,7 +32,7 @@ def main():
 					 help='write feature vectors to FILE.pkl (optional)')
  	parser.add_argument('-i', action="store_true", default=False, help='iTRAQ models')
  	parser.add_argument('-p', action="store_true", default = False, help='phospho models')
-i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default='23',
+	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default='23',
 					 help="number of cpu's to use")
 
 	args = parser.parse_args()
@@ -54,13 +54,21 @@ i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default
 	with open(args.c) as f:
 		for row in f:
 			if row.startswith("ptm="): numptms+=1
+			if row.startswith("sptm="): numptms+=1
 	fa.write("%i\n"%numptms)
-	pos = 19 #modified amino acids have numbers starting at 19
+	pos = 38 #modified amino acids have numbers starting at 38 (mutations -> omega)
+	with open(args.c) as f:
+		for row in f:
+			if row.startswith("sptm="):
+				l=row.rstrip().split('=')[1].split(',')
+				fa.write("%f\n"%(float(l[1])+masses[a_map[l[3]]]))
+				PTMmap[l[0]] = pos
+				pos+=1
 	with open(args.c) as f:
 		for row in f:
 			if row.startswith("ptm="):
 				l=row.rstrip().split('=')[1].split(',')
-				fa.write("%f\n"%(float(l[1])+masses[a_map[l[2]]]))
+				fa.write("%f\n"%(float(l[1])+masses[a_map[l[3]]]))
 				PTMmap[l[0]] = pos
 				pos+=1
 			if row.startswith("nterm="):
@@ -83,7 +91,7 @@ i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default
 		if args.i:
 			if args.p:
 				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
-			print "using HCD iTRAQ phospho models..."
+				print "using HCD iTRAQ phospho models..."
 			else:
 				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
 				print "using HCD iTRAQ pmodels..."
@@ -214,10 +222,11 @@ i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default
 			#select titles for this worker			
 			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
 			"""
-			process_peptides(i,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
+			process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
 			"""
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
+										args,
 										data[data.spec_id.isin(tmp)],
 										PTMmap,Ntermmap,Ctermmap,fragmethod
 										)))
@@ -226,6 +235,7 @@ i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default
 		tmp = titles[i*num_pep_per_cpu:]
 		results.append(myPool.apply_async(process_peptides,args=(
 								i,
+								args,
 								data[data.spec_id.isin(tmp)],
 								PTMmap,Ntermmap,Ctermmap,fragmethod
 								)))
@@ -260,7 +270,7 @@ i	parser.add_argument('-m', metavar='INT',action="store", dest='num_cpu',default
 
 
 #peak intensity prediction without spectrum file (under construction)
-def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
+def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	"""
 	Read the PEPREC file and predict spectra.
 	"""
@@ -286,7 +296,7 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	charges = specdict['charge']
 
 	final_result = pd.DataFrame(columns=['peplen','charge','ion','mz', 'ionnumber', 'prediction', 'spec_id'])
-	sp_count = 0
+	pcount = 0
 	total = len(peptides)
 
 	for pepid in peptides:
@@ -326,6 +336,7 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 						modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
 
 		(b_mz,y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide,nptm,cptm)
+		print b_mz
 
 		# get ion intensities
 		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
@@ -344,10 +355,9 @@ def process_peptides(worker_num,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 		tmp['prediction'] = resultB + resultY
 		tmp['spec_id'] = [pepid]*len(tmp)
 		final_result = final_result.append(tmp)
-		sp_count+=1
-		if int(((1.0 * sp_count)/total) * 100) % 20 == 0: 
-			sys.stderr.write('w' + str(worker_num) + '( ' + str(sp_count) + ') ')
-
+		pcount += 1
+		if (pcount % 500) == 0:
+			sys.stderr.write('w' + str(worker_num) + '(' + str(pcount) + ') ')
 	return final_result
 
 # peak intensity prediction with spectrum file (for evaluation) OR feature extraction
@@ -467,7 +477,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 							else:
 								modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
 
-				if args.ia:
+				if args.i:
 					#remove reporter ionsi
 					for mi,mp in enumerate(msms):
 						if (mp >= 113) & (mp <= 118):
