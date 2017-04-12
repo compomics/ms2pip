@@ -3,8 +3,8 @@
 #include <string.h>
 
 
-#include "models/vectors_train_h5B_iTRAQ_c.c"
-#include "models/vectors_train_h5Y_iTRAQ_c.c"
+#include "models/iTRAQ/modelB.c"
+#include "models/iTRAQ/modelY.c"
 
 //#include "models/dB.c"
 //#include "models/dY.c"

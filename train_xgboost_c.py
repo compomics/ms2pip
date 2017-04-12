@@ -61,7 +61,7 @@ def main():
 	#vectors = vectors[vectors.ionnumber==5]	
 	#eval_vectors = eval_vectors[eval_vectors.ionnumber==5]	
 
-	#vectors = vectors.sample(1000000,replace=False)
+	vectors = vectors.sample(4000000,replace=False)
 
 	print "%s contains %i feature vectors" % (args.vectors,len(vectors))
 	#print "%s contains %i feature vectors" % (args.vectorseval,len(eval_vectors))
@@ -72,7 +72,7 @@ def main():
 	num_psms = len(upeps)
 	np.random.shuffle(upeps)
 
-	test_psms = upeps[:int(num_psms*0.3)]
+	test_psms = upeps[:int(num_psms*0.1)]
 
 	targetsB = vectors.pop("targetsB")
 	targetsY = vectors.pop("targetsY")

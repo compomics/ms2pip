@@ -137,9 +137,9 @@ def main():
 			#select titles for this worker
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
+			sys.stderr.write('ok')
 			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
 			#send worker to myPool
-			
 			results.append(myPool.apply_async(process_spectra,args=(
 										i,
 										args,
@@ -336,7 +336,6 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 						modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
 
 		(b_mz,y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide,nptm,cptm)
-		print b_mz
 
 		# get ion intensities
 		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
@@ -395,6 +394,8 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	dataresult['target'] = dataresult['target'].astype(np.float32)					
 	dataresult['prediction'] = dataresult['prediction'].astype(np.float32)					
 		
+	sys.stderr.write('here')
+		
 	title = ""
 	charge = 0
 	msms = []
@@ -438,7 +439,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 			elif row[:8] == "END IONS":
 				#process
 				if not title in peptides: continue
-
+				#sys.stderr.write('.')
 				#with counter.get_lock():
 				#	counter.value += 1
 				#sys.stderr.write("%i ",counter.value)
