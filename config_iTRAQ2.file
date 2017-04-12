@@ -1,7 +1,0 @@
-frag_method=HCD
-frag_error=0.02
-
-ptm=Oxidation,15.994915,M
-ptm=CAM,57.02146,C
-ptm=iTRAQ,144.102063,K
-nterm=iTRAQ,144.102063

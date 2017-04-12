@@ -64,7 +64,11 @@ with open(sys.argv[1]) as f:
 					m = ""
 					for i in range(1,len(tmp)):
 						tmp2=tmp[i].split(',')
-						m += str(int(tmp2[0])+1)+'|'+tmp2[2] + peptide[int(tmp2[0])] + '|'
+						if (tmp2[0]=='0') & (tmp2[2]=='iTRAQ'):
+							m += '0|'+tmp2[2] +'|'
+						else:
+							#m += str(int(tmp2[0])+1)+'|'+tmp2[2] +'|'
+							m += str(int(tmp2[0])+1)+'|'+tmp2[2] + peptide[int(tmp2[0])] + '|'
 						if not tmp2[2] in PTMs: PTMs[tmp2[2]] = 0
 						PTMs[tmp2[2]] += 1
 					fpip.write('%s%i %s %s\n'%(sys.argv[2],specid,m[:-1],peptide))
