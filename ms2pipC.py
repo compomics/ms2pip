@@ -84,6 +84,7 @@ def main():
 
 	fa.close()
 
+
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 		print "using CID models..."
@@ -137,7 +138,6 @@ def main():
 			#select titles for this worker
 			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
 			# this commented part of code can be used for debugging by avoiding parallel processing
-			sys.stderr.write('ok')
 			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
 			#send worker to myPool
 			results.append(myPool.apply_async(process_spectra,args=(
@@ -393,9 +393,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	dataresult['ionnumber'] = dataresult['ionnumber'].astype(np.uint8)
 	dataresult['target'] = dataresult['target'].astype(np.float32)					
 	dataresult['prediction'] = dataresult['prediction'].astype(np.float32)					
-		
-	sys.stderr.write('here')
-		
+				
 	title = ""
 	charge = 0
 	msms = []
@@ -421,7 +419,10 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 			if row == "": continue
 			if row[0] == "T":
 				if row[:5] == "TITLE":
-					title = row[6:].replace(' ','')
+					#title = row[6:].replace(' ','')
+					title = row[6:]
+					title = title.split(' ')[0]
+					#print title
 					if not title in peptides:
 						skip = True
 						continue
@@ -438,11 +439,14 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 					charge = int(row[7:9].replace("+",""))
 			elif row[:8] == "END IONS":
 				#process
+				title = title.split(' ')[0]
 				if not title in peptides: continue
 				#sys.stderr.write('.')
 				#with counter.get_lock():
 				#	counter.value += 1
 				#sys.stderr.write("%i ",counter.value)
+
+				
 
 				peptide = peptides[title]
 				peptide = peptide.replace('L','I')
@@ -657,7 +661,8 @@ def scan_spectrum_file(filename):
 		for row in rows:
 			if row[0] == "T":
 				if row[:5] == "TITLE":
-					titles.append(row.rstrip()[6:].replace(" ",""))
+					#titles.append(row.rstrip()[6:].replace(" ",""))
+					titles.append(row.rstrip()[6:].split(" ")[0])
 	f.close()
 	return titles
 
