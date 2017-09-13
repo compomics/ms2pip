@@ -112,6 +112,9 @@ def main():
 						dtype={'spec_id':str,'modifications':str})
 	data = data.fillna('-') # for some reason the missing values are converted to float otherwise
 
+	sys.stdout.write('starting workers...\n')
+	myPool = multiprocessing.Pool(num_cpu)
+
 	if args.spec_file:
 		# Process the mgf file. In process_spectra, there is a check for
 		# args.vector_file that determines what is returned (feature vectors or
@@ -128,10 +131,6 @@ def main():
 		split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
 
 		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
-
-		sys.stdout.write('starting workers...\n')
-
-		myPool = multiprocessing.Pool(num_cpu)
 
 		results = []
 		for i in range(num_cpu):
@@ -204,8 +203,6 @@ def main():
 		# split the titles into (num_cpu) lists to ditribute across the workers
 		split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
 		sys.stdout.write("%i peptides (~%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
-		sys.stdout.write('starting workers...\n')
-		myPool = multiprocessing.Pool(num_cpu)
 
 		sys.stdout.write('predicting spectra... \n')
 		results = []
