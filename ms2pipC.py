@@ -7,7 +7,7 @@ import multiprocessing
 from random import shuffle
 import tempfile
 #import xgboost as xgb
-
+ # TODO write function to modify pep sequence & choose model
 #some globals
 
 # a_map converts the peptide amio acids to integers, note how 'L' is removed
@@ -216,10 +216,12 @@ def main():
 		sys.stdout.write('done!\n')
 
 
-#peak intensity prediction without spectrum file (under construction)
 def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	"""
-	Read the PEPREC file and predict spectra.
+	Function for each worker to process a list of peptides. The models are
+	chosen based on fragmethod, PTMmap, Ntermmap and Ctermmap determine the
+	modifications applied to each peptide sequence. Returns the predicted
+	spectra for all the peptides.
 	"""
 
 	if fragmethod == "CID":
@@ -236,7 +238,7 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 		print "Unknown fragmentation method in configfile: %s"%fragmethod
 		exit(1)
 
-	# transform pandas datastructure into dictionary for easy access
+	# transform pandas dataframe into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
 	modifications = specdict['modifications']
@@ -247,7 +249,6 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	total = len(peptides)
 
 	for pepid in peptides:
-
 		ch = charges[pepid]
 
 		peptide = peptides[pepid]
@@ -282,12 +283,13 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 					else:
 						modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
 
+		# get ion mzs
 		(b_mz,y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide,nptm,cptm)
 
 		# get ion intensities
 		(resultB,resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 		for ii in range(len(resultB)):
-			resultB[ii] = resultB[ii]+0.5 #This still needs to be checked!!!!!!!
+			resultB[ii] = resultB[ii]+0.5 # TODO needs to be checked!
 		for ii in range(len(resultY)):
 			resultY[ii] = resultY[ii]+0.5
 
@@ -306,8 +308,15 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 			sys.stderr.write('w' + str(worker_num) + '(' + str(pcount) + ') ')
 	return final_result
 
-# peak intensity prediction with spectrum file (for evaluation) OR feature extraction
 def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror):
+	"""
+	Function for each worker to process a list of spectra. Each peptide's
+	sequence is extracted from the mgf file. Then models are chosen based on
+	fragmethod, PTMmap, Ntermmap and Ctermmap determine the modifications
+	applied to each peptide sequence and the spectrum is predicted. Then either
+	the feature vectors are returned, or a DataFrame with the predicted and
+	empirical intensities.
+	"""
 
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
@@ -486,7 +495,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	else:
 		return dataresult
 
-#feature names
+# feature names
 def get_feature_names():
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 
@@ -547,7 +556,7 @@ def get_feature_names():
 
 	return names
 
-#feature names for the fixed peptide length feature vectors
+# feature names for the fixed peptide length feature vectors
 def get_feature_names_chem(peplen):
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 
