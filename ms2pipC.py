@@ -116,79 +116,45 @@ def main():
 	myPool = multiprocessing.Pool(num_cpu)
 
 	if args.spec_file:
-		# Process the mgf file. In process_spectra, there is a check for
-		# args.vector_file that determines what is returned (feature vectors or
-		# evaluation of predictions)
-
-		# processing the mgf file:
-		# this is parallelized at the spectrum TITLE level
-		sys.stdout.write('scanning spectrum file... ')
-		titles = scan_spectrum_file(args.spec_file)
-		#titles might be ordered from small to large peptides,
-		#shuffling improves parallel speeds
-		shuffle(titles)
-		# split the titles into (num_cpu) lists to ditribute across the workers
-		split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
-
-		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
-
+		split_titles = prepare_spectra(args.spec_file, num_cpu)
 		results = []
+
 		for i in range(num_cpu):
-			#select titles for this worker
 			tmp = split_titles[i]
-			# this commented part of code can be used for debugging by avoiding parallel processing
-			sys.stderr.write('ok')
-			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
-			#send worker to myPool
+			# for debugging,  by avoiding parallel processing
+			# process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
+			# sys.stderr.write('ok')
+
+			# send worker to myPool
 			results.append(myPool.apply_async(process_spectra,args=(
 										i,
 										args,
 										data[data.spec_id.isin(tmp)],
 										PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror
 										)))
-
 		myPool.close()
 		myPool.join()
 
-		# workers done...merging results
+		sys.stdout.write('merging results...\n')
+		all_results = []
+		for r in results:
+			all_results.append(r.get())
+		all_results = pd.concat(all_results)
 
 		if args.vector_file:
-			sys.stdout.write('\nmerging results...\n')
-			# i.e. if we want to save the features + targets:
-			# read feature vectors from workers and concatenate
-			all_vectors = []
-			for r in results:
-				all_vectors.append(r.get())
-			all_vectors = pd.concat(all_vectors)
-
-			sys.stdout.write('writing file... \n')
+			sys.stdout.write('writing vector file {}... \n'.format(args.vector_file))
   			# write result. write format depends on extension:
   			ext = args.vector_file.split('.')[-1]
   			if ext == 'pkl':
-				# print all_vectors.head()
-				all_vectors.to_pickle(args.vector_file+'.pkl')
+				all_results.to_pickle(args.vector_file+'.pkl')
   			elif ext == 'h5':
-				all_vectors.to_hdf(args.vector_file, 'table')
+				all_results.to_hdf(args.vector_file, 'table')
     			# 'table' is a tag used to read back the .h5
   			else: # if none of the two, default to .h5
-				all_vectors.to_hdf(args.vector_file, 'table')
-
+				all_results.to_hdf(args.vector_file, 'table')
 		else:
-			sys.stdout.write('\nmerging results...\n')
-			all_spectra = []
-			for r in results:
-				all_spectra.append(r.get())
-			all_spectra = pd.concat(all_spectra)
-
-			sys.stdout.write('writing file...\n')
-			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
-
-			#sys.stdout.write('computing correlations...\n')
-			#correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
-			#corr_boxplot = correlations.plot('box')
-			#corr_boxplot = corr_boxplot.get_figure()
-			#corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
-			#corr_boxplot.savefig(args.pep_file + '_correlations.png')
+			sys.stdout.write('writing file {}...\n'.format(args.pep_file + '_pred_and_emp.csv'))
+			all_results.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
 		sys.stdout.write('done! \n')
 
@@ -373,7 +339,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	dataresult['target'] = dataresult['target'].astype(np.float32)
 	dataresult['prediction'] = dataresult['prediction'].astype(np.float32)
 
-	sys.stderr.write('here')
+	# sys.stderr.write('here')
 
 	title = ""
 	charge = 0
@@ -639,6 +605,23 @@ def scan_spectrum_file(filename):
 					titles.append(row.rstrip()[6:].replace(" ",""))
 	f.close()
 	return titles
+
+def prepare_spectra(spec_file, num_cpu):
+	"""
+	Take args.spec_file and return a list containing num_cpu smaller lists
+	with the spectrum titles that will be split across the workers
+	"""
+	sys.stdout.write('scanning spectrum file... \n')
+
+	titles = scan_spectrum_file(spec_file)
+	#titles might be ordered from small to large peptides,
+	#shuffling improves parallel speeds
+	shuffle(titles)
+
+	split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
+	sys.stdout.write("%i spectra (~%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
+
+	return(split_titles)
 
 def print_logo():
 	logo = """
