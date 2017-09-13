@@ -116,7 +116,14 @@ def main():
 	myPool = multiprocessing.Pool(num_cpu)
 
 	if args.spec_file:
-		split_titles = prepare_spectra(args.spec_file, num_cpu)
+		"""
+		When an mgf file is provided, MS2PIP either saves the feature vectors to
+		 train models with or writes a file with the predicted spectra next to
+		the empirical one.
+		"""
+		sys.stdout.write('scanning spectrum file... \n')
+		titles = scan_spectrum_file(args.spec_file)
+		split_titles = prepare_titles(titles, num_cpu)
 		results = []
 
 		for i in range(num_cpu):
@@ -159,26 +166,20 @@ def main():
 		sys.stdout.write('done! \n')
 
 	else:
-		# Get only predictions from a pep_file
+		"""
+		If no mgf file is provided, MS2PIP will generate predicted spectra
+		for each peptide in the pep_file
+		"""
 		sys.stdout.write('scanning peptide file... ')
 
-		#titles might be ordered from small to large peptides,
-		#shuffling improves parallel speeds
 		titles = data.spec_id.tolist()
-		shuffle(titles)
-		# split the titles into (num_cpu) lists to ditribute across the workers
-		split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
-		sys.stdout.write("%i peptides (~%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
-
-		sys.stdout.write('predicting spectra... \n')
+		split_titles = prepare_titles(titles, num_cpu)
 		results = []
 
 		for i in range(num_cpu):
-			#select titles for this worker
 			tmp = split_titles[i]
-			"""
-			process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
-			"""
+			# for debugging,  by avoiding parallel processing
+			# process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
 										args,
@@ -188,18 +189,18 @@ def main():
 		myPool.close()
 		myPool.join()
 
-		sys.stdout.write('\nmerging results...\n')
+		sys.stdout.write('merging results...\n')
 
 		all_preds = pd.DataFrame()
 		for r in results:
 			all_preds = all_preds.append(r.get())
 
-		# print all_preds
 		sys.stdout.write('writing file {}...\n'.format(args.pep_file +'_predictions.csv'))
 		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
-		mgf = False # prevent writing big mgf files
+
+		mgf = False # set to True to write spectrum as mgf file
 		if mgf:
-			sys.stdout.write('\nwriting mgf file...\n')
+			sys.stdout.write('writing mgf file {}...\n'.format(args.pep_file +'_predictions.mgf'))
 			mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
 			for sp in all_preds.spec_id.unique():
 				tmp = all_preds[all_preds.spec_id == sp]
@@ -211,6 +212,7 @@ def main():
 					mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
 				mgf_output.write('END IONS\n')
 			mgf_output.close()
+
 		sys.stdout.write('done!\n')
 
 
@@ -606,16 +608,13 @@ def scan_spectrum_file(filename):
 	f.close()
 	return titles
 
-def prepare_spectra(spec_file, num_cpu):
+def prepare_titles(titles, num_cpu):
 	"""
-	Take args.spec_file and return a list containing num_cpu smaller lists
-	with the spectrum titles that will be split across the workers
+	Take a list and return a list containing num_cpu smaller lists with the
+	spectrum titles/peptides that will be split across the workers
 	"""
-	sys.stdout.write('scanning spectrum file... \n')
-
-	titles = scan_spectrum_file(spec_file)
-	#titles might be ordered from small to large peptides,
-	#shuffling improves parallel speeds
+	# titles might be ordered from small to large peptides,
+	# shuffling improves parallel speeds
 	shuffle(titles)
 
 	split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
