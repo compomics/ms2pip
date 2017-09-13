@@ -18,7 +18,7 @@ masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058
 a_map = {}
 for i,a in enumerate(aminos):
 	a_map[a] = i
-		
+
 def main():
 
 	parser = argparse.ArgumentParser()
@@ -42,7 +42,7 @@ def main():
 		exit(1)
 
 	num_cpu = int(args.num_cpu)
-			
+
 	PTMmap = {}
 	Ntermmap = {}
 	Ctermmap = {}
@@ -101,7 +101,7 @@ def main():
 	else:
 		print "Unknown fragmentation method in configfile: %s"%fragmethod
 		exit(1)
-			
+
 	ms2pipfeatures_pyx.ms2pip_init(fa.name)
 
 	# read peptide information
@@ -193,7 +193,7 @@ def main():
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
 			#sys.stdout.write('computing correlations...\n')
-			#correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']			
+			#correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
 			#corr_boxplot = correlations.plot('box')
 			#corr_boxplot = corr_boxplot.get_figure()
 			#corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
@@ -210,6 +210,7 @@ def main():
 		titles = data.spec_id.tolist()
 		shuffle(titles)
 		num_pep_per_cpu = int(len(titles)/(num_cpu))
+		if num_pep_per_cpu == 0: num_pep_per_cpu = 1 # if there are fewer peps than CPU this was 0
 		sys.stdout.write("%i peptides (%i per cpu)\n"%(len(titles),num_pep_per_cpu))
 
 		sys.stdout.write('starting workers...\n')
@@ -217,9 +218,9 @@ def main():
 
 		sys.stdout.write('predicting spectra... \n')
 		results = []
-		i = 0
-		for i in range(num_cpu-1):
-			#select titles for this worker			
+
+		for i in range(num_cpu):
+			#select titles for this worker
 			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
 			"""
 			process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
@@ -230,16 +231,6 @@ def main():
 										data[data.spec_id.isin(tmp)],
 										PTMmap,Ntermmap,Ctermmap,fragmethod
 										)))
-		#some titles might be left
-		i+=1
-		tmp = titles[i*num_pep_per_cpu:]
-		results.append(myPool.apply_async(process_peptides,args=(
-								i,
-								args,
-								data[data.spec_id.isin(tmp)],
-								PTMmap,Ntermmap,Ctermmap,fragmethod
-								)))
-
 		myPool.close()
 		myPool.join()
 
@@ -250,7 +241,7 @@ def main():
 			all_preds = all_preds.append(r.get())
 
 		# print all_preds
-		sys.stdout.write('writing files...\n')
+		sys.stdout.write('writing file {}...\n'.format(args.pep_file +'_predictions.csv'))
 		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
 		mgf = False # prevent writing big mgf files
 		if mgf:
@@ -382,20 +373,20 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	modifications = specdict['modifications']
 
 	total = len(peptides)
-	
+
 	# cols contains the names of the computed features
 	cols_n = get_feature_names()
-	
+
 	dataresult = pd.DataFrame(columns=['spec_id','peplen','charge','ion','ionnumber','target','prediction'])
 	dataresult['peplen'] = dataresult['peplen'].astype(np.uint8)
 	dataresult['charge'] = dataresult['charge'].astype(np.uint8)
 	dataresult['ion'] = dataresult['ion'].astype(np.uint8)
 	dataresult['ionnumber'] = dataresult['ionnumber'].astype(np.uint8)
-	dataresult['target'] = dataresult['target'].astype(np.float32)					
-	dataresult['prediction'] = dataresult['prediction'].astype(np.float32)					
-		
+	dataresult['target'] = dataresult['target'].astype(np.float32)
+	dataresult['prediction'] = dataresult['prediction'].astype(np.float32)
+
 	sys.stderr.write('here')
-		
+
 	title = ""
 	charge = 0
 	msms = []
@@ -514,7 +505,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 					for ii in range(len(resultY)):
 						resultY[ii] = resultY[ii]+0.5
 
-					tmp = pd.DataFrame()					
+					tmp = pd.DataFrame()
 					tmp['spec_id'] = [title]*(2*len(b))
 					tmp['peplen'] = [peplen]*(2*len(b))
 					tmp['charge'] = [charge]*(2*len(b))
@@ -526,10 +517,10 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 					tmp['charge'] = tmp['charge'].astype(np.uint8)
 					tmp['ion'] = tmp['ion'].astype(np.uint8)
 					tmp['ionnumber'] = tmp['ionnumber'].astype(np.uint8)
-					tmp['target'] = tmp['target'].astype(np.float32)					
-					tmp['prediction'] = tmp['prediction'].astype(np.float32)					
+					tmp['target'] = tmp['target'].astype(np.float32)
+					tmp['prediction'] = tmp['prediction'].astype(np.float32)
 					dataresult = dataresult.append(tmp,ignore_index=True)
-								
+
 				pcount += 1
 				if (pcount % 500) == 0:
 					sys.stderr.write('w' + str(worker_num) + '(' + str(pcount) + ') ')
