@@ -124,18 +124,19 @@ def main():
 		#titles might be ordered from small to large peptides,
 		#shuffling improves parallel speeds
 		shuffle(titles)
-		num_spectra_per_cpu = int(len(titles)/(num_cpu))
-		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),num_spectra_per_cpu))
+		# split the titles into (num_cpu) lists to ditribute across the workers
+		split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
+
+		sys.stdout.write("%i spectra (%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
 
 		sys.stdout.write('starting workers...\n')
 
 		myPool = multiprocessing.Pool(num_cpu)
 
 		results = []
-		i = 0
-		for i in range(num_cpu-1):
+		for i in range(num_cpu):
 			#select titles for this worker
-			tmp = titles[i*num_spectra_per_cpu:(i+1)*num_spectra_per_cpu]
+			tmp = split_titles[i]
 			# this commented part of code can be used for debugging by avoiding parallel processing
 			sys.stderr.write('ok')
 			#process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
@@ -146,15 +147,6 @@ def main():
 										data[data.spec_id.isin(tmp)],
 										PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror
 										)))
-		i+=1
-		#some titles might be left
-		tmp = titles[i*num_spectra_per_cpu:]
-		results.append(myPool.apply_async(process_spectra,args=(
-								i,
-								args,
-								data[data.spec_id.isin(tmp)],
-								PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror
-								)))
 
 		myPool.close()
 		myPool.join()
@@ -209,10 +201,9 @@ def main():
 		#shuffling improves parallel speeds
 		titles = data.spec_id.tolist()
 		shuffle(titles)
-		num_pep_per_cpu = int(len(titles)/(num_cpu))
-		if num_pep_per_cpu == 0: num_pep_per_cpu = 1 # if there are fewer peps than CPU this was 0
-		sys.stdout.write("%i peptides (%i per cpu)\n"%(len(titles),num_pep_per_cpu))
-
+		# split the titles into (num_cpu) lists to ditribute across the workers
+		split_titles = [titles[i*len(titles) // num_cpu : (i+1)*len(titles) // num_cpu] for i in range(num_cpu)]
+		sys.stdout.write("%i peptides (~%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
 		sys.stdout.write('starting workers...\n')
 		myPool = multiprocessing.Pool(num_cpu)
 
@@ -221,7 +212,7 @@ def main():
 
 		for i in range(num_cpu):
 			#select titles for this worker
-			tmp = titles[i*num_pep_per_cpu:(i+1)*num_pep_per_cpu]
+			tmp = split_titles[i]
 			"""
 			process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
 			"""
