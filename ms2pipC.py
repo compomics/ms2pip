@@ -7,9 +7,8 @@ import multiprocessing
 from random import shuffle
 import tempfile
 #import xgboost as xgb
- # TODO write function to modify pep sequence & choose model
-#some globals
 
+#some globals:
 # a_map converts the peptide amio acids to integers, note how 'L' is removed
 aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 masses = [71.037114,103.00919,115.026943,129.042593,147.068414,57.021464,137.058912,
@@ -86,20 +85,20 @@ def main():
 
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
-		print "using CID models..."
+		print("using CID models.\n")
 	elif fragmethod == "HCD":
 		if args.i:
 			if args.p:
 				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
-				print "using HCD iTRAQ phospho models..."
+				print("using HCD iTRAQ phospho models.\n")
 			else:
 				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
-				print "using HCD iTRAQ pmodels..."
+				print("using HCD iTRAQ pmodels.\n")
 		else:
 			import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
-			print "using HCD..."
+			print("using HCD models.\n")
 	else:
-		print "Unknown fragmentation method in configfile: %s"%fragmethod
+		print("Unknown fragmentation method in configfile: %s"%fragmethod)
 		exit(1)
 
 	ms2pipfeatures_pyx.ms2pip_init(fa.name)
@@ -129,10 +128,11 @@ def main():
 		for i in range(num_cpu):
 			tmp = split_titles[i]
 			# for debugging,  by avoiding parallel processing
-			# process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
+			# all_results = process_spectra(i,args, data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod,fragerror)
 			# sys.stderr.write('ok')
 
 			# send worker to myPool
+			# """
 			results.append(myPool.apply_async(process_spectra,args=(
 										i,
 										args,
@@ -147,7 +147,7 @@ def main():
 		for r in results:
 			all_results.append(r.get())
 		all_results = pd.concat(all_results)
-
+			# """
 		if args.vector_file:
 			sys.stdout.write('writing vector file {}... \n'.format(args.vector_file))
   			# write result. write format depends on extension:
@@ -179,7 +179,7 @@ def main():
 		for i in range(num_cpu):
 			tmp = split_titles[i]
 			# for debugging,  by avoiding parallel processing
-			# process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
+			# all_preds = process_peptides(i,args,data[data.spec_id.isin(tmp)],PTMmap,Ntermmap,Ctermmap,fragmethod)
 			results.append(myPool.apply_async(process_peptides,args=(
 										i,
 										args,
@@ -223,7 +223,8 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	modifications applied to each peptide sequence. Returns the predicted
 	spectra for all the peptides.
 	"""
-
+	# NOTE not sure why these must be imported inside this function again
+	"""
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
@@ -237,7 +238,7 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	else:
 		print "Unknown fragmentation method in configfile: %s"%fragmethod
 		exit(1)
-
+	"""
 	# transform pandas dataframe into dictionary for easy access
 	specdict = data[['spec_id','peptide','modifications','charge']].set_index('spec_id').to_dict()
 	peptides = specdict['peptide']
@@ -249,39 +250,15 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 	total = len(peptides)
 
 	for pepid in peptides:
-		ch = charges[pepid]
-
 		peptide = peptides[pepid]
 		peptide = peptide.replace('L','I')
+		mods = modifications[pepid]
 
 		# convert peptide string to integer list to speed up C code
 		peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
-		# modpeptide is the same as peptide but with modified amino acids
-		# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
-		mods = modifications[pepid]
-		modpeptide = np.array(peptide[:],dtype=np.uint16)
-		peplen = len(peptide)
-		nptm = 0
-		cptm = 0
-		if mods != '-':
-			l = mods.split('|')
-			for i in range(0,len(l),2):
-				tl = l[i+1]
-				if int(l[i]) == 0:
-					if tl in Ntermmap:
-						nptm += Ntermmap[tl]
-					else:
-						nptm += Ntermmap[tl[:-1]]
-				elif int(l[i]) == -1:
-					if tl in Ctermmap:
-						cptm += Ctermmap[tl]
-					else:
-						cptm += Ctermmap[tl[:-1]]
-				else:
-					if tl in PTMmap:
-						modpeptide[int(l[i])-1] = PTMmap[tl]
-					else:
-						modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
+
+		modpeptide, nptm, cptm = apply_mods(peptide, mods)
+		ch = charges[pepid]
 
 		# get ion mzs
 		(b_mz,y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide,nptm,cptm)
@@ -295,7 +272,7 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 
 		# return results as a DataFrame
 		tmp = pd.DataFrame()
-		tmp['peplen'] = [peplen]*(2*len(resultB))
+		tmp['peplen'] = [len(peptide)]*(2*len(resultB))
 		tmp['charge'] = [ch]*(2*len(resultB))
 		tmp['ion'] = ['b']*len(resultB)+['y']*len(resultY)
 		tmp['mz'] = b_mz + y_mz
@@ -317,7 +294,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	the feature vectors are returned, or a DataFrame with the predicted and
 	empirical intensities.
 	"""
-
+	# NOTE not sure why these must be imported inside this function again
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 	elif fragmethod == "HCD":
@@ -407,32 +384,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 				# convert peptide string to integer list to speed up C code
 				peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
 
-				# modpeptide is the same as peptide but with modified amino acids
-				# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
-				modpeptide = np.array(peptide[:],dtype=np.uint16)
-				peplen = len(peptide)
-
-				nptm = 0
-				cptm = 0
-				if mods != '-':
-					l = mods.split('|')
-					for i in range(0,len(l),2):
-						tl = l[i+1]
-						if int(l[i]) == 0:
-							if tl in Ntermmap:
-								nptm += Ntermmap[tl]
-							else:
-								nptm += Ntermmap[tl[:-1]]
-						elif int(l[i]) == -1:
-							if tl in Ctermmap:
-								cptm += Ctermmap[tl]
-							else:
-								cptm += Ctermmap[tl[:-1]]
-						else:
-							if tl in PTMmap:
-								modpeptide[int(l[i])-1] = PTMmap[tl]
-							else:
-								modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
+				modpeptide, nptm, cptm = apply_mods(peptide, mods)
 
 				if args.i:
 					#remove reporter ionsi
@@ -472,7 +424,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 
 					tmp = pd.DataFrame()
 					tmp['spec_id'] = [title]*(2*len(b))
-					tmp['peplen'] = [peplen]*(2*len(b))
+					tmp['peplen'] = [len(peptide)]*(2*len(b))
 					tmp['charge'] = [charge]*(2*len(b))
 					tmp['ion'] = [0]*len(b) + [1]*len(y)
 					tmp['ionnumber'] = [a+1 for a in range(len(b))+range(len(y)-1,-1,-1)]
@@ -495,8 +447,8 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 	else:
 		return dataresult
 
-# feature names
 def get_feature_names():
+	# feature names
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 
 	names = []
@@ -556,8 +508,8 @@ def get_feature_names():
 
 	return names
 
-# feature names for the fixed peptide length feature vectors
 def get_feature_names_chem(peplen):
+	# feature names for the fixed peptide length feature vectors
 	aminos = ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']
 
 	names = []
@@ -630,6 +582,41 @@ def prepare_titles(titles, num_cpu):
 	sys.stdout.write("%i spectra (~%i per cpu)\n"%(len(titles),np.mean([len(a) for a in split_titles])))
 
 	return(split_titles)
+
+def apply_mods(peptide, mods):
+	"""
+	Takes a peptide sequence and a set of modifications. Returns the modified
+	version of the peptide sequence, c- and n-term modifications.
+	"""
+
+	# modpeptide is the same as peptide but with modified amino acids
+	# converted to other integers (beware: these are hard coded in ms2pipfeatures_c.c for now)
+	modpeptide = np.array(peptide[:],dtype=np.uint16)
+	peplen = len(peptide)
+
+	nptm = 0
+	cptm = 0
+	if mods != '-':
+		l = mods.split('|')
+		for i in range(0,len(l),2):
+			tl = l[i+1]
+			if int(l[i]) == 0:
+				if tl in Ntermmap:
+					nptm += Ntermmap[tl]
+				else:
+					nptm += Ntermmap[tl[:-1]]
+			elif int(l[i]) == -1:
+				if tl in Ctermmap:
+					cptm += Ctermmap[tl]
+				else:
+					cptm += Ctermmap[tl[:-1]]
+			else:
+				if tl in PTMmap:
+					modpeptide[int(l[i])-1] = PTMmap[tl]
+				else:
+					modpeptide[int(l[i])-1] = PTMmap[tl[:-1]]
+
+	return modpeptide, nptm, cptm
 
 def print_logo():
 	logo = """
