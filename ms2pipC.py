@@ -114,7 +114,7 @@ def main():
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
-    data = pd.read_csv(	args.pep_file,
+    data = pd.read_csv(args.pep_file,
                         sep=" ",
                         index_col=False,
                         dtype={"spec_id": str, "modifications": str})
@@ -263,7 +263,7 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
     final_result = pd.DataFrame(
         columns=["peplen", "charge", "ion", "mz", "ionnumber", "prediction", "spec_id"])
     pcount = 0
-    total = len(peptides)
+    # total = len(peptides) # variable was unused
 
     for pepid in peptides:
         peptide = peptides[pepid]
@@ -282,9 +282,9 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
         # get ion intensities
         (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(
             peptide, modpeptide, ch)
-        for ii in range(len(resultB)):
+        for ii, _ in enumerate(resultB):
             resultB[ii] = resultB[ii] + 0.5  # TODO needs to be checked!
-        for ii in range(len(resultY)):
+        for ii, _ in enumerate(resultY):
             resultY[ii] = resultY[ii] + 0.5
 
         # return results as a DataFrame
@@ -329,12 +329,11 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
         exit(1)
 
     # transform pandas datastructure into dictionary for easy access
-    specdict = data[["spec_id", "peptide", "modifications"]
-                    ].set_index("spec_id").to_dict()
+    specdict = data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
 
-    total = len(peptides)
+    # total = len(peptides) # variable was unused
 
     # cols contains the names of the computed features
     cols_n = get_feature_names()
@@ -355,9 +354,9 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
     f = open(args.spec_file)
     skip = False
     vectors = []
-    result = []
+    # result = [] # unused
     pcount = 0
-    while (1):
+    while 1:
         rows = f.readlines(3000000)
         if not rows:
             break
@@ -438,10 +437,10 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                     # predict the b- and y-ion intensities from the peptide
                     (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(
                         peptide, modpeptide, charge)
-                    for ii in range(len(resultB)):
+                    for ii, _ in enumerate(resultB):
                         # This still needs to be checked!!!!!!!
                         resultB[ii] = resultB[ii] + 0.5
-                    for ii in range(len(resultY)):
+                    for ii, _ in enumerate(resultY):
                         resultY[ii] = resultY[ii] + 0.5
 
                     tmp = pd.DataFrame()
@@ -473,7 +472,9 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
 
 
 def get_feature_names():
-    # feature names
+	"""
+    feature names for the fixed peptide length feature vectors
+    """
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K",
               "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
 
@@ -536,7 +537,9 @@ def get_feature_names():
 
 
 def get_feature_names_chem(peplen):
-    # feature names for the fixed peptide length feature vectors
+	"""
+    feature names for the fixed peptide length feature vectors
+    """
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K",
               "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
 
@@ -586,9 +589,12 @@ def get_feature_names_chem(peplen):
 
 
 def scan_spectrum_file(filename):
+    """
+    go over mgf file and return list with all spectrum titles
+    """
     titles = []
     f = open(filename)
-    while (1):
+    while 1:
         rows = f.readlines(1000000)
         if not rows:
             break
@@ -614,7 +620,7 @@ def prepare_titles(titles, num_cpu):
     sys.stdout.write("%i spectra (~%i per cpu)\n" %
                      (len(titles), np.mean([len(a) for a in split_titles])))
 
-    return(split_titles)
+    return split_titles
 
 
 def apply_mods(peptide, mods):
@@ -627,7 +633,6 @@ def apply_mods(peptide, mods):
     # converted to other integers (beware: these are hard coded in
     # ms2pipfeatures_c.c for now)
     modpeptide = np.array(peptide[:], dtype=np.uint16)
-    peplen = len(peptide)
 
     nptm = 0
     cptm = 0
