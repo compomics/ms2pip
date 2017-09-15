@@ -16,14 +16,12 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
     spectra for all the peptides.
     """
     # transform pandas dataframe into dictionary for easy access
-    specdict = data[["spec_id", "peptide", "modifications",
-                     "charge"]].set_index("spec_id").to_dict()
+    specdict = data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
     charges = specdict["charge"]
 
-    final_result = pd.DataFrame(
-        columns=["peplen", "charge", "ion", "mz", "ionnumber", "prediction", "spec_id"])
+    final_result = pd.DataFrame(columns=["peplen", "charge", "ion", "mz", "ionnumber", "prediction", "spec_id"])
     pcount = 0
     # total = len(peptides) # variable was unused
 
@@ -42,8 +40,7 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
         (b_mz, y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide, nptm, cptm)
 
         # get ion intensities
-        (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(
-            peptide, modpeptide, ch)
+        (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
         for ii, _ in enumerate(resultB):
             resultB[ii] = resultB[ii] + 0.5  # TODO needs to be checked!
         for ii, _ in enumerate(resultY):
@@ -55,8 +52,7 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
         tmp["charge"] = [ch] * (2 * len(resultB))
         tmp["ion"] = ["b"] * len(resultB) + ["y"] * len(resultY)
         tmp["mz"] = b_mz + y_mz
-        tmp["ionnumber"] = range(1, len(resultB) + 1) + \
-            range(len(resultY), 0, -1)
+        tmp["ionnumber"] = range(1, len(resultB) + 1) + range(len(resultY), 0, -1)
         tmp["prediction"] = resultB + resultY
         tmp["spec_id"] = [pepid] * len(tmp)
         final_result = final_result.append(tmp)
@@ -80,13 +76,10 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
 
-    # total = len(peptides) # variable was unused
-
     # cols contains the names of the computed features
     cols_n = get_feature_names()
 
-    dataresult = pd.DataFrame(
-        columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "target", "prediction"])
+    dataresult = pd.DataFrame(columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "target", "prediction"])
     dataresult["peplen"] = dataresult["peplen"].astype(np.uint8)
     dataresult["charge"] = dataresult["charge"].astype(np.uint8)
     dataresult["ion"] = dataresult["ion"].astype(np.uint8)
@@ -101,7 +94,6 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
     f = open(args.spec_file)
     skip = False
     vectors = []
-    # result = [] # unused
     pcount = 0
     while 1:
         rows = f.readlines(3000000)
@@ -164,16 +156,14 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                 peaks = peaks.astype(np.float32)
 
                 # find the b- and y-ion peak intensities in the MS2 spectrum
-                (b, y, b2, y2) = ms2pipfeatures_pyx.get_targets(
-                    modpeptide, msms, peaks, nptm, cptm, fragerror)
+                (b, y, b2, y2) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, nptm, cptm, fragerror)
 
                 # for debugging:
                 # tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols, dtype=np.uint32)
                 # print(bst.predict(xgb.DMatrix(tmp)))
 
                 if args.vector_file:
-                    tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(
-                        peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
+                    tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
                     tmp["psmid"] = [title] * len(tmp)
                     tmp["targetsB"] = b
                     tmp["targetsY"] = y[::-1]
@@ -182,8 +172,7 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                     vectors.append(tmp)
                 else:
                     # predict the b- and y-ion intensities from the peptide
-                    (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(
-                        peptide, modpeptide, charge)
+                    (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
                     for ii, _ in enumerate(resultB):
                         # This still needs to be checked!!!!!!!
                         resultB[ii] = resultB[ii] + 0.5
@@ -195,8 +184,7 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                     tmp["peplen"] = [len(peptide)] * (2 * len(b))
                     tmp["charge"] = [charge] * (2 * len(b))
                     tmp["ion"] = [0] * len(b) + [1] * len(y)
-                    tmp["ionnumber"] = [
-                        a + 1 for a in range(len(b)) + range(len(y) - 1, -1, -1)]
+                    tmp["ionnumber"] = [a + 1 for a in range(len(b)) + range(len(y) - 1, -1, -1)]
                     tmp["target"] = b + y
                     tmp["prediction"] = resultB + resultY
                     tmp["peplen"] = tmp["peplen"].astype(np.uint8)
@@ -224,28 +212,19 @@ def get_feature_names():
     """
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K",
               "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
-
     names = []
     for a in aminos:
         names.append("Ib_" + a)
     for a in aminos:
         names.append("Iy_" + a)
     names += ["pmz", "peplen", "ionnumber", "ionnumber_rel"]
+
     for c in ["mz", "bas", "heli", "hydro", "pI"]:
         names.append("mean_" + c)
 
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("max_" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("min_" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("max" + c + "_b")
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("min" + c + "_b")
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("max" + c + "_y")
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("min" + c + "_y")
+    for c in ["max_{}", "min_{}", "max{}_b", "min{}_b", "max{}_y", "min{}_y"]:
+        for b in ["bas", "heli", "hydro", "pI"]:
+            names.append(c.format(b))
 
     for c in ["mz", "bas", "heli", "hydro", "pI"]:
         names.append("%s_ion" % c)
@@ -253,18 +232,9 @@ def get_feature_names():
         names.append("mean_%s_ion" % c)
         names.append("mean_%s_ion_other" % c)
 
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("plus_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("times_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("minus1_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("minus2_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("bsum" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("ysum" + c)
+    for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
+        for b in ["bas", "heli", "hydro", "pI"]:
+            names.append(c.format(b))
 
     for pos in ["0", "1", "-2", "-1"]:
         for c in ["mz", "bas", "heli", "hydro", "pI", "P", "D", "E", "K", "R"]:
@@ -282,7 +252,6 @@ def get_feature_names():
 
     return names
 
-
 def get_feature_names_chem(peplen):
     """
     feature names for the fixed peptide length feature vectors
@@ -291,21 +260,11 @@ def get_feature_names_chem(peplen):
               "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
 
     names = []
-    names += ["pmz", "peplen", "ionnumber", "ionnumber_rel"]
-    for c in ["mz", "bas", "heli", "hydro", "pI"]:
-        names.append("mean_" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("max_" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("min_" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("max" + c + "_b")
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("min" + c + "_b")
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("max" + c + "_y")
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("min" + c + "_y")
+    names += ["pmz", "peplen", "ionnumber", "ionnumber_rel", "mean_mz"]
+
+    for c in ["mean_{}", "max_{}", "min_{}", "max{}_b", "min{}_b", "max{}_y", "min{}_y"]:
+        for b in ["bas", "heli", "hydro", "pI"]:
+            names.append(c.format(b))
 
     for c in ["mz", "bas", "heli", "hydro", "pI"]:
         names.append("%s_ion" % c)
@@ -313,18 +272,9 @@ def get_feature_names_chem(peplen):
         names.append("mean_%s_ion" % c)
         names.append("mean_%s_ion_other" % c)
 
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("plus_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("times_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("minus1_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("minus2_cleave" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("bsum" + c)
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("ysum" + c)
+    for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
+        for b in ["bas", "heli", "hydro", "pI"]:
+            names.append(c.format(b))
 
     for i in range(peplen):
         for c in ["mz", "bas", "heli", "hydro", "pI"]:
