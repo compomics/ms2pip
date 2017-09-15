@@ -6,7 +6,6 @@ import argparse
 import multiprocessing
 from random import shuffle
 import tempfile
-#import xgboost as xgb
 
 def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmethod):
     """
@@ -23,7 +22,6 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
 
     final_result = pd.DataFrame(columns=["peplen", "charge", "ion", "mz", "ionnumber", "prediction", "spec_id"])
     pcount = 0
-    # total = len(peptides) # variable was unused
 
     for pepid in peptides:
         peptide = peptides[pepid]
@@ -60,7 +58,6 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
         if (pcount % 500) == 0:
             sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
     return final_result
-
 
 def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmethod, fragerror):
     """
@@ -174,8 +171,7 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                     # predict the b- and y-ion intensities from the peptide
                     (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
                     for ii, _ in enumerate(resultB):
-                        # This still needs to be checked!!!!!!!
-                        resultB[ii] = resultB[ii] + 0.5
+                        resultB[ii] = resultB[ii] + 0.5 # TODO needs to be checked!
                     for ii, _ in enumerate(resultY):
                         resultY[ii] = resultY[ii] + 0.5
 
@@ -184,7 +180,7 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                     tmp["peplen"] = [len(peptide)] * (2 * len(b))
                     tmp["charge"] = [charge] * (2 * len(b))
                     tmp["ion"] = [0] * len(b) + [1] * len(y)
-                    tmp["ionnumber"] = [a + 1 for a in range(len(b)) + range(len(y) - 1, -1, -1)]
+                    tmp["ionnumber"] = [a + 1 for a in range(len(b)) + range(len(y)-1, -1, -1)]
                     tmp["target"] = b + y
                     tmp["prediction"] = resultB + resultY
                     tmp["peplen"] = tmp["peplen"].astype(np.uint8)
@@ -197,14 +193,12 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
 
                 pcount += 1
                 if (pcount % 500) == 0:
-                    sys.stderr.write("w" + str(worker_num) +
-                                     "(" + str(pcount) + ") ")
+                    sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
 
     if args.vector_file:
         return pd.concat(vectors)
     else:
         return dataresult
-
 
 def get_feature_names():
     """
@@ -227,10 +221,10 @@ def get_feature_names():
             names.append(c.format(b))
 
     for c in ["mz", "bas", "heli", "hydro", "pI"]:
-        names.append("%s_ion" % c)
-        names.append("%s_ion_other" % c)
-        names.append("mean_%s_ion" % c)
-        names.append("mean_%s_ion_other" % c)
+        names.append("{}_ion".format(c))
+        names.append("{}_ion_other".format(c))
+        names.append("mean_{}_ion".format(c))
+        names.append("mean_{}_ion_other".format(c))
 
     for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
         for b in ["bas", "heli", "hydro", "pI"]:
@@ -267,10 +261,10 @@ def get_feature_names_chem(peplen):
             names.append(c.format(b))
 
     for c in ["mz", "bas", "heli", "hydro", "pI"]:
-        names.append("%s_ion" % c)
-        names.append("%s_ion_other" % c)
-        names.append("mean_%s_ion" % c)
-        names.append("mean_%s_ion_other" % c)
+        names.append("{}_ion".format(c))
+        names.append("{}_ion_other".format(c))
+        names.append("mean_{}_ion".format(c))
+        names.append("mean_{}_ion_other".format(c))
 
     for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
         for b in ["bas", "heli", "hydro", "pI"]:
@@ -283,7 +277,6 @@ def get_feature_names_chem(peplen):
     names.append("charge")
 
     return names
-
 
 def scan_spectrum_file(filename):
     """
@@ -302,7 +295,6 @@ def scan_spectrum_file(filename):
     f.close()
     return titles
 
-
 def prepare_titles(titles, num_cpu):
     """
     Take a list and return a list containing num_cpu smaller lists with the
@@ -314,21 +306,16 @@ def prepare_titles(titles, num_cpu):
 
     split_titles = [titles[i * len(titles) // num_cpu: (i + 1)
                            * len(titles) // num_cpu] for i in range(num_cpu)]
-    sys.stdout.write("%i spectra (~%i per cpu)\n" %
-                     (len(titles), np.mean([len(a) for a in split_titles])))
+    sys.stdout.write("{} spectra (~{:.2f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
 
     return split_titles
-
 
 def apply_mods(peptide, mods):
     """
     Takes a peptide sequence and a set of modifications. Returns the modified
-    version of the peptide sequence, c- and n-term modifications.
+    version of the peptide sequence, c- and n-term modifications. This modified
+    version are hard coded in ms2pipfeatures_c.c for now.
     """
-
-    # modpeptide is the same as peptide but with modified amino acids
-    # converted to other integers (beware: these are hard coded in
-    # ms2pipfeatures_c.c for now)
     modpeptide = np.array(peptide[:], dtype=np.uint16)
 
     nptm = 0
@@ -355,7 +342,6 @@ def apply_mods(peptide, mods):
 
     return modpeptide, nptm, cptm
 
-
 def print_logo():
     logo = """
  _____ _____ ___ _____ _____ _____
@@ -369,14 +355,13 @@ def print_logo():
 
 
 if __name__ == "__main__":
-    # some globals:
     # a_map converts the peptide amino acids to integers, note how "L" is removed
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K", "M", "N", "P", "Q",
                 "R", "S", "T", "V", "W", "Y"]
-    masses = [71.037114, 103.00919, 115.026943, 129.042593, 147.068414, 57.021464,
-              137.058912, 113.084064, 128.094963, 131.040485, 114.042927, 97.052764,
-               128.058578, 156.101111, 87.032028, 101.047679, 99.068414, 186.079313,
-               163.063329, 147.0354]
+    masses = [71.037114, 103.00919, 115.026943, 129.042593, 147.068414,
+                57.021464, 137.058912, 113.084064, 128.094963, 131.040485,
+                114.042927, 97.052764, 128.058578, 156.101111, 87.032028,
+                101.047679, 99.068414, 186.079313, 163.063329, 147.0354]
     a_map = {}
     for i, a in enumerate(aminos):
         a_map[a] = i
@@ -422,21 +407,21 @@ if __name__ == "__main__":
                 numptms += 1
             if row.startswith("sptm="):
                 numptms += 1
-    fa.write("%i\n" % numptms)
+    fa.write("{}\n".format(numptms))
     # modified amino acids have numbers starting at 38 (mutations -> omega)
     pos = 38
     with open(args.c) as f:
         for row in f:
             if row.startswith("sptm="):
                 l = row.rstrip().split("=")[1].split(",")
-                fa.write("%f\n" % (float(l[1]) + masses[a_map[l[3]]]))
+                fa.write("{}\n".format(float(l[1]) + masses[a_map[l[3]]]))
                 PTMmap[l[0]] = pos
                 pos += 1
     with open(args.c) as f:
         for row in f:
             if row.startswith("ptm="):
                 l = row.rstrip().split("=")[1].split(",")
-                fa.write("%f\n" % (float(l[1]) + masses[a_map[l[3]]]))
+                fa.write("{}\n".format(float(l[1]) + masses[a_map[l[3]]]))
                 PTMmap[l[0]] = pos
                 pos += 1
             if row.startswith("nterm="):
@@ -467,7 +452,7 @@ if __name__ == "__main__":
             import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
             print("using HCD models.\n")
     else:
-        print("Unknown fragmentation method in configfile: %s" % fragmethod)
+        print("Unknown fragmentation method in configfile: {}".format(fragmethod))
         exit(1)
 
     ms2pipfeatures_pyx.ms2pip_init(fa.name)
@@ -550,7 +535,7 @@ if __name__ == "__main__":
 
         for i in range(num_cpu):
             tmp = split_titles[i]
-            # for debugging,  by avoiding parallel processing
+            # for debugging, by avoiding parallel processing
             # all_preds = process_peptides(i, args, data[data.spec_id.isin(tmp)], PTMmap, Ntermmap, Ctermmap, fragmethod)
             results.append(myPool.apply_async(process_peptides, args=(
                 i,
