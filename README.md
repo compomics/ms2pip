@@ -53,12 +53,12 @@ Several ms2pipC options need to be set in this configfile.
 The models that should be used are set as `frag_method=X` where X is either `CID` or `HCD`.
 The fragment ion error tolerance is set as `frag_error=X` where is X is the tolerance in Da.
 
-PTMs (see further) are set as `ptm=X,Y,Z` for each internal PTM where X is a string that represents 
-the PTM, Y is the difference in Da associated with the PTM and Z is the amino 
-acid that is modified by the PTM. N-terminal modifications are specified as `nterm=X,Y` 
-where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
-Similarly, c-terminal modifications are specified as `cterm=X,Y` 
-where X is gain a string that represents the PTM, Y is again the difference in Da associated with the PTM.
+PTMs (see further) are set as `ptm=X,Y,o,Z` for each internal PTM where X is a string that represents 
+the PTM, Y is the difference in Da associated with the PTM, o is a field only used by Omega (can be any value) and Z is the amino 
+acid that is modified by the PTM. N-terminal modifications are specified as `nterm=X,Y,o` 
+where X is again a string that represents the PTM, o is a field only used by Omega (can be any value), and Y is again the difference in Da associated with the PTM.
+Similarly, c-terminal modifications are specified as `cterm=X,Y,o` 
+where X is again a string that represents the PTM, o is a field only used by Omega (can be any value), and Y is again the difference in Da associated with the PTM.
 
 ### Getting predictions from peptide file
 

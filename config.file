@@ -1,8 +1,13 @@
 frag_method=HCD
 frag_error=0.02
 
-ptm=Oxidation,15.994915,M
-ptm=Cam,57.02146,C
-#ptm=PhosphoS,79.966331,S
-#ptm=phosphT,79.966331,T
-#ptm=phosphY,79.966331,Y
+ptm=Oxidation,15.994915,opt,M
+ptm=CAM,57.02146,fix,C
+ptm=Pyro_glu,-18.010565,opt,E
+ptm=Pyro-glu,-17.026549,opt,Q
+ptm=Pyro-cmC,39.994915,opt,C
+ptm=PhosphoS,79.966331,opt,S
+ptm=PhosphoT,79.966331,opt,T
+ptm=PhosphoY,79.966331,opt,Y
+ptm=iTRAQK,144.102063,fix,K
+nterm=iTRAQ,144.102063,fix
