@@ -50,7 +50,7 @@ def process_peptides(worker_num, args, data, PTMmap, Ntermmap, Ctermmap, fragmet
         tmp["charge"] = [ch] * (2 * len(resultB))
         tmp["ion"] = ["b"] * len(resultB) + ["y"] * len(resultY)
         tmp["mz"] = b_mz + y_mz
-        tmp["ionnumber"] = range(1, len(resultB) + 1) + range(len(resultY), 0, -1)
+        tmp["ionnumber"] = list(np.arange(1, len(resultB) + 1)) + list(np.arange(len(resultY), 0, -1))
         tmp["prediction"] = resultB + resultY
         tmp["spec_id"] = [pepid] * len(tmp)
         final_result = final_result.append(tmp)
@@ -407,7 +407,7 @@ if __name__ == "__main__":
                 numptms += 1
             if row.startswith("sptm="):
                 numptms += 1
-    fa.write("{}\n".format(numptms))
+    fa.write(bytearray("{}\n".format(numptms).encode()))
     # modified amino acids have numbers starting at 38 (mutations -> omega)
     pos = 38
     with open(args.c) as f:
@@ -421,7 +421,7 @@ if __name__ == "__main__":
         for row in f:
             if row.startswith("ptm="):
                 l = row.rstrip().split("=")[1].split(",")
-                fa.write("{}\n".format(float(l[1]) + masses[a_map[l[3]]]))
+                fa.write(bytearray("{}\n".format(float(l[1]) + masses[a_map[l[3]]]).encode()))
                 PTMmap[l[0]] = pos
                 pos += 1
             if row.startswith("nterm="):
@@ -455,7 +455,7 @@ if __name__ == "__main__":
         print("Unknown fragmentation method in configfile: {}".format(fragmethod))
         exit(1)
 
-    ms2pipfeatures_pyx.ms2pip_init(fa.name)
+    ms2pipfeatures_pyx.ms2pip_init(bytearray(fa.name.encode()))
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
