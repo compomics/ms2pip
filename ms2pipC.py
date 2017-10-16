@@ -5,7 +5,9 @@ import pickle
 import argparse
 import multiprocessing
 from random import shuffle
+import math
 import tempfile
+from pyteomics import mass
 #import xgboost as xgb
 
 #some globals
@@ -62,21 +64,21 @@ def main():
 			if row.startswith("sptm="):
 				l=row.rstrip().split('=')[1].split(',')
 				fa.write("%f\n"%(float(l[1])+masses[a_map[l[3]]]))
-				PTMmap[l[0]] = pos
+				PTMmap[l[0].lower()] = pos
 				pos+=1
 	with open(args.c) as f:
 		for row in f:
 			if row.startswith("ptm="):
 				l=row.rstrip().split('=')[1].split(',')
-				fa.write("%f\n"%(float(l[1])+masses[a_map[l[3]]]))
-				PTMmap[l[0]] = pos
-				pos+=1
-			if row.startswith("nterm="):
-				l=row.rstrip().split('=')[1].split(',')
-				Ntermmap[l[0]] = float(l[1])
-			if row.startswith("cterm="):
-				l=row.rstrip().split('=')[1].split(',')
-				Ctermmap[l[0]] = float(l[1])
+				if l[3] == "N-term":
+					Ntermmap[l[0].lower()] = float(l[1])
+				elif l[3] == "C-term":
+					Ctermmap[l[0].lower()] = float(l[1])
+				else:	
+					if l[3] in a_map:
+						fa.write("%f\n"%(float(l[1])+masses[a_map[l[3]]]))
+						PTMmap[l[0].lower()] = pos
+						pos+=1
 			if row.startswith("frag_method="):
 				fragmethod=row.rstrip().split('=')[1]
 			if row.startswith("frag_error="):
@@ -192,13 +194,47 @@ def main():
 			sys.stdout.write('writing file...\n')
 			all_spectra.to_csv(args.pep_file + '_pred_and_emp.csv', index=False)
 
-			#sys.stdout.write('computing correlations...\n')
-			#correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']			
-			#corr_boxplot = correlations.plot('box')
-			#corr_boxplot = corr_boxplot.get_figure()
-			#corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
-			#corr_boxplot.savefig(args.pep_file + '_correlations.png')
 
+			def peakcount(x):
+				c = 0.
+				for i in x:
+					if i > -9.95: c+=1.
+				return c/len(x)
+				
+			#SD: wroking here! need to normalize counts in Omega as well
+			peakcounts = all_spectra.groupby('spec_id')['target'].apply(peakcount)
+			peakcounts.to_csv(args.pep_file+".pctmp",index=True)
+			pcs = {}
+			with open(args.pep_file+".pctmp") as f:
+				for row in f:
+					l= row.rstrip().split(',')
+					pcs[l[0]] = float(l[1])
+
+			peakcounts = all_spectra.groupby('spec_id')['target2'].apply(peakcount)
+			peakcounts.to_csv(args.pep_file+".pctmp",index=True)
+			with open(args.pep_file+".pctmp") as f:
+				for row in f:
+					l= row.rstrip().split(',')
+					pcs[l[0]] = (pcs[l[0]]+float(l[1]))/2
+
+
+			sys.stdout.write('computing correlations...\n')
+			correlations = all_spectra.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']	
+			correlations.to_csv(args.pep_file+".pearsonrtmp",index=True)
+			fout = open(args.pep_file+".pearsonr","w")
+			with open(args.pep_file+".pearsonrtmp") as f:
+				fout.write('spec_id,pearsonr,peakcount\n')
+				for row in f:
+					l= row.rstrip().split(',')
+					fout.write("%s,%s,%s\n"%(l[0],l[2],pcs[l[0]]))
+			fout.close()
+			eee
+			"""
+			corr_boxplot = correlations.plot('hist')
+			corr_boxplot = corr_boxplot.get_figure()
+			corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
+			corr_boxplot.savefig(args.pep_file + '_correlations.png')
+			"""
 		sys.stdout.write('done! \n')
 
 	else:
@@ -249,21 +285,27 @@ def main():
 		for r in results:
 			all_preds = all_preds.append(r.get())
 
-		# print all_preds
+		#all_preds = all_preds[all_preds["prediction"]>-9]
+		#all_preds["prediction"] = 1000000 * ((2**all_preds["prediction"])-0.001)
+
+		#print all_preds
 		sys.stdout.write('writing files...\n')
 		all_preds.to_csv(args.pep_file +'_predictions.csv', index=False)
-		mgf = False # prevent writing big mgf files
+		mgf = True # prevent writing big mgf files
 		if mgf:
 			sys.stdout.write('\nwriting mgf file...\n')
 			mgf_output = open(args.pep_file +'_predictions.mgf', 'w+')
 			for sp in all_preds.spec_id.unique():
 				tmp = all_preds[all_preds.spec_id == sp]
+				tmp = tmp[tmp["prediction"]>-9.8]
+				tmp["prediction"] = 10000 * ((2**tmp["prediction"])-0.001)
 				tmp = tmp.sort_values('mz')
 				mgf_output.write('BEGIN IONS\n')
 				mgf_output.write('TITLE=' + str(sp) + '\n')
-				mgf_output.write('CHARGE=' + str(tmp.charge[0]) +'\n')
-				for i in range(len(tmp)):
-					mgf_output.write(str(tmp['mz'][i]) + ' ' + str(tmp['prediction'][i]) + '\n')
+				mgf_output.write('PEPMASS=' + str(tmp.pepmass.values[0]) +'\n')		
+				mgf_output.write('CHARGE=' + str(tmp.charge.values[0]) +'+\n')		
+				for ii,r in tmp.iterrows():
+					mgf_output.write("%.4f %.2f\n"%(r['mz'],r['prediction']))
 				mgf_output.write('END IONS\n')
 			mgf_output.close()
 		sys.stdout.write('done!\n')
@@ -305,6 +347,7 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 
 		peptide = peptides[pepid]
 		peptide = peptide.replace('L','I')
+		pepmass= mass.calculate_mass(sequence=peptide,charge=ch)
 
 		# convert peptide string to integer list to speed up C code
 		peptide = np.array([a_map[x] for x in peptide],dtype=np.uint16)
@@ -353,6 +396,8 @@ def process_peptides(worker_num,args,data,PTMmap,Ntermmap,Ctermmap,fragmethod):
 		tmp['ionnumber'] = range(1,len(resultB)+1)+range(len(resultY),0,-1)
 		tmp['prediction'] = resultB + resultY
 		tmp['spec_id'] = [pepid]*len(tmp)
+		tmp['pepmass'] = [pepmass]*len(tmp)
+		
 		final_result = final_result.append(tmp)
 		pcount += 1
 		if (pcount % 500) == 0:
@@ -465,7 +510,7 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 				if mods != '-':
 					l = mods.split('|')
 					for i in range(0,len(l),2):
-						tl = l[i+1]
+						tl = l[i+1].lower()
 						if int(l[i]) == 0:
 							if tl in Ntermmap:
 								nptm += Ntermmap[tl]
@@ -525,12 +570,14 @@ def process_spectra(worker_num,args,data, PTMmap,Ntermmap,Ctermmap,fragmethod,fr
 					tmp['ion'] = [0]*len(b) + [1]*len(y)
 					tmp['ionnumber'] = [a+1 for a in range(len(b))+range(len(y)-1,-1,-1)]
 					tmp['target'] = b + y
+					tmp['target2'] = b2 + y2
 					tmp['prediction'] = resultB + resultY
 					tmp['peplen'] = tmp['peplen'].astype(np.uint8)
 					tmp['charge'] = tmp['charge'].astype(np.uint8)
 					tmp['ion'] = tmp['ion'].astype(np.uint8)
 					tmp['ionnumber'] = tmp['ionnumber'].astype(np.uint8)
 					tmp['target'] = tmp['target'].astype(np.float32)					
+					tmp['target2'] = tmp['target2'].astype(np.float32)					
 					tmp['prediction'] = tmp['prediction'].astype(np.float32)					
 					dataresult = dataresult.append(tmp,ignore_index=True)
 								
