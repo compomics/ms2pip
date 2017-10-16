@@ -196,7 +196,11 @@ def process_spectra(worker_num, args, data,  PTMmap, Ntermmap, Ctermmap, fragmet
                     sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
 
     if args.vector_file:
-        return pd.concat(vectors)
+        df = pd.DataFrame()
+        for v in vectors:
+            if len(v>0): df = pd.concat([df, v])
+            else: continue
+        return df
     else:
         return dataresult
 
