@@ -160,6 +160,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
                 else:
                     # predict the b- and y-ion intensities from the peptide
                     (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
+
                     tmp = pd.DataFrame()
                     tmp["spec_id"] = [title] * (2 * len(b))
                     tmp["peplen"] = [len(peptide)] * (2 * len(b))
@@ -490,7 +491,7 @@ if __name__ == "__main__":
         print("Unknown fragmentation method in configfile: {}".format(fragmethod))
         exit(1)
 
-    ms2pipfeatures_pyx.ms2pip_init(afile,modfile,modfile2)
+    ms2pipfeatures_pyx.ms2pip_init(bytearray(fa.name.encode()))
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
@@ -556,6 +557,7 @@ if __name__ == "__main__":
                 args.pep_file + "_pred_and_emp.csv"))
             all_results.to_csv(
                 args.pep_file + "_pred_and_emp.csv", index=False)
+
 
         sys.stdout.write("done! \n")
 
