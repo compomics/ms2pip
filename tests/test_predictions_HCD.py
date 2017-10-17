@@ -2,12 +2,12 @@ from subprocess import call
 import pandas as pd
 import numpy as np
 
-# Run ms2pipC to predict peak intensities from a PEPREC file
-call(['python', '../ms2pipC.py', 'test.PEPREC', '-c', '../config.file'])
+# Run ms2pipC to predict peak intensities from a PEPREC file (HCD model)
+call(['python', '../ms2pipC.py', 'test.PEPREC', '-c', 'config.file'])
 call(['ls'])
 test_data = pd.read_csv('test.PEPREC_predictions.csv')
 # Load target values & peptide file
-target_data = pd.read_csv('target.PEPREC_predictions.csv')
+target_data = pd.read_csv('target_HCD.PEPREC_predictions.csv')
 pepfile = pd.read_csv('test.PEPREC', sep=" ", index_col=False,
                         dtype={"spec_id": str, "modifications": str})
 
@@ -26,7 +26,7 @@ def test_peak_ints_b():
         tmp_target = target_data[target_data.spec_id == pep]
         tmp_target = tmp_target[tmp_target.ion == 'b']
         for no in tmp_target.ionnumber:
-            assert(tmp_test[tmp_test.ionnumber == no].equals(tmp_target[tmp_target.ionnumber == no]))
+            assert(tmp_test[tmp_test.ionnumber == no]['prediction'].values[0] == tmp_target[tmp_target.ionnumber == no]['prediction'].values[0])
 
 def test_peak_ints_y():
     for pep in target_data.spec_id.unique():
@@ -35,6 +35,6 @@ def test_peak_ints_y():
         tmp_target = target_data[target_data.spec_id == pep]
         tmp_target = tmp_target[tmp_target.ion == 'y']
         for no in tmp_target.ionnumber:
-            assert(tmp_test[tmp_test.ionnumber == no].equals(tmp_target[tmp_target.ionnumber == no]))
+            assert(tmp_test[tmp_test.ionnumber == no]['prediction'].values[0] == tmp_target[tmp_target.ionnumber == no]['prediction'].values[0])
 
 call(['rm', 'test.PEPREC_predictions.csv'])
