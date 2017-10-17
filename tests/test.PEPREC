@@ -1,2 +1,4 @@
 spec_id modifications peptide charge
 peptide1  ACDE 1
+peptide2  ACDEFGHI 1
+peptide3  ACDEFGHIKMNPQ 1
