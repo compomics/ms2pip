@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # Run ms2pipC to extract features and targets from an .mgf and .PEPREC files
-call(['python', '../ms2pipC.py', '-s', 'hard_test2.mgf', '-w', 'test.h5', 'test.PEPREC'])
+call(['python', '../ms2pipC.py', '-s', 'hard_test2.mgf', '-w', 'test.h5', 'test.PEPREC', '-c', '../config.file'])
 call(['ls'])
 test_data = pd.read_hdf('test.h5', 'table')
 # Load target values

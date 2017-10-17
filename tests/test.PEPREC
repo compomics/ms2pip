@@ -1,2 +1,2 @@
-spec_id modifications peptide
-peptide1  ACDE
+spec_id modifications peptide charge
+peptide1  ACDE 1
