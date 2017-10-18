@@ -484,7 +484,10 @@ if __name__ == "__main__":
 		print("using HCD iTRAQ phospho models.\n")
 	elif fragmethod == "HCDiTRAQ4":
 		import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
-		print("using HCD iTRAQ pmodels.\n")
+			print("using HCD iTRAQ pmodels.\n")
+	elif fragmethod == "ETD
+		import ms2pipfeatures_pyx_ETD as
+		print("using ETD models.\n")
 	else:
 		print("Unknown fragmentation method in configfile: {}".format(fragmethod))
 		exit(1)
