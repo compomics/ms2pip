@@ -319,7 +319,7 @@ def apply_mods(peptide, mods, PTMmap):
 				sys.stderr.write("Unknown modification: {}\n".format(tl))
 
 	return modpeptide
-	
+
 def load_configfile(filepath):
 	params = {}
 	params['ptm'] = []
@@ -339,17 +339,17 @@ def load_configfile(filepath):
 			else:
 				params[par] = val
 	return params
-	
+
 def generate_modifications_file(params, masses, a_map):
 	PTMmap = {}
-	
+
 	ptmnum = 38 #Omega compatibility (mutations)
 	spbuffer = []
 	for v in params["sptm"]:
 		l = v.split(',')
 		tmpf = float(l[1])
 		if l[2] == 'opt':
-			if l[3] == "N-term":				
+			if l[3] == "N-term":
 				spbuffer.append([tmpf,-1,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
@@ -358,7 +358,7 @@ def generate_modifications_file(params, masses, a_map):
 				spbuffer.append([tmpf,-2,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
-				continue		
+				continue
 			if not l[3] in a_map: continue
 			spbuffer.append([tmpf,a_map[l[3]],ptmnum])
 			PTMmap[l[0]] = ptmnum
@@ -368,7 +368,7 @@ def generate_modifications_file(params, masses, a_map):
 		l = v.split(',')
 		tmpf = float(l[1])
 		if l[2] == 'opt':
-			if l[3] == "N-term":				
+			if l[3] == "N-term":
 				pbuffer.append([tmpf,-1,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
@@ -377,12 +377,12 @@ def generate_modifications_file(params, masses, a_map):
 				pbuffer.append([tmpf,-2,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
-				continue		
+				continue
 			if not l[3] in a_map: continue
 			pbuffer.append([tmpf,a_map[l[3]],ptmnum])
 			PTMmap[l[0]] = ptmnum
 			ptmnum+=1
-	
+
 	f = tempfile.NamedTemporaryFile(delete=False)
 	f.write("%i\n"%len(pbuffer))
 	for i in range(len(pbuffer)):
@@ -394,7 +394,7 @@ def generate_modifications_file(params, masses, a_map):
 	for i in range(len(spbuffer)):
 		f2.write("%f,1,%i,%i\n" % (spbuffer[i][0],spbuffer[i][1],spbuffer[i][2]))
 	f2.close()
-	
+
 	return (f.name,f2.name,PTMmap)
 
 
@@ -449,16 +449,16 @@ if __name__ == "__main__":
 
 	num_cpu = int(args.num_cpu)
 
-	params = None	
+	params = None
 	if args.c:
 		params = load_configfile(args.c)
 	elif not args.datasetname:
 		print ("no config file specified")
 		exit(1)
-	
+
 	fragmethod = params["frag_method"]
 	fragerror = params["frag_error"]
-	
+
 	#create amino acid masses file
 	#to be compatible with Omega
 	#that might have fixed modifications
@@ -630,4 +630,3 @@ if __name__ == "__main__":
 			mgf_output.close()
 
 		sys.stdout.write("done!\n")
-
