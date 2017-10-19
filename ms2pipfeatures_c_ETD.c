@@ -77,7 +77,7 @@ float* c_ms2pip_get_mz(int peplen, unsigned short* modpeptide, float nptm, float
 	mz = cptm;
 	for (i=peplen-1; i >= 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+17.00273965-15.01089904; //z-ion: peptide + OH - NH
+		membuffer[j++] = mz+17.00273965-15.01089904+1.007825032; //z-ion: peptide + OH - NH
 	}
 	return membuffer;
 }
@@ -101,7 +101,7 @@ float* c_ms2pip_get_t(int peplen, unsigned short* modpeptide, int numpeaks, floa
 	mz = nptm;
 	for (i=0; i < peplen-1; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[i] = mz+1.007236+17.026549;
+		membuffer[i] = mz+1.007825032+17.026549;
 	}
 
 	msms_pos = 0;
@@ -146,7 +146,7 @@ float* c_ms2pip_get_t(int peplen, unsigned short* modpeptide, int numpeaks, floa
 	j=0;
 	for (i=peplen-1; i >= 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j] = mz+17.00274-15.010899;
+		membuffer[j] = mz+17.00274-15.010899+1.007825032;
 		//printf("%f ",membuffer[j]);
 		j++;
 	}
@@ -195,7 +195,7 @@ float* c_ms2pip_get_t(int peplen, unsigned short* modpeptide, int numpeaks, floa
 	mz = nptm;
 	for (i=0; i < peplen-1; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[i] = (mz+2*1.007236+17.026549)/2; //Add hydrogen, divide by 2 (Not sure about this...)
+		membuffer[i] = (mz+2*1.007825032+17.026549)/2; //Add hydrogen, divide by 2 (Not sure about this...)
 	}
 
 	msms_pos = 0;
@@ -240,7 +240,7 @@ float* c_ms2pip_get_t(int peplen, unsigned short* modpeptide, int numpeaks, floa
 	j=0;
 	for (i=peplen-1; i >= 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j] = (mz+17.00274-15.010899+1.007236)/2; //Add hydrogen, divide by 2 (Not sure about this...)
+		membuffer[j] = (mz+17.00274-15.010899+1.007825032+1.007825032)/2; //Add hydrogen, divide by 2 (Not sure about this...)
 		//printf("%f ",membuffer[j]);
 		j++;
 	}
