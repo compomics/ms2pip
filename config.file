@@ -1,9 +1,9 @@
 frag_method=HCD
 frag_error=0.02
 
-ptm=Oxidation,15.994915,opt,M
+ptm=mox,15.994915,opt,M
 #ptm=CAM,57.02146,fix,C
-ptm=Cam,57.02146,fix,C
+ptm=cam,57.02146,opt,C
 ptm=Pyro_glu,-18.010565,opt,E
 ptm=Pyro-glu,-17.026549,opt,Q
 ptm=Pyro-cmC,39.994915,opt,C
