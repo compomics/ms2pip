@@ -615,41 +615,4 @@ if __name__ == "__main__":
                 mgf_output.write("END IONS\n")
             mgf_output.close()
 
-        for i in range(num_cpu):
-            tmp = split_titles[i]
-            results.append(myPool.apply_async(process_peptides, args=(
-                i,
-                args,
-                data[data.spec_id.isin(tmp)],
-                PTMmap, Ntermmap, Ctermmap, fragmethod)))
-        myPool.close()
-        myPool.join()
-
-        sys.stdout.write("merging results...\n")
-
-        all_preds = pd.DataFrame()
-        for r in results:
-            all_preds = all_preds.append(r.get())
-
-        sys.stdout.write("writing file {}...\n".format(
-            args.pep_file + "_predictions.csv"))
-        all_preds.to_csv(args.pep_file + "_predictions.csv", index=False)
-
-        mgf = False  # set to True to write spectrum as mgf file
-        if mgf:
-            sys.stdout.write("writing mgf file {}...\n".format(
-                args.pep_file + "_predictions.mgf"))
-            mgf_output = open(args.pep_file + "_predictions.mgf", "w+")
-            for sp in all_preds.spec_id.unique():
-                tmp = all_preds[all_preds.spec_id == sp]
-                tmp = tmp.sort_values("mz")
-                mgf_output.write("BEGIN IONS\n")
-                mgf_output.write("TITLE=" + str(sp) + "\n")
-                mgf_output.write("CHARGE=" + str(tmp.charge[0]) + "\n")
-                for i in range(len(tmp)):
-                    mgf_output.write(
-                        str(tmp["mz"][i]) + " " + str(tmp["prediction"][i]) + "\n")
-                mgf_output.write("END IONS\n")
-            mgf_output.close()
-
         sys.stdout.write("done!\n")
