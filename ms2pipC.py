@@ -148,7 +148,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 				peaks = np.array(np.log2(peaks + 0.001))
 				peaks = peaks.astype(np.float32)
 
-				(b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, fragerror)
+				(b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, fragerrorfr)
 
 				if args.vector_file:
 					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
@@ -437,11 +437,7 @@ if __name__ == "__main__":
 	parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
 						help=".mgf MS2 spectrum file (optional)")
 	parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
-						help="write feature vectors to FILE.pkl (optional)")
-	parser.add_argument("-i", action="store_true",
-						default=False, help="iTRAQ models")
-	parser.add_argument("-p", action="store_true",
-						default=False, help="phospho models")
+						help="write feature vectors to FILE.{pkl,h5} (optional)")
 	parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
 						default="23", help="number of cpu's to use")
 
@@ -473,23 +469,22 @@ if __name__ == "__main__":
 	f.close()
 	afile = f.name
 
-	Glycomap = None
+	#PTMs are loaded the same as in Omega
+	#THis allows me to use the same C init() function in bot ms2ip and Omega
 	(modfile,modfile2,PTMmap) = generate_modifications_file(params,masses,a_map)
 
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
 		print("using CID models.\n")
 	elif fragmethod == "HCD":
-		if args.i:
-			if args.p:
-				import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
-				print("using HCD iTRAQ phospho models.\n")
-			else:
-				import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
-				print("using HCD iTRAQ pmodels.\n")
-		else:
-			import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
-			print("using HCD models.\n")
+		import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
+		print("using HCD models.\n")
+	elif fragmethod == "HCDiTRAQ4phospho":
+		import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
+		print("using HCD iTRAQ phospho models.\n")
+	elif fragmethod == "HCDiTRAQ4":
+		import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
+		print("using HCD iTRAQ pmodels.\n")
 	else:
 		print("Unknown fragmentation method in configfile: {}".format(fragmethod))
 		exit(1)
