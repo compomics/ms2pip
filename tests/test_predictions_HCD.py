@@ -37,4 +37,4 @@ def test_peak_ints_y():
         for no in tmp_target.ionnumber:
             assert(tmp_test[tmp_test.ionnumber == no]['prediction'].values[0] == tmp_target[tmp_target.ionnumber == no]['prediction'].values[0])
 
-call(['rm', 'test.PEPREC_predictions.csv'])
+# call(['rm', 'test.PEPREC_predictions.csv'])
