@@ -148,7 +148,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 				peaks = np.array(np.log2(peaks + 0.001))
 				peaks = peaks.astype(np.float32)
 
-				(b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks)
+				(b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, fragerror)
 
 				if args.vector_file:
 					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)

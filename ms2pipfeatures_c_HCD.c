@@ -119,13 +119,12 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 }
 
 //get fragment ion peaks from spectrum
-float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks)
+float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
 	{
 	int i,j,tmp;
 	float mz;
 	int msms_pos;
 	int mem_pos;
-	float tolmz = 0.02;
 	float max, tmp2;
 
 	//b-ions

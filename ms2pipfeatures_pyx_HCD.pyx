@@ -8,7 +8,7 @@ cdef extern from "ms2pipfeatures_c_HCD.c":
 	unsigned int* get_v_bof_chem(int peplen, unsigned short* peptide, int charge)
 	float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
-	float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks)
+	float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
 
 def ms2pip_init(amino_masses_fname, modifications_fname,modifications_fname_sptm):
 	init_ms2pip(amino_masses_fname, modifications_fname,modifications_fname_sptm)
@@ -26,8 +26,8 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[u
 		r.append(v)
 	return r
 
-def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks):
-	cdef float* result = get_t_ms2pip(len(modpeptide)-2,&modpeptide[0],len(peaks),&msms[0],&peaks[0])
+def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks, fragerror):
+	cdef float* result = get_t_ms2pip(len(modpeptide)-2,&modpeptide[0],len(peaks),&msms[0],&peaks[0],fragerror)
 	b = []
 	for i in range(len(modpeptide)-3):
 		b.append(result[i])
