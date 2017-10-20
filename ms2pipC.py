@@ -41,7 +41,7 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
     # get ion intensities
     (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 
-    # return results as a DataFrame
+        # return results as a DataFrame
     tmp = pd.DataFrame()
     tmp["peplen"] = [len(peptide)] * (2 * len(resultB))
     tmp["charge"] = [ch] * (2 * len(resultB))
@@ -308,16 +308,16 @@ def apply_mods(peptide, mods, PTMmap):
     """
     modpeptide = np.array(peptide[:], dtype=np.uint16)
 
-	nptm = 0
-	cptm = 0
-	if mods != "-":
-		l = mods.split("|")
-		for i in range(0, len(l), 2):
-			tl = l[i + 1]
-			if tl in PTMmap:
-				modpeptide[int(l[i])] = PTMmap[tl]
-			else:
-				sys.stderr.write("Unknown modification: {}\n".format(tl))
+    nptm = 0
+    cptm = 0
+    if mods != "-":
+        l = mods.split("|")
+        for i in range(0, len(l), 2):
+            tl = l[i + 1]
+            if tl in PTMmap:
+                modpeptide[int(l[i])] = PTMmap[tl]
+            else:
+                sys.stderr.write("Unknown modification: {}\n".format(tl))
 
     return modpeptide
 
