@@ -29,31 +29,31 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
         peptide = peptide.replace("L", "I")
         mods = modifications[pepid]
 
-    # convert peptide string to integer list to speed up C code
-    peptide = np.array([0] + [a_map[x] for xm in peptide] + [0], dtype=np.uint16)
+        # convert peptide string to integer list to speed up C code
+        peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
 
-    modpeptide = apply_mods(peptide, mods, PTMmap)
-    ch = charges[pepid]
+        modpeptide = apply_mods(peptide, mods, PTMmap)
+        ch = charges[pepid]
 
-    # get ion mzs
-    (b_mz, y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide)
+        # get ion mzs
+        (b_mz, y_mz) = ms2pipfeatures_pyx.get_mzs(modpeptide)
 
-    # get ion intensities
-    (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
+        # get ion intensities
+        (resultB, resultY) = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 
-        # return results as a DataFrame
-    tmp = pd.DataFrame()
-    tmp["peplen"] = [len(peptide)] * (2 * len(resultB))
-    tmp["charge"] = [ch] * (2 * len(resultB))
-    tmp["ion"] = ["b"] * len(resultB) + ["y"] * len(resultY)
-    tmp["mz"] = b_mz + y_mz
-    tmp["ionnumber"] = list(np.arange(1, len(resultB) + 1)) + list(np.arange(len(resultY), 0, -1))
-    tmp["prediction"] = resultB + resultY
-    tmp["spec_id"] = [pepid] * len(tmp)
-    final_result = final_result.append(tmp)
-    pcount += 1
-    if (pcount % 500) == 0:
-        sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
+            # return results as a DataFrame
+        tmp = pd.DataFrame()
+        tmp["peplen"] = [len(peptide)] * (2 * len(resultB))
+        tmp["charge"] = [ch] * (2 * len(resultB))
+        tmp["ion"] = ["b"] * len(resultB) + ["y"] * len(resultY)
+        tmp["mz"] = b_mz + y_mz
+        tmp["ionnumber"] = list(np.arange(1, len(resultB) + 1)) + list(np.arange(len(resultY), 0, -1))
+        tmp["prediction"] = resultB + resultY
+        tmp["spec_id"] = [pepid] * len(tmp)
+        final_result = final_result.append(tmp)
+        pcount += 1
+        if (pcount % 500) == 0:
+            sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
     return final_result
 
 def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
@@ -135,20 +135,19 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
                 peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
 
                 modpeptide = apply_mods(peptide, mods, PTMmap)
-
-                if args.i:
-                    # remove reporter ions
-                    for mi, mp in enumerate(msms):
-                        if (mp >= 113) & (mp <= 118):
-                            peaks[mi] = 0
+                # TODO args.i no longer exists
+                # if args.i:
+                #     # remove reporter ions
+                #     for mi, mp in enumerate(msms):
+                #         if (mp >= 113) & (mp <= 118):
+                #             peaks[mi] = 0
 
                 # normalize and convert MS2 peaks
                 msms = np.array(msms, dtype=np.float32)
                 peaks = peaks / np.sum(peaks)
                 peaks = np.array(np.log2(peaks + 0.001))
                 peaks = peaks.astype(np.float32)
-
-                (b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, fragerrorfr)
+                (b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 
                 if args.vector_file:
                     tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
@@ -491,7 +490,7 @@ if __name__ == "__main__":
         print("Unknown fragmentation method in configfile: {}".format(fragmethod))
         exit(1)
 
-    ms2pipfeatures_pyx.ms2pip_init(bytearray(fa.name.encode()))
+    ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
