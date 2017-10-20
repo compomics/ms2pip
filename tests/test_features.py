@@ -14,21 +14,13 @@ def test_get_feature_vectors():
 
 def test_get_targetsB():
     for i in range(3):
-        assert (np.isclose(test_data[test_data.columns[-4]][i], target_data[target_data.columns[-4]][i]))
-
-def test_get_targetsY():
-    for i in range(3):
-        assert (np.isclose(test_data[test_data.columns[-3]][i], target_data[target_data.columns[-3]][i]))
-
-def test_get_targetsB2():
-    for i in range(3):
         assert (np.isclose(test_data[test_data.columns[-2]][i], target_data[target_data.columns[-2]][i]))
 
-def test_get_targetsY2():
+def test_get_targetsY():
     for i in range(3):
         assert (np.isclose(test_data[test_data.columns[-1]][i], target_data[target_data.columns[-1]][i]))
 
 def test_get_psmid():
-    assert test_data[test_data.columns[-5]].equals(target_data[target_data.columns[-5]])
+    assert test_data[test_data.columns[-3]].equals(target_data[target_data.columns[-3]])
 
 call(['rm', 'test.h5'])
