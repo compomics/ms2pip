@@ -17,11 +17,12 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[u
 	cdef unsigned int* result = get_v_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
 	r = []
 	offset = 0
-	for i in range(len(peptide)-1):
+	fnum = result[0]/(len(peptide)-3)
+	for i in range(len(peptide)-3):
 		v = []
-		for j in range(186):
-			v.append(result[j+offset])
-		offset+=186
+		for j in range(fnum):
+			v.append(result[j+1+offset])
+		offset+=fnum
 		r.append(v)
 	return r
 
@@ -34,20 +35,6 @@ def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndar
 	for i in range(len(modpeptide)-3):
 		y.append(result[len(modpeptide)-3+i])
 	return(b,y)
-
-def get_score(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks, charge):
-	cdef float* targets = get_t_ms2pip(len(modpeptide)-2,&modpeptide[0],len(peaks),&msms[0],&peaks[0])
-	cdef float* predictions = get_p_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
-	mae = 0.
-	#for i in range(2*len(modpeptide)-2):
-	for i in range(len(modpeptide)-1):
-		sys.stdout.write("%f " % (predictions[len(modpeptide-1)+i]))
-		mae += abs(targets[len(modpeptide)-1+i]-predictions[len(modpeptide)-1+i])
-	sys.stdout.write("\n")
-	#mae /= (2*len(modpeptide)-2)
-	mae /= (len(modpeptide)-1)
-	#print mae
-	return mae
 
 def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
 	cdef float* predictions = get_p_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)

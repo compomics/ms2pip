@@ -5,11 +5,11 @@
 //#include "models/modelBnew.c"
 //#include "models/modelYnew.c"
 
-#include "models/vectors_train_h5B_c.c"
-#include "models/vectors_train_h5Y_c.c"
+//#include "models/vectors_train_h5B_c.c"
+//#include "models/vectors_train_h5Y_c.c"
 
-//#include "models/dB.c"
-//#include "models/dY.c"
+#include "models/dB.c"
+#include "models/dY.c"
 
 float membuffer[10000];
 unsigned int v[30000];
@@ -755,6 +755,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		}
 
 		v[fnum++] = charge;
+
 	}
 	v[0] = fnum-1;
 	return v;

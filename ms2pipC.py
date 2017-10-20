@@ -30,7 +30,7 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
 		mods = modifications[pepid]
 
 		# convert peptide string to integer list to speed up C code
-		peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
+		peptide = np.array([0] + [a_map[x] for xm in peptide] + [0], dtype=np.uint16)
 
 		modpeptide = apply_mods(peptide, mods, PTMmap)
 		ch = charges[pepid]
@@ -152,9 +152,10 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 
 				if args.vector_file:
 					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
+					#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
 					tmp["psmid"] = [title] * len(tmp)
 					tmp["targetsB"] = b
-					tmp["targetsY"] = y[::-1]
+					tmp["targetsY"] = y
 					vectors.append(tmp)
 				else:
 					# predict the b- and y-ion intensities from the peptide
@@ -414,7 +415,6 @@ def print_logo():
 	print(logo)
 	print("by sven.degroeve@ugent.be\n")
 
-
 if __name__ == "__main__":
 	# a_map converts the peptide amino acids to integers, note how "L" is removed
 	aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K", "M", "N", "P", "Q",
@@ -475,10 +475,6 @@ if __name__ == "__main__":
 
 	Glycomap = None
 	(modfile,modfile2,PTMmap) = generate_modifications_file(params,masses,a_map)
-
-	print modfile
-	print modfile2
-	print PTMmap
 
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
@@ -557,30 +553,29 @@ if __name__ == "__main__":
 				all_results.to_hdf(args.vector_file, "table")
 			# "table" is a tag used to read back the .h5
 			else:  # if none of the two, default to .h5
-				all_results.to_hdf(args.vector_file, "table")
+				#all_results.to_hdf(args.vector_file, "table")
+				all_results.to_csv(args.vector_file)
 		else:
 			sys.stdout.write("writing file {}...\n".format(
 				args.pep_file + "_pred_and_emp.csv"))
 			all_results.to_csv(
 				args.pep_file + "_pred_and_emp.csv", index=False)
-
-		sys.stdout.write('computing correlations...\n')
-		correlations = all_results.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
-		correlations.to_csv(args.pep_file+".pearsonrtmp",index=True)
-		fout = open(args.pep_file+".pearsonr","w")
-		with open(args.pep_file+".pearsonrtmp") as f:
-			fout.write('spec_id,pearsonr\n')
-			for row in f:
-				l= row.rstrip().split(',')
-				fout.write("%s,%s\n"%(l[0],l[2]))
-			fout.close()
-
-		"""
-		corr_boxplot = correlations.plot('hist')
-		corr_boxplot = corr_boxplot.get_figure()
-		corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
-		corr_boxplot.savefig(args.pep_file + '_correlations.png')
-		"""
+			sys.stdout.write('computing correlations...\n')
+			correlations = all_results.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
+			correlations.to_csv(args.pep_file+".pearsonrtmp",index=True)
+			fout = open(args.pep_file+".pearsonr","w")
+			with open(args.pep_file+".pearsonrtmp") as f:
+				fout.write('spec_id,pearsonr\n')
+				for row in f:
+					l= row.rstrip().split(',')
+					fout.write("%s,%s\n"%(l[0],l[2]))
+				fout.close()
+			"""
+			corr_boxplot = correlations.plot('hist')
+			corr_boxplot = corr_boxplot.get_figure()
+			corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
+			corr_boxplot.savefig(args.pep_file + '_correlations.png')
+			"""
 
 		sys.stdout.write("done! \n")
 
@@ -640,3 +635,4 @@ if __name__ == "__main__":
 			mgf_output.close()
 
 		sys.stdout.write("done!\n")
+
