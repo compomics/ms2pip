@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr
 
-print xgb.__version__
+print(xgb.__version__)
 
 import ms2pipfeatures_pyx
 
@@ -25,7 +25,7 @@ def evalerror(preds, dtrain):
 
 def main():
 
-	parser = argparse.ArgumentParser(description='XGBoost training')    
+	parser = argparse.ArgumentParser(description='XGBoost training')
 	parser.add_argument('vectors',metavar='<_vectors.pkl>',
 					 help='feature vector file')
 	parser.add_argument('type',metavar='<type>',
@@ -37,13 +37,13 @@ def main():
 	args = parser.parse_args()
 
 	sys.stderr.write('loading data\n')
- 
+
 	if args.vectors.split('.')[-1] == 'pkl':
 	  vectors = pd.read_pickle(args.vectors)
 	elif args.vectors.split('.')[-1] == 'h5':
 	  vectors = pd.read_hdf(args.vectors, 'table')
 	else:
-	  print "unsuported feature vector format"
+	  print("unsuported feature vector format")
 
 	if args.vectorseval:
 		if args.vectorseval.split('.')[-1] == 'pkl':
@@ -51,21 +51,21 @@ def main():
 		elif args.vectorseval.split('.')[-1] == 'h5':
 		  eval_vectors = pd.read_hdf(args.vectorseval, 'table')
 		else:
-		  print "unsuported feature vector format"
-	
-		
-	#vectors = vectors[vectors.charge==2]	
-	#eval_vectors = eval_vectors[eval_vectors.charge==2]	
-	#vectors = vectors[vectors.peplen==10]	
-	#eval_vectors = eval_vectors[eval_vectors.peplen==10]	
-	#vectors = vectors[vectors.ionnumber==5]	
-	#eval_vectors = eval_vectors[eval_vectors.ionnumber==5]	
+		  print("unsuported feature vector format")
+
+
+	#vectors = vectors[vectors.charge==2]
+	#eval_vectors = eval_vectors[eval_vectors.charge==2]
+	#vectors = vectors[vectors.peplen==10]
+	#eval_vectors = eval_vectors[eval_vectors.peplen==10]
+	#vectors = vectors[vectors.ionnumber==5]
+	#eval_vectors = eval_vectors[eval_vectors.ionnumber==5]
 
 	vectors = vectors.sample(4000000,replace=False)
 
-	print "%s contains %i feature vectors" % (args.vectors,len(vectors))
-	#print "%s contains %i feature vectors" % (args.vectorseval,len(eval_vectors))
-				
+	print("{} contains {} feature vectors".format(args.vectors,len(vectors)))
+	#print("{} contains {} feature vectors".format(args.vectorseval,len(eval_vectors)))
+
 	psmids = vectors["psmid"]
 	np.random.seed(1)
 	upeps = psmids.unique()
@@ -87,7 +87,7 @@ def main():
 		test_targets = targetsY[psmids.isin(test_psms)]
 		train_targets = targetsY[~psmids.isin(test_psms)]
 	else:
-		print "Wrong model type argument (should be 'B' or 'Y')."
+		print("Wrong model type argument (should be 'B' or 'Y').")
 		exit
 
 	if args.vectorseval:
@@ -132,15 +132,15 @@ def main():
 	         "eta":1,
 	         #"max_delta_step":12,
 	         "max_depth":8,
-			 "gamma":1,	
+			 "gamma":1,
 			 "min_child_weight":700,
 			 "subsample":1,
 			 "colsample_bytree":1,
-			 #"scale_pos_weight":num_neg/num_pos
-			 #"scale_pos_weight":2
+			 #"scale_pos_weight":num_neg/num_pos,
+			 #"scale_pos_weight":2,
+             "eval_metric":'rmse'
 	         }
 	plst = param.items()
-	plst += [('eval_metric', 'rmse')]
 
 	#train XGBoost
 	#bst = xgb.cv( plst, xtrain, 200,nfold=5,callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
@@ -178,24 +178,24 @@ def main():
 	#tmp.to_pickle('predictions.pkl')
 	tmp.to_csv('predictions.csv',index=False)
 
-	
+
 	convert_model_to_c(bst,args,numf)
 
 	for ch in range(8,20):
-		print "len %i" % ch
+		print("len {}".format(ch))
 		n1 = 0
 		n2 = 0
 		tmp3 = tmp[tmp.peplen==ch]
 		for pid in tmp3.psmid.unique().values:
 			tmp2 = tmp3[tmp3.psmid==pid]
-			print pid
+			print(pid)
 			for (t,p) in zip (tmp2.target,tmp2.predictions):
-				print "%f %f" % (t,p)
+				print("{} {}".format(t,p))
 			#n1 += pearsonr(tmp2.target,tmp2.predictions)[0]
 			n1 += np.mean(np.abs(tmp2.target-tmp2.predictions))
-			#print n1
+			#print(n1)
 			n2+=1
-		print float(n1)/n2
+		print(n1/n2)
 
 	#plt.scatter(x=test_targets,y=predictions)
 	#plt.show()
@@ -264,10 +264,10 @@ def convert_model_to_c(bst,args,numf):
 
 		with open(tmp+'.pyx','w') as fout:
 			fout.write("cdef extern from \"" + tmp2[-1] + "_c.c\":\n")
-			fout.write("\tfloat score_%s(short unsigned short[%i] v)\n\n"%(args.type,numf))
+			fout.write("\tfloat score_{}(short unsigned short[{}] v)\n\n".format(args.type, numf))
 			fout.write("def myscore(sv):\n")
-			fout.write("\tcdef unsigned short[%i] v = sv\n"%numf)
-			fout.write("\treturn score_%s(v)\n"%args.type)
+			fout.write("\tcdef unsigned short[{}] v = sv\n".format(numf))
+			fout.write("\treturn score_{}(v)\n".format(args.type))
 
 	#os.remove('dump.raw.txt')
 
@@ -276,10 +276,10 @@ def tree_to_code(tree,pos,padding):
 	p = "\t"*padding
 	if tree[pos][0] == -1:
 		if tree[pos][1] < 0:
-			return p+"s = s %f;\n"%tree[pos][1]
+			return p+"s = s {};\n".format(tree[pos][1])
 		else:
-			return p+"s = s + %f;\n"%tree[pos][1]
-	return p+"if (v[%i]<%i){\n%s}\n%selse{\n%s}"%(tree[pos][0],tree[pos][1],tree_to_code(tree,tree[pos][2],padding+1),p,tree_to_code(tree,tree[pos][3],padding+1))
+			return p+"s = s + {};\n".format(tree[pos][1])
+	return p+"if (v[{}]<{}){\n{}}\n{}else{\n{}}".format(tree[pos][0],tree[pos][1],tree_to_code(tree,tree[pos][2],padding+1),p,tree_to_code(tree,tree[pos][3],padding+1))
 
 def print_logo():
 	logo = """
@@ -289,7 +289,7 @@ def print_logo():
   |_| |__|__|__|__|_____|_|___|
 
            """
-	print logo
+	print(logo)
 
 if __name__ == "__main__":
 	print_logo()
