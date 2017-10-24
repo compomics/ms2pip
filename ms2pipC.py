@@ -487,6 +487,9 @@ if __name__ == "__main__":
     elif fragmethod == "HCDiTRAQ4":
         import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
         print("using HCD iTRAQ pmodels.\n")
+    elif fragmethod == "ETD":
+        import ms2pipfeatures_pyx_ETD as ms2pipfeatures_pyx
+        print("using ETD models.\n")
     else:
         print("Unknown fragmentation method in configfile: {}".format(fragmethod))
         exit(1)
@@ -549,15 +552,13 @@ if __name__ == "__main__":
             elif ext == "h5":
                 all_results.to_hdf(args.vector_file, "table")
             # "table" is a tag used to read back the .h5
-            else:  # if none of the two, default to .h5
-                all_results.to_hdf(args.vector_file, "table")
-                # all_results.to_csv(args.vector_file)
+            else:  # if none of the two, save as csv. File size can be large
+                all_results.to_csv(args.vector_file)
         else:
             sys.stdout.write("writing file {}...\n".format(
                 args.pep_file + "_pred_and_emp.csv"))
             all_results.to_csv(
                 args.pep_file + "_pred_and_emp.csv", index=False)
-
 
         sys.stdout.write("done! \n")
 
