@@ -1,3 +1,7 @@
+# Custom MS2PIP stuff
+data/
+*_pyx_*.c
+
 # Remote Sync for Atom
 .remote-sync.json
 

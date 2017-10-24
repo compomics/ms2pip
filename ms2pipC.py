@@ -30,7 +30,7 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
 		mods = modifications[pepid]
 
 		# convert peptide string to integer list to speed up C code
-		peptide = np.array([0] + [a_map[x] for xm in peptide] + [0], dtype=np.uint16)
+		peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
 
 		modpeptide = apply_mods(peptide, mods, PTMmap)
 		ch = charges[pepid]
@@ -136,7 +136,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 
 				modpeptide = apply_mods(peptide, mods, PTMmap)
 
-				if args.i:
+				if 'iTRAQ' in fragmethod:
 					# remove reporter ions
 					for mi, mp in enumerate(msms):
 						if (mp >= 113) & (mp <= 118):
@@ -148,7 +148,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 				peaks = np.array(np.log2(peaks + 0.001))
 				peaks = peaks.astype(np.float32)
 
-				(b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, fragerrorfr)
+				(b, y) = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 
 				if args.vector_file:
 					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
@@ -165,7 +165,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 					tmp["peplen"] = [len(peptide)] * (2 * len(b))
 					tmp["charge"] = [charge] * (2 * len(b))
 					tmp["ion"] = [0] * len(b) + [1] * len(y)
-					tmp["ionnumber"] = [a + 1 for a in range(len(b)) + range(len(y)-1, -1, -1)]
+					tmp["ionnumber"] = [a + 1 for a in list(range(len(b))) + list(range(len(y)-1, -1, -1))]
 					tmp["target"] = b + y
 					tmp["prediction"] = resultB + resultY
 					tmp["peplen"] = tmp["peplen"].astype(np.uint8)
@@ -319,7 +319,7 @@ def apply_mods(peptide, mods, PTMmap):
 				sys.stderr.write("Unknown modification: {}\n".format(tl))
 
 	return modpeptide
-	
+
 def load_configfile(filepath):
 	params = {}
 	params['ptm'] = []
@@ -339,17 +339,17 @@ def load_configfile(filepath):
 			else:
 				params[par] = val
 	return params
-	
+
 def generate_modifications_file(params, masses, a_map):
 	PTMmap = {}
-	
+
 	ptmnum = 38 #Omega compatibility (mutations)
 	spbuffer = []
 	for v in params["sptm"]:
 		l = v.split(',')
 		tmpf = float(l[1])
 		if l[2] == 'opt':
-			if l[3] == "N-term":				
+			if l[3] == "N-term":
 				spbuffer.append([tmpf,-1,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
@@ -358,7 +358,7 @@ def generate_modifications_file(params, masses, a_map):
 				spbuffer.append([tmpf,-2,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
-				continue		
+				continue
 			if not l[3] in a_map: continue
 			spbuffer.append([tmpf,a_map[l[3]],ptmnum])
 			PTMmap[l[0]] = ptmnum
@@ -368,7 +368,7 @@ def generate_modifications_file(params, masses, a_map):
 		l = v.split(',')
 		tmpf = float(l[1])
 		if l[2] == 'opt':
-			if l[3] == "N-term":				
+			if l[3] == "N-term":
 				pbuffer.append([tmpf,-1,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
@@ -377,24 +377,24 @@ def generate_modifications_file(params, masses, a_map):
 				pbuffer.append([tmpf,-2,ptmnum])
 				PTMmap[l[0]] = ptmnum
 				ptmnum+=1
-				continue		
+				continue
 			if not l[3] in a_map: continue
 			pbuffer.append([tmpf,a_map[l[3]],ptmnum])
 			PTMmap[l[0]] = ptmnum
 			ptmnum+=1
-	
-	f = tempfile.NamedTemporaryFile(delete=False)
-	f.write("%i\n"%len(pbuffer))
+
+	f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
+	f.write(str.encode("{}\n".format(len(pbuffer))))
 	for i in range(len(pbuffer)):
-		f.write("%f,1,%i,%i\n" % (pbuffer[i][0],pbuffer[i][1],pbuffer[i][2]))
+		f.write(str.encode("{},1,{},{}\n".format(pbuffer[i][0],pbuffer[i][1],pbuffer[i][2])))
 	f.close()
 
-	f2 = tempfile.NamedTemporaryFile(delete=False)
-	f2.write("%i\n"%len(spbuffer))
+	f2 = tempfile.NamedTemporaryFile(delete=False, mode='wb')
+	f2.write(str.encode("{}\n".format(len(spbuffer))))
 	for i in range(len(spbuffer)):
-		f2.write("%f,1,%i,%i\n" % (spbuffer[i][0],spbuffer[i][1],spbuffer[i][2]))
+		f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0],spbuffer[i][1],spbuffer[i][2])))
 	f2.close()
-	
+
 	return (f.name,f2.name,PTMmap)
 
 
@@ -449,23 +449,23 @@ if __name__ == "__main__":
 
 	num_cpu = int(args.num_cpu)
 
-	params = None	
+	params = None
 	if args.c:
 		params = load_configfile(args.c)
 	elif not args.datasetname:
 		print ("no config file specified")
 		exit(1)
-	
+
 	fragmethod = params["frag_method"]
 	fragerror = params["frag_error"]
-	
+
 	#create amino acid masses file
 	#to be compatible with Omega
 	#that might have fixed modifications
 	f = tempfile.NamedTemporaryFile(delete=False)
 	for m in masses:
-		f.write("%f\n"%m)
-	f.write("0\n")
+		f.write(str.encode("{}\n".format(m)))
+	f.write(str.encode("0\n"))
 	f.close()
 	afile = f.name
 
@@ -485,11 +485,14 @@ if __name__ == "__main__":
 	elif fragmethod == "HCDiTRAQ4":
 		import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
 		print("using HCD iTRAQ pmodels.\n")
+	elif fragmethod == "ETD":
+		import ms2pipfeatures_pyx_ETD as ms2pipfeatures_pyx
+		print("using ETD models.\n")
 	else:
 		print("Unknown fragmentation method in configfile: {}".format(fragmethod))
 		exit(1)
 
-	ms2pipfeatures_pyx.ms2pip_init(afile,modfile,modfile2)
+	ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()),bytearray(modfile.encode()),bytearray(modfile2.encode()))
 
 	# read peptide information
 	# the file contains the columns: spec_id, modifications, peptide and charge
@@ -630,4 +633,3 @@ if __name__ == "__main__":
 			mgf_output.close()
 
 		sys.stdout.write("done!\n")
-
