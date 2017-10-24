@@ -1,4 +1,4 @@
-# MS2PIPC
+# MS2PIPc
 
 ### Install
 
@@ -11,7 +11,7 @@ Requirements:
 - XGBoost (python API) (only required for training)
 - Cython (http://cython.org/)
 
-MS2PIPC requires the machine specific compilation of the C-code:
+MS2PIPc requires the machine specific compilation of the C-code:
 
 ```
 sh compile.sh
@@ -42,15 +42,15 @@ optional arguments:
   -m INT          number of cpu's to use
 ```
 
-The `-i` flag makes ms2pipC use the NIST iTRAQ4 models (HCD onnly).
+The `-i` flag makes MS2PIPc use the NIST iTRAQ4 models (HCD only).
 
-The `-i` flag in combination with the `-p` flag makes ms2pipC use the NIST iTRAQ4 phospho models (HCD onnly).
+The `-i` flag in combination with the `-p` flag makes MS2PIPc use the NIST iTRAQ4 phospho models (HCD only).
 
-### configfile (-c option)
+### Config file (-c option)
 
-Several ms2pipC options need to be set in this configfile.
+Several MS2PIPc options need to be set in this config file.
 
-The models that should be used are set as `frag_method=X` where X is either `CID` or `HCD`.
+The models that should be used are set as `frag_method=X` where X is either `CID`,  `HCD`, `ETD`, `HCDiTRAQ4` or `HCDiTRAQ4phospho`.
 The fragment ion error tolerance is set as `frag_error=X` where is X is the tolerance in Da.
 
 PTMs (see further) are set as `ptm=X,Y,o,Z` for each internal PTM where X is a string that represents
