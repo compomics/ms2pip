@@ -37,8 +37,6 @@ optional arguments:
   -c FILE         config file
   -s FILE         .mgf MS2 spectrum file (optional)
   -w FILE         write feature vectors to FILE.pkl (optional)
-  -i              iTRAQ models
-  -p              phospho models
   -m INT          number of cpu's to use
 ```
 
@@ -151,6 +149,6 @@ Hyperparameters should still be optimized.
 You will need to digg into the script for model selection.
 
 This script will write the XGBoost models as `.c` files that can be compiled
-and linked through Cython. Just put the models in the `/models` folder
-, change the `#include` directives in `ms2pipfeatures_c.c`, and recompile
+and linked through Cython. Just put the models in the `/models` folder,
+change the `#include` directives in `ms2pipfeatures_c.c`, and recompile
 the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script.
