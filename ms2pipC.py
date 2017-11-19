@@ -8,6 +8,7 @@ from random import shuffle
 import math
 import tempfile
 
+
 def process_peptides(worker_num, args, data, PTMmap, fragmethod):
 	"""
 	Function for each worker to process a list of peptides. The models are
@@ -56,7 +57,8 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
 			sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
 	return final_result
 
-def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
+
+def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
 	"""
 	Function for each worker to process a list of spectra. Each peptide's
 	sequence is extracted from the mgf file. Then models are chosen based on
@@ -108,7 +110,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 			if row[0] == "T":
 				if row[:5] == "TITLE":
 					title = row[6:].replace(" ", "")
-					if not title in peptides:
+					if title not in peptides:
 						skip = True
 						continue
 			elif row[0].isdigit():
@@ -124,7 +126,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 					charge = int(row[7:9].replace("+", ""))
 			elif row[:8] == "END IONS":
 				# process current spectrum
-				if not title in peptides:
+				if title not in peptides:
 					continue
 
 				peptide = peptides[title]
@@ -152,7 +154,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 
 				if args.vector_file:
 					tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
-					#tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
+					# tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
 					tmp["psmid"] = [title] * len(tmp)
 					tmp["targetsB"] = b
 					tmp["targetsY"] = y
@@ -165,7 +167,7 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 					tmp["peplen"] = [len(peptide)] * (2 * len(b))
 					tmp["charge"] = [charge] * (2 * len(b))
 					tmp["ion"] = [0] * len(b) + [1] * len(y)
-					tmp["ionnumber"] = [a + 1 for a in list(range(len(b))) + list(range(len(y)-1, -1, -1))]
+					tmp["ionnumber"] = [a + 1 for a in list(range(len(b))) + list(range(len(y) - 1, -1, -1))]
 					tmp["target"] = b + y
 					tmp["prediction"] = resultB + resultY
 					tmp["peplen"] = tmp["peplen"].astype(np.uint8)
@@ -183,11 +185,14 @@ def process_spectra(worker_num, args, data,  PTMmap, fragmethod, fragerror):
 	if args.vector_file:
 		df = pd.DataFrame()
 		for v in vectors:
-			if len(v>0): df = pd.concat([df, v])
-			else: continue
+			if len(v > 0):
+				df = pd.concat([df, v])
+			else:
+				continue
 		return df
 	else:
 		return dataresult
+
 
 def get_feature_names():
 	"""
@@ -235,6 +240,7 @@ def get_feature_names():
 
 	return names
 
+
 def get_feature_names_chem(peplen):
 	"""
 	feature names for the fixed peptide length feature vectors
@@ -267,6 +273,7 @@ def get_feature_names_chem(peplen):
 
 	return names
 
+
 def scan_spectrum_file(filename):
 	"""
 	go over mgf file and return list with all spectrum titles
@@ -284,6 +291,7 @@ def scan_spectrum_file(filename):
 	f.close()
 	return titles
 
+
 def prepare_titles(titles, num_cpu):
 	"""
 	Take a list and return a list containing num_cpu smaller lists with the
@@ -293,11 +301,11 @@ def prepare_titles(titles, num_cpu):
 	# shuffling improves parallel speeds
 	shuffle(titles)
 
-	split_titles = [titles[i * len(titles) // num_cpu: (i + 1)
-						   * len(titles) // num_cpu] for i in range(num_cpu)]
+	split_titles = [titles[i * len(titles) // num_cpu: (i + 1) * len(titles) // num_cpu] for i in range(num_cpu)]
 	sys.stdout.write("{} spectra (~{:.2f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
 
 	return split_titles
+
 
 def apply_mods(peptide, mods, PTMmap):
 	"""
@@ -320,6 +328,7 @@ def apply_mods(peptide, mods, PTMmap):
 
 	return modpeptide
 
+
 def load_configfile(filepath):
 	params = {}
 	params['ptm'] = []
@@ -328,8 +337,9 @@ def load_configfile(filepath):
 	with open(filepath) as f:
 		for line in f:
 			line = line.strip()
-			if not line or line[0] == '#': continue
-			(par,val) = line.split('=')
+			if not line or line[0] == '#':
+				continue
+			(par, val) = line.split('=')
 			if par == "ptm":
 				params["ptm"].append(val)
 			elif par == "sptm":
@@ -340,69 +350,74 @@ def load_configfile(filepath):
 				params[par] = val
 	return params
 
+
 def generate_modifications_file(params, masses, a_map):
 	PTMmap = {}
 
-	ptmnum = 38 #Omega compatibility (mutations)
+	ptmnum = 38  # Omega compatibility (mutations)
 	spbuffer = []
 	for v in params["sptm"]:
 		l = v.split(',')
 		tmpf = float(l[1])
 		if l[2] == 'opt':
 			if l[3] == "N-term":
-				spbuffer.append([tmpf,-1,ptmnum])
+				spbuffer.append([tmpf, -1, ptmnum])
 				PTMmap[l[0]] = ptmnum
-				ptmnum+=1
+				ptmnum += 1
 				continue
 			if l[3] == "C-term":
-				spbuffer.append([tmpf,-2,ptmnum])
+				spbuffer.append([tmpf, -2, ptmnum])
 				PTMmap[l[0]] = ptmnum
-				ptmnum+=1
+				ptmnum += 1
 				continue
-			if not l[3] in a_map: continue
-			spbuffer.append([tmpf,a_map[l[3]],ptmnum])
+			if not l[3] in a_map:
+				continue
+			spbuffer.append([tmpf, a_map[l[3]], ptmnum])
 			PTMmap[l[0]] = ptmnum
-			ptmnum+=1
+			ptmnum += 1
 	pbuffer = []
 	for v in params["ptm"]:
 		l = v.split(',')
 		tmpf = float(l[1])
 		if l[2] == 'opt':
 			if l[3] == "N-term":
-				pbuffer.append([tmpf,-1,ptmnum])
+				pbuffer.append([tmpf, -1, ptmnum])
 				PTMmap[l[0]] = ptmnum
-				ptmnum+=1
+				ptmnum += 1
 				continue
 			if l[3] == "C-term":
-				pbuffer.append([tmpf,-2,ptmnum])
+				pbuffer.append([tmpf, -2, ptmnum])
 				PTMmap[l[0]] = ptmnum
-				ptmnum+=1
+				ptmnum += 1
 				continue
-			if not l[3] in a_map: continue
-			pbuffer.append([tmpf,a_map[l[3]],ptmnum])
+			if not l[3] in a_map:
+				continue
+			pbuffer.append([tmpf, a_map[l[3]], ptmnum])
 			PTMmap[l[0]] = ptmnum
-			ptmnum+=1
+			ptmnum += 1
 
 	f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
 	f.write(str.encode("{}\n".format(len(pbuffer))))
 	for i in range(len(pbuffer)):
-		f.write(str.encode("{},1,{},{}\n".format(pbuffer[i][0],pbuffer[i][1],pbuffer[i][2])))
+		f.write(str.encode("{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2])))
 	f.close()
 
 	f2 = tempfile.NamedTemporaryFile(delete=False, mode='wb')
 	f2.write(str.encode("{}\n".format(len(spbuffer))))
 	for i in range(len(spbuffer)):
-		f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0],spbuffer[i][1],spbuffer[i][2])))
+		f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])))
 	f2.close()
 
-	return (f.name,f2.name,PTMmap)
+	return (f.name, f2.name, PTMmap)
 
 
 def peakcount(x):
 	c = 0.
 	for i in x:
-		if i > -9.95: c+=1.
-	return c/len(x)
+		if i > -9.95:
+			c += 1.
+	return c / len(x)
+
 
 def print_logo():
 	logo = """
@@ -414,6 +429,7 @@ def print_logo():
 		   """
 	print(logo)
 	print("by sven.degroeve@ugent.be\n")
+
 
 if __name__ == "__main__":
 	# a_map converts the peptide amino acids to integers, note how "L" is removed
@@ -453,15 +469,15 @@ if __name__ == "__main__":
 	if args.c:
 		params = load_configfile(args.c)
 	elif not args.datasetname:
-		print ("no config file specified")
+		print("No config file specified")
 		exit(1)
 
 	fragmethod = params["frag_method"]
 	fragerror = params["frag_error"]
 
-	#create amino acid masses file
-	#to be compatible with Omega
-	#that might have fixed modifications
+	# create amino acid masses file
+	# to be compatible with Omega
+	# that might have fixed modifications
 	f = tempfile.NamedTemporaryFile(delete=False)
 	for m in masses:
 		f.write(str.encode("{}\n".format(m)))
@@ -469,9 +485,9 @@ if __name__ == "__main__":
 	f.close()
 	afile = f.name
 
-	#PTMs are loaded the same as in Omega
-	#THis allows me to use the same C init() function in bot ms2ip and Omega
-	(modfile,modfile2,PTMmap) = generate_modifications_file(params,masses,a_map)
+	# PTMs are loaded the same as in Omega
+	# This allows me to use the same C init() function in bot ms2ip and Omega
+	(modfile, modfile2, PTMmap) = generate_modifications_file(params, masses, a_map)
 
 	if fragmethod == "CID":
 		import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
@@ -492,7 +508,7 @@ if __name__ == "__main__":
 		print("Unknown fragmentation method in configfile: {}".format(fragmethod))
 		exit(1)
 
-	ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()),bytearray(modfile.encode()),bytearray(modfile2.encode()))
+	ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
 	# read peptide information
 	# the file contains the columns: spec_id, modifications, peptide and charge
@@ -509,7 +525,7 @@ if __name__ == "__main__":
 	if args.spec_file:
 		"""
 		When an mgf file is provided, MS2PIP either saves the feature vectors to
-		 train models with or writes a file with the predicted spectra next to
+		train models with or writes a file with the predicted spectra next to
 		the empirical one.
 		"""
 		sys.stdout.write("scanning spectrum file... \n")
@@ -551,7 +567,7 @@ if __name__ == "__main__":
 				all_results.to_hdf(args.vector_file, "table")
 			# "table" is a tag used to read back the .h5
 			else:  # if none of the two, default to .h5
-				#all_results.to_hdf(args.vector_file, "table")
+				# all_results.to_hdf(args.vector_file, "table")
 				all_results.to_csv(args.vector_file)
 		else:
 			sys.stdout.write("writing file {}...\n".format(
@@ -559,14 +575,14 @@ if __name__ == "__main__":
 			all_results.to_csv(
 				args.pep_file + "_pred_and_emp.csv", index=False)
 			sys.stdout.write('computing correlations...\n')
-			correlations = all_results.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2,'prediction']
-			correlations.to_csv(args.pep_file+".pearsonrtmp",index=True)
-			fout = open(args.pep_file+".pearsonr","w")
-			with open(args.pep_file+".pearsonrtmp") as f:
+			correlations = all_results.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2, 'prediction']
+			correlations.to_csv(args.pep_file + ".pearsonrtmp", index=True)
+			fout = open(args.pep_file + ".pearsonr", "w")
+			with open(args.pep_file + ".pearsonrtmp") as f:
 				fout.write('spec_id,pearsonr\n')
 				for row in f:
-					l= row.rstrip().split(',')
-					fout.write("%s,%s\n"%(l[0],l[2]))
+					l = row.rstrip().split(',')
+					fout.write("{}, {}\n".format(l[0], l[2]))
 				fout.close()
 			"""
 			corr_boxplot = correlations.plot('hist')
