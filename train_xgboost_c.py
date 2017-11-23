@@ -65,14 +65,14 @@ def convert_model_to_c(bst,args,numf):
 
 		tmp = args.vectors.replace('.','_')
 		tmp2 = tmp.split('/')
-		with open(tmp+args.type+args.ion+'_c.c','w') as fout:
+		with open(tmp+args.type+'_c.c','w') as fout:
 			fout.write("static float score_"+args.type+"(unsigned int* v){\n")
 			fout.write("float s = 0.;\n")
 			for tt in range(len(forest)):
 				fout.write(tree_to_code(forest[tt],0,1))
 			fout.write("\nreturn s;}\n")
 
-		with open(tmp+args.type+args.ion+'.pyx','w') as fout:
+		with open(tmp+args.type+'.pyx','w') as fout:
 			fout.write("cdef extern from \"" + tmp2[-1] + "_c.c\":\n")
 			fout.write("\tfloat score_{}(short unsigned short[{}] v)\n\n".format(args.type, numf))
 			fout.write("def myscore(sv):\n")
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 	parser.add_argument('vectors',metavar='<_vectors.pkl>',
 		help='feature vector file')
 	parser.add_argument('type',metavar='<type>',
-		help='model type: [B,Y]')
+		help='model type: [B,Y,C,Z]')
 	parser.add_argument('-c',metavar='INT', action="store", dest='num_cpu', default=23,
 		help='number of cpu\'s to use')
 	parser.add_argument('-t',metavar='FILE', action="store", dest='vectorseval',
@@ -155,7 +155,6 @@ if __name__ == "__main__":
 	targetsY = vectors.pop('targetsY')
 	if 'targetsC' in vectors.columns:
 		targetsC = vectors.pop('targetsC')
-	if 'targetsZ' in vectors.columns:
 		targetsZ = vectors.pop('targetsZ')
 	vectors.drop(['targets2B', 'Targets2Y', 'Targets2C', 'Targets2Z'], axis=0, inplace=True)
 
@@ -190,8 +189,9 @@ if __name__ == "__main__":
 	if args.vectorseval:
 		targetsBeval = eval_vectors.pop('targetsB')
 		targetsYeval = eval_vectors.pop('targetsY')
-		targetsCeval = eval_vectors.pop('targetsC')
-		targetsZeval = eval_vectors.pop('targetsZ')
+		if 'targetsC' in vectors.columns:
+			targetsCeval = eval_vectors.pop('targetsC')
+			targetsZeval = eval_vectors.pop('targetsZ')
 
 		if args.type == 'B':
 			eval_targets = targetsBeval
@@ -257,7 +257,7 @@ if __name__ == "__main__":
 	#bst = xgb.cv( plst, xtrain, 200, nfold=5, callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
 
 	#Save model
-	bst.save_model'{}_{}.xgboost'.format{args.vectors, args.type})
+	#bst.save_model(args.vectors+'.xgboost')
 
 	#Load previously saved model here, if necessary
 	#bst = xgb.Booster({'nthread':23}) #init model
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 	importance = bst.get_fscore()
 	importance = sorted(importance.items(), key=operator.itemgetter(1))
 	ll = []
-	with open("importance.txt","w") as f:
+	with open("{}_{}importance.txt".format(args.vectors, args.type),"w") as f:
 		for feat,n in importance[:]:
 			ll.append(feat)
 			f.write(feat + "\t" + str(n) + '\n')
@@ -297,7 +297,7 @@ if __name__ == "__main__":
 	tmp['target'] = list(test_targets.values)
 	tmp['predictions'] = predictions
 	tmp['psmid'] = list(test_psmids.values)
-	tmp.to_csv('predictions.csv',index=False)
+	tmp.to_csv("{}_{}predictions.csv".format(args.vectors, args.type), index=False)
 	#tmp.to_pickle('predictions.pkl')
 
 	"""

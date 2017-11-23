@@ -153,9 +153,9 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
 
 				# normalize and convert MS2 peaks
 				msms = np.array(msms, dtype=np.float32)
-				#peaks = peaks / np.sum(peaks)
-				#peaks = np.array(np.log2(peaks + 0.001))
-				peaks = np.array(peaks).astype(np.float32)
+				peaks = peaks / np.sum(peaks)
+				peaks = np.array(np.log2(peaks + 0.001))
+				peaks = peaks.astype(np.float32)
 
 				targets = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 

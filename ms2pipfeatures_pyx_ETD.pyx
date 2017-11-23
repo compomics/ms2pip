@@ -38,15 +38,11 @@ def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndar
 		resultY.append(results[1*num_ions+i])
 		resultC.append(results[2*num_ions+i])
 		resultZ.append(results[3*num_ions+i])
-	#resultY = resultY[::-1]
-	#resultZ = resultZ[::-1]
 	return(resultB,resultY,resultC,resultZ)
 
 def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
 	cdef float* results = get_p_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
 	num_ions = len(modpeptide)-3
-	for i in range((len(modpeptide)-3)*4):
-		print(results[i])
 	resultB = []
 	resultY = []
 	resultC = []
@@ -56,10 +52,6 @@ def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.nda
 		resultY.append(results[1*num_ions+i])  # Because there's an extra value in the predictions between the b- and y- ions
 		resultC.append(results[2*num_ions+i])  # +1 also here??? Need to check!
 		resultZ.append(results[3*num_ions+i])  # Because there's an extra value in the predictions between the b- and y- ions
-	print(resultB)
-	print(resultY)
-	print(resultC)
-	print(resultZ)
 	return(resultB,resultY,resultC,resultZ)
 
 def get_mzs(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide):

@@ -2,10 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/ETD/retrain_yFeaturesFlipped_B.c"
-#include "models/ETD/retrain_yFeaturesFlipped_Y.c"
-#include "models/ETD/retrain_yFeaturesFlipped_C.c"
-#include "models/ETD/retrain_yFeaturesFlipped_Z.c"
+#include "models/ETD/SyntheticETD_ScoreCutOff100_Train_C.c"
+#include "models/ETD/SyntheticETD_ScoreCutOff100_Train_Z.c"
 
 //#include "models/dB.c"
 //#include "models/dY.c"
@@ -107,22 +105,22 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	mz = modpeptide[0];
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+1.007236; // b-ion
+		membuffer[j++] = mz+1.007236;  //b-ion
 	}
 	mz = modpeptide[-1];
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = 18.0105647+mz+1.007236; // y-ion
+		membuffer[j++] = 18.0105647+mz+1.007236;  //y-ion
 	}
 	mz = modpeptide[0];
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+1.007825032+17.0265491; // c-ion: peptide + H + NH3
+		membuffer[j++] = mz+1.007825032+17.0265491;  //c-ion: peptide + H + NH3
 	}
 	mz = modpeptide[-1];
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+17.00273965-15.01089904+1.007825032; // z-ion: peptide + OH - NH
+		membuffer[j++] = mz+17.00273965-15.01089904+1.007825032;  //z-ion: peptide + OH - NH
 	}
 	return membuffer;
 }
@@ -234,14 +232,14 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 		}
 	}
 
-	// c-ions
+	//c-ions
 	mz = 0.;
 	if (modpeptide[0] != 0) {
 		mz += amino_masses[modpeptide[0]];
 	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[i-1] = mz+1.007825032+17.026549;
+		membuffer[i] = mz+1.007825032+17.026549;
 	}
 
 	msms_pos = 0;
@@ -275,7 +273,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 					}
 				}
 			}
-			ions[(peplen-1)*2+mem_pos] = max;
+			ions[2*(peplen-1)+mem_pos] = max;
 			mem_pos += 1;
 		}
 	}
@@ -323,7 +321,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 					}
 				}
 			}
-			ions[(peplen-1)*3+mem_pos] = max;
+			ions[3*(peplen-1)+mem_pos] = max;
 			mem_pos += 1;
 		}
 	}
@@ -872,10 +870,10 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	int fnum = v[0]/(peplen-1);
 
 	for (i=0; i < peplen-1; i++) {
-		predictions[i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*(peplen-1)-1-i] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
+		predictions[2*(peplen-1)+1-i] = score_Y(v+1+(i*fnum))+0.5;
 		predictions[2*(peplen-1)+i] = score_C(v+1+(i*fnum))+0.5;
-		predictions[4*(peplen-1)-1-i] = score_Z(v+1+(i*fnum))+0.5;
+		predictions[4*(peplen-1)+1-i] = score_Z(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }
