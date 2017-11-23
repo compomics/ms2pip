@@ -1,6 +1,9 @@
 frag_method=ETD
 frag_error=0.02
 
+ptm=Oxidation,15.994915,opt,M
+ptm=Carbamidomethyl,57.02146,opt,C
+
 ptm=mox,15.994915,opt,M
 #ptm=CAM,57.02146,fix,C
 ptm=cam,57.02146,opt,C
