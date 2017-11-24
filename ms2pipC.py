@@ -479,8 +479,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("pep_file", metavar="<peptide file>",
                         help="list of peptides")
-    parser.add_argument("-c", metavar="FILE", action="store", dest="c",
-                        help="config file")
+    parser.add_argument("-c", metavar="FILE", action="store", dest="c", default="config.file",
+                        help="config file (by default config.file)")
     parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
                         help=".mgf MS2 spectrum file (optional)")
     parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
