@@ -14,48 +14,57 @@ def ms2pip_init(amino_masses_fname, modifications_fname,modifications_fname_sptm
 	init_ms2pip(amino_masses_fname, modifications_fname,modifications_fname_sptm)
 
 def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
-	cdef unsigned int* result = get_v_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
+	cdef unsigned int* results = get_v_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
 	r = []
 	offset = 0
-	fnum = result[0]/(len(peptide)-3)
+	fnum = results[0]/(len(peptide)-3)
 	for i in range(len(peptide)-3):
 		v = []
 		for j in range(fnum):
-			v.append(result[j+1+offset])
+			v.append(results[j+1+offset])
 		offset+=fnum
 		r.append(v)
 	return r
 
 def get_targets(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, np.ndarray[float, ndim=1, mode="c"] msms, np.ndarray[float, ndim=1, mode="c"] peaks, fragerror):
-	cdef float* result = get_t_ms2pip(len(modpeptide)-2,&modpeptide[0],len(peaks),&msms[0],&peaks[0],fragerror)
-	b = []
-	for i in range(len(modpeptide)-3):
-		b.append(result[i])
-	y = []
-	for i in range(len(modpeptide)-3):
-		y.append(result[len(modpeptide)-3+i])
-	return(b,y)
-
-def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
-	cdef float* predictions = get_p_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
+	cdef float* results = get_t_ms2pip(len(modpeptide)-2,&modpeptide[0],len(peaks),&msms[0],&peaks[0],fragerror)
+	num_ions = len(modpeptide)-3
 	resultB = []
 	resultY = []
-	for i in range(len(modpeptide)-3):
-		resultB.append(predictions[i])
-	for i in range(len(modpeptide)-3):
-		resultY.append(predictions[len(modpeptide)-2+i])
-	return (resultB,resultY)
+	resultC = []
+	resultZ = []
+	for i in range(num_ions):
+		resultB.append(results[0*num_ions+i])
+		resultY.append(results[1*num_ions+i])
+		resultC.append(results[2*num_ions+i])
+		resultZ.append(results[3*num_ions+i])
+	return(resultB,resultY,resultC,resultZ)
+
+def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
+	cdef float* results = get_p_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
+	num_ions = len(modpeptide)-3
+	resultB = []
+	resultY = []
+	resultC = []
+	resultZ = []
+	for i in range(num_ions):
+		resultB.append(results[0*num_ions+i])
+		resultY.append(results[1*num_ions+i])
+		resultC.append(results[2*num_ions+i])
+		resultZ.append(results[3*num_ions+i])
+	return(resultB,resultY,resultC,resultZ)
 
 def get_mzs(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide):
-	cdef int pos = 0
 	cdef int i
-	cdef float* result = ms2pip_get_mz(len(modpeptide)-2, &modpeptide[0])
-	b = []
-	for i in range(len(modpeptide)-3):
-		b.append(result[pos])
-		pos += 1
-	y = []
-	for i in range(len(modpeptide)-3):
-		y.append(result[pos])
-		pos+=1
-	return(b,y)
+	cdef float* results = ms2pip_get_mz(len(modpeptide)-2, &modpeptide[0])
+	num_ions = len(modpeptide)-3
+	resultB = []
+	resultY = []
+	resultC = []
+	resultZ = []
+	for i in range(num_ions):
+		resultB.append(results[0*num_ions+i])
+		resultY.append(results[1*num_ions+i])
+		resultC.append(results[2*num_ions+i])
+		resultZ.append(results[3*num_ions+i])
+	return(resultB,resultY,resultC,resultZ)

@@ -2,14 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "models/modelBnew.c"
-//#include "models/modelYnew.c"
-
 #include "models/vectors_train_h5B_c.c"
 #include "models/vectors_train_h5Y_c.c"
-
-//#include "models/dB.c"
-//#include "models/dY.c"
 
 float membuffer[10000];
 unsigned int v[30000];
@@ -74,7 +68,7 @@ void init_ms2pip(char* amino_masses_fname, char* modifications_fname, char* modi
 				amino_masses[after] = mz;
 			}
 			else
-			{	
+			{
 				amino_masses[after] = amino_masses[before]+mz;
 				amino_F[after] = (unsigned short) (amino_masses[before]+mz - 57.021464);
 			}
@@ -90,7 +84,7 @@ void init_ms2pip(char* amino_masses_fname, char* modifications_fname, char* modi
 				amino_masses[after] = mz;
 			}
 			else
-			{	
+			{
 				amino_masses[after] = amino_masses[before]+mz;
 				amino_F[after] = (unsigned short) (amino_masses[before]+mz - 57.021464);
 			}
@@ -127,11 +121,11 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	int mem_pos;
 	float max, tmp2;
 
-	//b-ions
 	for (i=0; i < 2*peplen; i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 	}
 
+	//b-ions
 	mz = 0.;
 	if (modpeptide[0] != 0) {
 		mz += amino_masses[modpeptide[0]];
@@ -252,7 +246,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 	int min_heli_y = 999;
 	int min_hydro_y = 999;
 	int min_pI_y = 999;
-	
+
 	unsigned int buf2[19];
 	unsigned int buf3[19];
 
@@ -492,7 +486,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		v[fnum++] = heli[peptide[i+1]]+heli[peptide[1]];
 		v[fnum++] = hydro[peptide[i+1]]+hydro[peptide[1]];
 		v[fnum++] = pI[peptide[i+1]]+pI[peptide[1]];
-		
+
 		v[fnum++] = bas[peptide[peplen]]+bas[peptide[i+2]];
 		v[fnum++] = heli[peptide[peplen]]+heli[peptide[i+2]];
 		v[fnum++] = hydro[peptide[peplen]]+hydro[peptide[i+2]];
@@ -767,10 +761,10 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
 	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
 	int fnum = v[0]/(peplen-1);
-	
+
 	for (i=0; i < peplen-1; i++) {
-		predictions[i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*peplen-2-i] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
+		predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }

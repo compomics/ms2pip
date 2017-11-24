@@ -2,11 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/ETD/SyntheticETD_ScoreCutOff100_Train_C.c"
-#include "models/ETD/SyntheticETD_ScoreCutOff100_Train_Z.c"
-
-//#include "models/dB.c"
-//#include "models/dY.c"
+#include "models/ETD/TempBrokenModels_B.c"
+#include "models/ETD/TempBrokenModels_Y.c"
+#include "models/ETD/TempBrokenModels_C.c"
+#include "models/ETD/TempBrokenModels_Z.c"
 
 float membuffer[10000];
 unsigned int v[30000];
@@ -105,12 +104,22 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	mz = modpeptide[0];
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+1.007825032+17.0265491; //c-ion: peptide + H + NH3
+		membuffer[j++] = mz+1.007236;  //b-ion
 	}
 	mz = modpeptide[-1];
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+17.00273965-15.01089904+1.007825032; //z-ion: peptide + OH - NH
+		membuffer[j++] = 18.0105647+mz+1.007236;  //y-ion
+	}
+	mz = modpeptide[0];
+	for (i=1; i < peplen; i++) {
+		mz += amino_masses[modpeptide[i]];
+		membuffer[j++] = mz+1.007825032+17.0265491;  //c-ion: peptide + H + NH3
+	}
+	mz = modpeptide[-1];
+	for (i=peplen; i > 1; i--) {
+		mz += amino_masses[modpeptide[i]];
+		membuffer[j++] = mz+17.00273965-15.01089904+1.007825032;  //z-ion: peptide + OH - NH
 	}
 	return membuffer;
 }
@@ -124,18 +133,18 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	int mem_pos;
 	float max, tmp2;
 
-	//c-ions
-	for (i=0; i < 2*peplen; i++) {
+	for (i=0; i < 4*peplen; i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 	}
 
+	// b-ions
 	mz = 0.;
 	if (modpeptide[0] != 0) {
 		mz += amino_masses[modpeptide[0]];
 	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[i] = mz+1.007825032+17.026549;
+		membuffer[i-1] = mz+1.007236;
 	}
 
 	msms_pos = 0;
@@ -170,6 +179,100 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 				}
 			}
 			ions[mem_pos] = max;
+			mem_pos += 1;
+		}
+	}
+
+	// y-ions
+	mz = 0.;
+	if (modpeptide[peplen+1] != 0) {
+		mz += modpeptide[peplen+1];
+	}
+	j=0;
+	for (i=peplen; i >= 2; i--) {
+		mz += amino_masses[modpeptide[i]];
+		membuffer[j] = 18.0105647+mz+1.007236;
+		j++;
+	}
+
+	msms_pos = 0;
+	mem_pos = 0;
+	while (1) {
+		if (msms_pos >= numpeaks) {
+			break;
+		}
+		if (mem_pos >= peplen) {
+			break;
+		}
+		mz = membuffer[mem_pos];
+		if (msms[msms_pos] > (mz+tolmz)) {
+			mem_pos += 1;
+		}
+		else if (msms[msms_pos] < (mz-tolmz)) {
+			msms_pos += 1;
+		}
+		else {
+			max = peaks[msms_pos];
+			tmp = msms_pos + 1;
+			if (tmp < numpeaks) {
+				while (msms[tmp] <= (mz+tolmz)) {
+					tmp2 = peaks[tmp];
+					if (max < tmp2) {
+						max = tmp2;
+					}
+					tmp += 1;
+					if (tmp == numpeaks) {
+						break;
+					}
+				}
+			}
+			ions[(peplen-1)+mem_pos] = max;
+			mem_pos += 1;
+		}
+	}
+
+	//c-ions
+	mz = 0.;
+	if (modpeptide[0] != 0) {
+		mz += amino_masses[modpeptide[0]];
+	}
+	for (i=1; i < peplen; i++) {
+		mz += amino_masses[modpeptide[i]];
+		membuffer[i-1] = mz+1.007825032+17.026549;
+	}
+
+	msms_pos = 0;
+	mem_pos = 0;
+	while (1) {
+		if (msms_pos >= numpeaks) {
+			break;
+		}
+		if (mem_pos >= peplen) {
+			break;
+		}
+		mz = membuffer[mem_pos];
+		if (msms[msms_pos] > (mz+tolmz)) {
+			mem_pos += 1;
+		}
+		else if (msms[msms_pos] < (mz-tolmz)) {
+			msms_pos += 1;
+		}
+		else {
+			max = peaks[msms_pos];
+			tmp = msms_pos + 1;
+			if (tmp < numpeaks) {
+				while (msms[tmp] <= (mz+tolmz)) {
+					tmp2 = peaks[tmp];
+					if (max < tmp2) {
+						max = tmp2;
+					}
+					tmp += 1;
+					if (tmp == numpeaks) {
+						break;
+					}
+				}
+			}
+			ions[2*(peplen-1)+mem_pos] = max;
 			mem_pos += 1;
 		}
 	}
@@ -217,7 +320,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 					}
 				}
 			}
-			ions[(peplen-1)+mem_pos] = max;
+			ions[3*(peplen-1)+mem_pos] = max;
 			mem_pos += 1;
 		}
 	}
@@ -766,8 +869,10 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	int fnum = v[0]/(peplen-1);
 
 	for (i=0; i < peplen-1; i++) {
-		predictions[i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*peplen-2-i] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
+		predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[2*(peplen-1)+i] = score_C(v+1+(i*fnum))+0.5;
+		predictions[4*(peplen-1)-i-1] = score_Z(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }
