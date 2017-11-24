@@ -79,10 +79,10 @@ be used in the TITLE field of the predicted MS2 `.mgf` file. The
 `modifications` column is a string that lists the PTMs in the peptide. Each PTM is written as
 `A|B` where A is the location of the PTM in the peptide (the first amino acid has location 1,
 location 0 is used for n-term
-modificatios, while -1 is used for c-term modifications) and B is a string that represent the PTM
-as defined in the configfile (`-c` command line argument).
+modifications, while -1 is used for c-term modifications) and B is a string that represent the PTM
+as defined in the config file (`-c` command line argument).
 Multiple PTMs in the `modifications` column are concatenated with '|'.
-As an example, suppose the configfile contains the line
+As an example, suppose the config file contains the line
 
 ```
 ptm=Cam,57.02146,C
@@ -91,9 +91,9 @@ cterm=Glyloss,-58.005479
 ```
 
 then a modifications string could like `0|Ace|2|Cam|5|Cam|-1|Glyloss` which means that the second
-and fifth amin acid is modified with `Cam`,  
-that there is a n-terminal modification `Ace`,
-and that there is a c-terminal modification `Glyloss`,
+and fifth amino acid is modified with `Cam`,  
+that there is an N-terminal modification `Ace`,
+and that there is a C-terminal modification `Glyloss`.
 
 ### Writing feature vectors for model training
 
@@ -137,7 +137,7 @@ positional arguments:
 
 optional arguments:
   -h, --help     show this help message and exit
-  -c INT         number of cpu's to use
+  -c INT         number of CPU's to use
   -p             output plots
 ```
 
@@ -145,7 +145,7 @@ reads the pickled feature vector file `<vectors.pkl or .h5>` and trains an
 XGBoost model. The `type` option should be "B" for b-ions and "Y" for
 y-ions.
 
-Hyperparameters should still be optimized.
+Hyper parameters should still be optimized.
 You will need to digg into the script for model selection.
 
 This script will write the XGBoost models as `.c` files that can be compiled
