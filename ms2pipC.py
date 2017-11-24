@@ -22,7 +22,7 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
 	modifications = specdict["modifications"]
 	charges = specdict["charge"]
 
-	final_result = pd.DataFrame(columns=["peplen", "charge", "ion", "mz", "ionnumber", "prediction", "spec_id"])
+	final_result = pd.DataFrame(columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "mz", "prediction"])
 	pcount = 0
 
 	for pepid in peptides:
@@ -38,23 +38,24 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
 
 		# get ion mzs
 		mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
-		# get ion intensities
-		results = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
 
-		# return results as a DataFrame
-		tmp = pd.DataFrame(columns=['peplen', 'charge', 'ion', 'mz', 'ionnumber', 'prediction'])
-		num_ions = len(results[0])
+		# get ion intensities
+		predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
+
+		# return predictions as a DataFrame
+		tmp = pd.DataFrame(columns=['spec_id', 'peplen', 'charge', 'ion', 'ionnumber', 'mz', 'prediction'])
+		num_ions = len(predictions[0])
 		if fragmethod == 'ETD':
 			tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['c'] * num_ions + ['z'] * num_ions
+			tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
 			tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
-			tmp["ionnumber"] = (list(np.arange(num_ions) + 1) + list(np.arange(num_ions, 0, -1))) * 2
-			tmp["prediction"] = results[0] + results[1] + results[2] + results[3]
+			tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
 		else:
 			tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions
 			tmp["mz"] = mzs[0] + mzs[1]
-			tmp["ionnumber"] = list(np.arange(num_ions) + 1) + list(np.arange(num_ions, 0, -1))
-			tmp["prediction"] = results[0] + results[1]
-		tmp["peplen"] = len(peptide)
+			tmp["ionnumber"] = list(range(1, num_ions + 1)) * 2
+			tmp["prediction"] = predictions[0] + predictions[1]
+		tmp["peplen"] = len(peptide)-2
 		tmp["charge"] = ch
 		tmp["spec_id"] = pepid
 
@@ -82,11 +83,12 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
 	# cols contains the names of the computed features
 	cols_n = get_feature_names()
 
-	dataresult = pd.DataFrame(columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "target", "prediction"])
+	dataresult = pd.DataFrame(columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "mz", "target", "prediction"])
 	dataresult["peplen"] = dataresult["peplen"].astype(np.uint8)
 	dataresult["charge"] = dataresult["charge"].astype(np.uint8)
 	dataresult["ion"] = dataresult["ion"].astype(np.uint8)
 	dataresult["ionnumber"] = dataresult["ionnumber"].astype(np.uint8)
+	dataresult["mz"] = dataresult["mz"].astype(np.float32)
 	dataresult["target"] = dataresult["target"].astype(np.float32)
 	dataresult["prediction"] = dataresult["prediction"].astype(np.float32)
 
@@ -153,10 +155,18 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
 
 				# normalize and convert MS2 peaks
 				msms = np.array(msms, dtype=np.float32)
-				peaks = peaks / np.sum(peaks)
-				peaks = np.array(np.log2(peaks + 0.001))
-				peaks = peaks.astype(np.float32)
+				debug = False
+				if debug:
+					peaks = np.array(peaks).astype(np.float32)
+				else:
+					peaks = peaks / np.sum(peaks)
+					peaks = np.array(np.log2(peaks + 0.001))
+					peaks = peaks.astype(np.float32)
 
+				# get ion mzs
+				mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
+
+				# get targets
 				targets = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 
 				if args.vector_file:
@@ -164,33 +174,36 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
 					# tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
 					tmp["psmid"] = [title] * len(tmp)
 					tmp["targetsB"] = targets[0]
-					tmp["targetsY"] = targets[1]
+					tmp["targetsY"] = targets[1][::-1]
 					if fragmethod == 'ETD':
 						tmp["targetsC"] = targets[2]
-						tmp["targetsZ"] = targets[3]
+						tmp["targetsZ"] = targets[3][::-1]
 					vectors.append(tmp)
 				else:
 					# predict the b- and y-ion intensities from the peptide
-					results = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
-					tmp = pd.DataFrame(columns=['spec_id', 'peplen', 'charge', 'ion', 'ionnumber', 'target', 'prediction'])
-					num_ions = len(results[0])
+					predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
+					tmp = pd.DataFrame(columns=['spec_id', 'peplen', 'charge', 'ion', 'ionnumber', 'mz', 'target', 'prediction'])
+					num_ions = len(predictions[0])
 					if fragmethod == 'ETD':
 						tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['c'] * num_ions + ['z'] * num_ions
-						tmp["ionnumber"] = [a + 1 for a in list(range(num_ions)) + list(range(num_ions - 1, -1, -1))] * 2
+						tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
+						tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
 						tmp["target"] = targets[0] + targets[1] + targets[2] + targets[3]
-						tmp["prediction"] = results[0] + results[1] + results[2] + results[3]
+						tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
 					else:
-						tmp["ion"] = [0] * num_ions + [1] * num_ions
-						tmp["ionnumber"] = [a + 1 for a in list(range(num_ions)) + list(range(num_ions - 1, -1, -1))]
+						tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions
+						tmp["ionnumber"] = list(range(1, num_ions + 1)) * 2
+						tmp["mz"] = mzs[0] + mzs[1]
 						tmp["target"] = targets[0] + targets[1]
-						tmp["prediction"] = results[0] + results[1]
+						tmp["prediction"] = predictions[0] + predictions[1]
 					tmp["spec_id"] = title
-					tmp["peplen"] = len(peptide)
+					tmp["peplen"] = len(peptide)-2
 					tmp["charge"] = charge
 
 					tmp["peplen"] = tmp["peplen"].astype(np.uint8)
 					tmp["charge"] = tmp["charge"].astype(np.uint8)
 					tmp["ionnumber"] = tmp["ionnumber"].astype(np.uint8)
+					tmp["mz"] = tmp["mz"].astype(np.float32)
 					tmp["target"] = tmp["target"].astype(np.float32)
 					tmp["prediction"] = tmp["prediction"].astype(np.float32)
 					dataresult = dataresult.append(tmp, ignore_index=True)

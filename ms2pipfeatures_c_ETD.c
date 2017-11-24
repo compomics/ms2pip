@@ -2,11 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/ETD/SyntheticETD_ScoreCutOff100_Train_C.c"
-#include "models/ETD/SyntheticETD_ScoreCutOff100_Train_Z.c"
-
-//#include "models/dB.c"
-//#include "models/dY.c"
+#include "models/ETD/TempBrokenModels_B.c"
+#include "models/ETD/TempBrokenModels_Y.c"
+#include "models/ETD/TempBrokenModels_C.c"
+#include "models/ETD/TempBrokenModels_Z.c"
 
 float membuffer[10000];
 unsigned int v[30000];
@@ -239,7 +238,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[i] = mz+1.007825032+17.026549;
+		membuffer[i-1] = mz+1.007825032+17.026549;
 	}
 
 	msms_pos = 0;
@@ -871,9 +870,9 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
 	for (i=0; i < peplen-1; i++) {
 		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*(peplen-1)+1-i] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
 		predictions[2*(peplen-1)+i] = score_C(v+1+(i*fnum))+0.5;
-		predictions[4*(peplen-1)+1-i] = score_Z(v+1+(i*fnum))+0.5;
+		predictions[4*(peplen-1)-i-1] = score_Z(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }

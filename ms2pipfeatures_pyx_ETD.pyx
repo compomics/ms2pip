@@ -14,14 +14,14 @@ def ms2pip_init(amino_masses_fname, modifications_fname,modifications_fname_sptm
 	init_ms2pip(amino_masses_fname, modifications_fname,modifications_fname_sptm)
 
 def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide, charge):
-	cdef unsigned int* result = get_v_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
+	cdef unsigned int* results = get_v_ms2pip(len(peptide)-2,&peptide[0],&modpeptide[0],charge)
 	r = []
 	offset = 0
-	fnum = result[0]/(len(peptide)-3)
+	fnum = results[0]/(len(peptide)-3)
 	for i in range(len(peptide)-3):
 		v = []
 		for j in range(fnum):
-			v.append(result[j+1+offset])
+			v.append(results[j+1+offset])
 		offset+=fnum
 		r.append(v)
 	return r
@@ -49,9 +49,9 @@ def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.nda
 	resultZ = []
 	for i in range(num_ions):
 		resultB.append(results[0*num_ions+i])
-		resultY.append(results[1*num_ions+i])  # Because there's an extra value in the predictions between the b- and y- ions
-		resultC.append(results[2*num_ions+i])  # +1 also here??? Need to check!
-		resultZ.append(results[3*num_ions+i])  # Because there's an extra value in the predictions between the b- and y- ions
+		resultY.append(results[1*num_ions+i])
+		resultC.append(results[2*num_ions+i])
+		resultZ.append(results[3*num_ions+i])
 	return(resultB,resultY,resultC,resultZ)
 
 def get_mzs(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide):
