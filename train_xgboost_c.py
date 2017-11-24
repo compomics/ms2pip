@@ -298,21 +298,21 @@ if __name__ == "__main__":
 	# tmp.to_pickle('predictions.pkl')
 
 	"""
-	for ch in range(8,20):
+	for ch in range(8, 20):
 		print("len {}".format(ch))
 		n1 = 0
 		n2 = 0
-		tmp3 = tmp[tmp.peplen==ch]
+		tmp3 = tmp[tmp.peplen == ch]
 		for pid in tmp3.psmid.unique().values:
-			tmp2 = tmp3[tmp3.psmid==pid]
+			tmp2 = tmp3[tmp3.psmid == pid]
 			print(pid)
-			for (t,p) in zip(tmp2.target,tmp2.predictions):
-				print("{} {}".format(t,p))
-			#n1 += pearsonr(tmp2.target,tmp2.predictions)[0]
-			n1 += np.mean(np.abs(tmp2.target-tmp2.predictions))
-			#print(n1)
+			for (t, p) in zip(tmp2.target, tmp2.predictions):
+				print("{} {}".format(t, p))
+			# n1 += pearsonr(tmp2.target, tmp2.predictions)[0]
+			n1 += np.mean(np.abs(tmp2.target - tmp2.predictions))
+			# print(n1)
 			n2 += 1
-		print(n1/n2)
+		print(n1 / n2)
 	"""
 
 	if args.make_plots:
