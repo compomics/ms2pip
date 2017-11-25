@@ -17,10 +17,11 @@ def evalerror(preds, dtrain):
 
 
 def convert_model_to_c(bst, args, numf):
-	bst.dump_model('dump.raw.txt')
+	filename = "{}_{}".format(args.vectors.split('.')[-2], args.type)
+	bst.dump_model("{}_dump.raw.txt".format(filename))
 	num_nodes = []
 	mmax = 0
-	with open('dump.raw.txt') as f:
+	with open("{}_dump.raw.txt".format(filename)) as f:
 		for row in f:
 			if row.startswith('booster'):
 				if row.startswith('booster[0]'):
@@ -36,7 +37,7 @@ def convert_model_to_c(bst, args, numf):
 	forest = []
 	tree = None
 	b = 0
-	with open('dump.raw.txt') as f:
+	with open("{}_dump.raw.txt".format(filename)) as f:
 		for row in f:
 			if row.startswith('booster'):
 				if row.startswith('booster[0]'):
@@ -55,6 +56,7 @@ def convert_model_to_c(bst, args, numf):
 				tmp = l[1].split('yes=')
 				tmp[0] = tmp[0].replace('[Features', '')
 				tmp[0] = tmp[0].replace('[Feature', '')
+				tmp[0] = tmp[0].replace('[f', '')
 				tmp[0] = tmp[0].replace(']', '')
 				tmp2 = tmp[0].split('<')
 				if float(tmp2[1]) < 0:
@@ -64,23 +66,23 @@ def convert_model_to_c(bst, args, numf):
 				tree[int(l[0])] = [int(tmp2[0]), int(math.ceil(float(tmp2[1]))), int(tmp3[0]), int(tmp4[0])]
 		forest.append(tree)
 
-		tmp = args.vectors.replace('.', '_')
-		tmp2 = tmp.split('/')
-		with open('{}{}_c.c'.format(tmp, args.type), 'w') as fout:
-			fout.write("static float score_{}(unsigned int* v){\n".format(args.type))
+		# tmp = args.vectors.replace('.', '_')
+		# tmp2 = tmp.split('/')
+		with open('{}.c'.format(filename), 'w') as fout:
+			fout.write("static float score_{}(unsigned int* v){{\n".format(args.type))
 			fout.write("float s = 0.;\n")
 			for tt in range(len(forest)):
 				fout.write(tree_to_code(forest[tt], 0, 1))
 			fout.write("\nreturn s;}\n")
 
-		with open('{}{}.pyx'.format(tmp, args.type), 'w') as fout:
-			fout.write("cdef extern from \"{}_c.c\":\n".format(tmp2[-1]))
+		with open('{}.pyx'.format(filename), 'w') as fout:
+			fout.write("cdef extern from \"{}.c\":\n".format(filename))
 			fout.write("\tfloat score_{}(short unsigned short[{}] v)\n\n".format(args.type, numf))
 			fout.write("def myscore(sv):\n")
 			fout.write("\tcdef unsigned short[{}] v = sv\n".format(numf))
 			fout.write("\treturn score_{}(v)\n".format(args.type))
 
-	os.remove('dump.raw.txt')
+	os.remove("{}_dump.raw.txt".format(filename))
 
 
 def tree_to_code(tree, pos, padding):
@@ -88,10 +90,9 @@ def tree_to_code(tree, pos, padding):
 	if tree[pos][0] == -1:
 		if tree[pos][1] < 0:
 			return p + "s = s {};\n".format(tree[pos][1])
-	else:
-		return p + "s = s + {};\n".format(tree[pos][1])
-	return p + "if (v[{}]<{}){\n{}}\n{}else{\n{}}".format(tree[pos][0], tree[pos][1], tree_to_code(tree, tree[pos][2], padding + 1), p, tree_to_code(tree, tree[pos][3], padding + 1))
-
+		else:
+			return p + "s = s + {};\n".format(tree[pos][1])
+	return p + "if (v[{}]<{}){{\n{}}}\n{}else{{\n{}}}".format(tree[pos][0], tree[pos][1], tree_to_code(tree, tree[pos][2], padding + 1), p, tree_to_code(tree, tree[pos][3], padding + 1))
 
 def print_logo():
 	logo = """
@@ -121,9 +122,11 @@ if __name__ == "__main__":
 		help="output plots")
 	args = parser.parse_args()
 
+	filename = "{}_{}".format(args.vectors.split('.')[-2], args.type)
+	print("Using filename {}".format(filename))
 
 	"""
-	LOAD DATA
+	# LOAD DATA
 	"""
 	print("Loading data...")
 
@@ -156,7 +159,10 @@ if __name__ == "__main__":
 	if 'targetsC' in vectors.columns:
 		targetsC = vectors.pop('targetsC')
 		targetsZ = vectors.pop('targetsZ')
-	vectors.drop(['targets2B', 'Targets2Y', 'Targets2C', 'Targets2Z'], axis=0, inplace=True)
+	if 'targets2B' in vectors.columns:
+		vectors.drop(['targets2B', 'Targets2Y'], axis=0, inplace=True)
+	if 'Targets2C' in vectors.columns:
+		vectors.drop(['Targets2C', 'Targets2Z'], axis=0, inplace=True)
 
 	# Split data into test and train set
 	psmids = vectors['psmid']
@@ -214,7 +220,7 @@ if __name__ == "__main__":
 		eval_vectors.columns = ['Feature' + str(i) for i in range(len(eval_vectors.columns))]
 
 	"""
-	CREATE XGBOOST DATASTRUCTURE
+	# CREATE XGBOOST DATASTRUCTURE
 	"""
 	print("Creating DMatrix...")
 	xtrain = xgb.DMatrix(train_vectors, label=train_targets)
@@ -228,7 +234,7 @@ if __name__ == "__main__":
 
 
 	"""
-	TRAIN XGBOOST
+	# TRAIN XGBOOST
 	"""
 	print("Training XGboost model...")
 
@@ -256,11 +262,11 @@ if __name__ == "__main__":
 	# bst = xgb.cv( plst, xtrain, 200, nfold=5, callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
 
 	# Save model
-	# bst.save_model(".xgboost".format(args.vectors))
+	bst.save_model("{}.xgboost".format(filename))
 
 	# Load previously saved model here, if necessary
 	# bst = xgb.Booster({'nthread':23}) #init model
-	# bst.load_model(args.vectors+'.xgboost') # load data
+	# bst.load_model(filename+'.xgboost') # load data
 
 	"""
 	OUTPUT MODEL TO C-CODE
@@ -275,10 +281,11 @@ if __name__ == "__main__":
 	importance = bst.get_fscore()
 	importance = sorted(importance.items(), key=operator.itemgetter(1))
 	ll = []
-	with open("{}_{}importance.txt".format(args.vectors, args.type), "w") as f:
+	with open("{}_importance.csv".format(filename), "w") as f:
+		f.write("Name,F-score\n")
 		for feat, n in importance[:]:
 			ll.append(feat)
-			f.write("{}\t{}\n".format(feat, str(n)))
+			f.write("{},{}\n".format(feat, str(n)))
 
 	#  Print feature importances
 	print_feature_importances = False
@@ -294,8 +301,8 @@ if __name__ == "__main__":
 	tmp['target'] = list(test_targets.values)
 	tmp['predictions'] = predictions
 	tmp['psmid'] = list(test_psmids.values)
-	tmp.to_csv("{}_{}predictions.csv".format(args.vectors, args.type), index=False)
-	# tmp.to_pickle('predictions.pkl')
+	tmp.to_csv("{}_predictions.csv".format(filename), index=False)
+	# tmp.to_pickle("{}_predictions.pkl".format(filename))
 
 	"""
 	for ch in range(8, 20):
@@ -323,6 +330,7 @@ if __name__ == "__main__":
 		plt.title('Test set')
 		plt.xlabel('Target')
 		plt.ylabel('Prediction')
+		plt.savefig("{}_test.png".format(filename))
 		plt.show()
 
 	print("Ready!")
