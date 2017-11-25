@@ -7,6 +7,8 @@ import numpy as np
 import xgboost as xgb
 import operator
 from scipy.stats import pearsonr
+import matplotlib.pyplot as plt
+
 
 np.random.seed(1)
 
@@ -66,8 +68,6 @@ def convert_model_to_c(bst, args, numf):
 				tree[int(l[0])] = [int(tmp2[0]), int(math.ceil(float(tmp2[1]))), int(tmp3[0]), int(tmp4[0])]
 		forest.append(tree)
 
-		# tmp = args.vectors.replace('.', '_')
-		# tmp2 = tmp.split('/')
 		with open('{}.c'.format(filename), 'w') as fout:
 			fout.write("static float score_{}(unsigned int* v){{\n".format(args.type))
 			fout.write("float s = 0.;\n")
@@ -75,12 +75,14 @@ def convert_model_to_c(bst, args, numf):
 				fout.write(tree_to_code(forest[tt], 0, 1))
 			fout.write("\nreturn s;}\n")
 
+		"""
 		with open('{}.pyx'.format(filename), 'w') as fout:
 			fout.write("cdef extern from \"{}.c\":\n".format(filename))
 			fout.write("\tfloat score_{}(short unsigned short[{}] v)\n\n".format(args.type, numf))
 			fout.write("def myscore(sv):\n")
 			fout.write("\tcdef unsigned short[{}] v = sv\n".format(numf))
 			fout.write("\treturn score_{}(v)\n".format(args.type))
+		"""
 
 	os.remove("{}_dump.raw.txt".format(filename))
 
@@ -93,6 +95,7 @@ def tree_to_code(tree, pos, padding):
 		else:
 			return p + "s = s + {};\n".format(tree[pos][1])
 	return p + "if (v[{}]<{}){{\n{}}}\n{}else{{\n{}}}".format(tree[pos][0], tree[pos][1], tree_to_code(tree, tree[pos][2], padding + 1), p, tree_to_code(tree, tree[pos][3], padding + 1))
+
 
 def print_logo():
 	logo = """
@@ -232,13 +235,12 @@ if __name__ == "__main__":
 	else:
 		evallist = [(xtest, 'test')]
 
-
 	"""
 	# TRAIN XGBOOST
 	"""
 	print("Training XGboost model...")
 
-	#set XGBoost parameters; make sure to tune well!
+	# Set XGBoost parameters; make sure to tune well!
 	param = {"objective": "reg:linear",
 			"nthread": int(args.num_cpu),
 			"silent": 1,
@@ -322,15 +324,13 @@ if __name__ == "__main__":
 		print(n1 / n2)
 	"""
 
+	plt.figure()
+	plt.scatter(x=test_targets, y=predictions)
+	plt.title('Test set')
+	plt.xlabel('Target')
+	plt.ylabel('Prediction')
+	plt.savefig("{}_test.png".format(filename))
 	if args.make_plots:
-		import matplotlib.pyplot as plt
-
-		plt.figure()
-		plt.scatter(x=test_targets, y=predictions)
-		plt.title('Test set')
-		plt.xlabel('Target')
-		plt.ylabel('Prediction')
-		plt.savefig("{}_test.png".format(filename))
 		plt.show()
 
 	print("Ready!")
