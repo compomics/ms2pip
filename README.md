@@ -27,16 +27,16 @@ by running the `compile.sh` script that writes the python module
 `ms2pipC.py`:  
 
 ```
-usage: ms2pipC.py [-h] [-s FILE] [-w FILE.ext] [-c INT] <peptide file>
+usage: ms2pipC.py [-h] [-c FILE] [-s FILE] [-w FILE] [-m INT] <peptide file>
 
 positional arguments:
   <peptide file>  list of peptides
 
 optional arguments:
   -h, --help      show this help message and exit
-  -c FILE         config file
+  -c FILE         config file (by default config.file)
   -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE.pkl (optional)
+  -w FILE         write feature vectors to FILE.{pkl,h5} (optional)
   -m INT          number of cpu's to use
 ```
 
@@ -79,28 +79,28 @@ be used in the TITLE field of the predicted MS2 `.mgf` file. The
 `modifications` column is a string that lists the PTMs in the peptide. Each PTM is written as
 `A|B` where A is the location of the PTM in the peptide (the first amino acid has location 1,
 location 0 is used for n-term
-modificatios, while -1 is used for c-term modifications) and B is a string that represent the PTM
-as defined in the configfile (`-c` command line argument).
+modifications, while -1 is used for c-term modifications) and B is a string that represent the PTM
+as defined in the config file (`-c` command line argument).
 Multiple PTMs in the `modifications` column are concatenated with '|'.
-As an example, suppose the configfile contains the line
+As an example, suppose the config file contains the line
 
 ```
-ptm=Cam,57.02146,C
-nterm=Ace,42.010565
-cterm=Glyloss,-58.005479
+ptm=Cam,57.02146,o,C
+nterm=Ace,42.010565,o
+cterm=Glyloss,-58.005479,o
 ```
 
 then a modifications string could like `0|Ace|2|Cam|5|Cam|-1|Glyloss` which means that the second
-and fifth amin acid is modified with `Cam`,  
-that there is a n-terminal modification `Ace`,
-and that there is a c-terminal modification `Glyloss`,
+and fifth amino acid is modified with `Cam`,  
+that there is an N-terminal modification `Ace`,
+and that there is a C-terminal modification `Glyloss`.
 
 ### Writing feature vectors for model training
 
 To compile a feature vector dataset you need to supply the
 MS2 .mgf file (option `-s`) and the name of the file to write the feature
 vectors to (option `-w`) to `ms2pipC.py`.
-The `spec_id` column in the `<peptide file>` should match the TITLE field
+The `spec_id` column in the `<peptide file>` should match the `TITLE` field
 of the corresponding MS2 spectrum in the .mgf file and is used to find
 the targets for the feature vectors.
 
@@ -127,25 +127,26 @@ converts a spectral library in `.msp` format into a spectrum `.mgf` file,
 The script
 
 ```
-usage: train_xgboost_c.py [-h] [-c INT] <vectors.pkl or .h5> <type>
+usage: train_xgboost_c.py [-h] [-c INT] [-t FILE] [-p] <_vectors.pkl> <type>
 
 XGBoost training
 
 positional arguments:
-  <vectors.pkl or .h5>  feature vector file
-  <type>         model type
+  <_vectors.pkl>  feature vector file
+  <type>          model type: [B,Y,C,Z]
 
 optional arguments:
-  -h, --help     show this help message and exit
-  -c INT         number of cpu's to use
-  -p             output plots
+  -h, --help      show this help message and exit
+  -c INT          number of cpu's to use
+  -t FILE         additional evaluation file
+  -p              output plots
 ```
 
 reads the pickled feature vector file `<vectors.pkl or .h5>` and trains an
-XGBoost model. The `type` option should be "B" for b-ions and "Y" for
-y-ions.
+XGBoost model. The `type` option should be `B` for b-ions, `Y` for
+y-ions, `C` for c-ions and `Z` for z-ions.
 
-Hyperparameters should still be optimized.
+Hyper parameters should still be optimized.
 You will need to digg into the script for model selection.
 
 This script will write the XGBoost models as `.c` files that can be compiled
