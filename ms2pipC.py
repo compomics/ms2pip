@@ -441,12 +441,21 @@ def generate_modifications_file(params, masses, a_map):
 
     return (f.name, f2.name, PTMmap)
 
+
 def peakcount(x):
     c = 0.
     for i in x:
         if i > -9.95:
             c += 1.
     return c / len(x)
+
+
+def calc_correlations(df):
+    correlations = df.groupby(['spec_id', 'peplen', 'charge', 'ion'])[['target', 'prediction']].corr().iloc[::2]['prediction']
+    correlations.index = correlations.index.droplevel(4)
+    correlations = correlations.to_frame().reset_index()
+    correlations.columns = ['spec_id', 'peplen', 'charge', 'ion', 'pearsonr']
+    return correlations
 
 
 def print_logo():
@@ -495,6 +504,8 @@ if __name__ == "__main__":
         exit(1)
 
     num_cpu = int(args.num_cpu)
+
+    output_filename = '.'.join(args.pep_file.split('.')[:-1])
 
     params = None
     if args.c:
@@ -602,25 +613,16 @@ if __name__ == "__main__":
                 # all_results.to_hdf(args.vector_file, "table")
                 all_results.to_csv(args.vector_file)
         else:
-            sys.stdout.write("writing file {}...\n".format(
-                args.pep_file + "_pred_and_emp.csv"))
-            all_results.to_csv(
-                args.pep_file + "_pred_and_emp.csv", index=False)
+            sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
+            all_results.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
             sys.stdout.write('computing correlations...\n')
-            correlations = all_results.groupby('spec_id')[['target', 'prediction']].corr().ix[0::2, 'prediction']
-            correlations.to_csv(args.pep_file + ".pearsonrtmp", index=True)
-            fout = open(args.pep_file + ".pearsonr", "w")
-            with open(args.pep_file + ".pearsonrtmp") as f:
-                fout.write('spec_id,pearsonr\n')
-                for row in f:
-                    l = row.rstrip().split(',')
-                    fout.write("{}, {}\n".format(l[0], l[2]))
-                fout.close()
+            correlations = calc_correlations(all_results)
+            correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
             """
             corr_boxplot = correlations.plot('hist')
             corr_boxplot = corr_boxplot.get_figure()
             corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
-            corr_boxplot.savefig(args.pep_file + '_correlations.png')
+            corr_boxplot.savefig("{}_correlations.png".format(output_filename))
             """
 
         sys.stdout.write("done! \n")
@@ -659,15 +661,13 @@ if __name__ == "__main__":
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        sys.stdout.write("writing file {}...\n".format(
-            args.pep_file + "_predictions.csv"))
-        all_preds.to_csv(args.pep_file + "_predictions.csv", index=False)
+        sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
+        all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
 
         mgf = False  # set to True to write spectrum as mgf file
         if mgf:
-            sys.stdout.write("writing mgf file {}...\n".format(
-                args.pep_file + "_predictions.mgf"))
-            mgf_output = open(args.pep_file + "_predictions.mgf", "w+")
+            sys.stdout.write("writing mgf file {}_predictions.mgf...\n".format(output_filename))
+            mgf_output = open("{}_predictions.mgf".format(output_filename), "w+")
             for sp in all_preds.spec_id.unique():
                 tmp = all_preds[all_preds.spec_id == sp]
                 tmp = tmp.sort_values("mz")
