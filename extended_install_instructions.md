@@ -12,7 +12,7 @@ sudo pip3 install xgboost
 ## Install MS2PIPc
 Download the repository from GitHub, go to the newly created project folder and compile the C-code:
 ```
-git clone https://github.com/RalfG/ms2pip_c.git
+git clone https://github.com/sdgroeve/ms2pip_c.git
 cd ms2pip_c
 sh compile.sh
 ```
