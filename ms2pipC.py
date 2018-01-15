@@ -458,6 +458,21 @@ def calc_correlations(df):
     return correlations
 
 
+def write_mgf(all_preds, output_filename):
+    sys.stdout.write("writing mgf file {}_predictions.mgf...\n".format(output_filename))
+    with open("{}_predictions.mgf".format(output_filename), "w+") as mgf_output:
+        for sp in all_preds.spec_id.unique():
+            tmp = all_preds[all_preds.spec_id == sp]
+            tmp = tmp.sort_values("mz")
+            mgf_output.write("BEGIN IONS\n")
+            mgf_output.write("TITLE=" + str(sp) + "\n")
+            mgf_output.write("CHARGE=" + str(tmp.charge[0]) + "\n")
+            for i in range(len(tmp)):
+                mgf_output.write(
+                    str(tmp["mz"][i]) + " " + str(tmp["prediction"][i]) + "\n")
+            mgf_output.write("END IONS\n")
+
+
 def print_logo():
     logo = """
  _____ _____ ___ _____ _____ _____
@@ -470,7 +485,7 @@ def print_logo():
     print("by sven.degroeve@ugent.be\n")
 
 
-if __name__ == "__main__":
+def run():
     # a_map converts the peptide amino acids to integers, note how "L" is removed
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K", "M", "N", "P", "Q",
               "R", "S", "T", "V", "W", "Y"]
@@ -666,18 +681,10 @@ if __name__ == "__main__":
 
         mgf = False  # set to True to write spectrum as mgf file
         if mgf:
-            sys.stdout.write("writing mgf file {}_predictions.mgf...\n".format(output_filename))
-            mgf_output = open("{}_predictions.mgf".format(output_filename), "w+")
-            for sp in all_preds.spec_id.unique():
-                tmp = all_preds[all_preds.spec_id == sp]
-                tmp = tmp.sort_values("mz")
-                mgf_output.write("BEGIN IONS\n")
-                mgf_output.write("TITLE=" + str(sp) + "\n")
-                mgf_output.write("CHARGE=" + str(tmp.charge[0]) + "\n")
-                for i in range(len(tmp)):
-                    mgf_output.write(
-                        str(tmp["mz"][i]) + " " + str(tmp["prediction"][i]) + "\n")
-                mgf_output.write("END IONS\n")
-            mgf_output.close()
+            write_mgf(all_preds, output_filename)
 
         sys.stdout.write("done!\n")
+
+
+if __name__ == "__main__":
+    run()
