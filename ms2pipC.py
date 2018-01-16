@@ -1,6 +1,5 @@
+# Native library
 import sys
-import numpy as np
-import pandas as pd
 import pickle
 import argparse
 import multiprocessing
@@ -8,7 +7,11 @@ from random import shuffle
 import math
 import tempfile
 
-# Import features
+# Other
+import numpy as np
+import pandas as pd
+
+# Features
 import ms2pipfeatures_pyx_HCD
 # import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
