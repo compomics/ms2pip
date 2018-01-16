@@ -8,14 +8,38 @@ from random import shuffle
 import math
 import tempfile
 
+# Import features
+import ms2pipfeatures_pyx_HCD
+# import ms2pipfeatures_pyx_CID
+# import ms2pipfeatures_pyx_HCDiTRAQ4phospho
+# import ms2pipfeatures_pyx_HCDiTRAQ4
+# import ms2pipfeatures_pyx_ETD
 
-def process_peptides(worker_num, args, data, PTMmap, fragmethod):
+
+def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod):
     """
     Function for each worker to process a list of peptides. The models are
     chosen based on fragmethod, PTMmap, Ntermmap and Ctermmap determine the
     modifications applied to each peptide sequence. Returns the predicted
     spectra for all the peptides.
     """
+
+    # Rename ms2pipfeatures_pyx
+    if fragmethod == "CID":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
+    elif fragmethod == "HCD":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
+    elif fragmethod == "HCDiTRAQ4phospho":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
+    elif fragmethod == "HCDiTRAQ4":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
+    elif fragmethod == "HCD":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
+    elif fragmethod == "ETD":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
+
+    ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
+
     # transform pandas dataframe into dictionary for easy access
     specdict = data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
     peptides = specdict["peptide"]
@@ -67,7 +91,7 @@ def process_peptides(worker_num, args, data, PTMmap, fragmethod):
     return final_result
 
 
-def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
+def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror):
     """
     Function for each worker to process a list of spectra. Each peptide's
     sequence is extracted from the mgf file. Then models are chosen based on
@@ -76,6 +100,23 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
     the feature vectors are returned, or a DataFrame with the predicted and
     empirical intensities.
     """
+
+    # Rename ms2pipfeatures_pyx
+    if fragmethod == "CID":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
+    elif fragmethod == "HCD":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
+    elif fragmethod == "HCDiTRAQ4phospho":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
+    elif fragmethod == "HCDiTRAQ4":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
+    elif fragmethod == "HCD":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
+    elif fragmethod == "ETD":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
+
+    ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
+
     # transform pandas datastructure into dictionary for easy access
     specdict = data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
     peptides = specdict["peptide"]
@@ -97,7 +138,7 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
     charge = 0
     msms = []
     peaks = []
-    f = open(args.spec_file)
+    f = open(spec_file)
     skip = False
     vectors = []
     pcount = 0
@@ -170,7 +211,7 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
                 # get targets
                 targets = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 
-                if args.vector_file:
+                if vector_file:
                     tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
                     # tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
                     tmp["psmid"] = [title] * len(tmp)
@@ -213,7 +254,7 @@ def process_spectra(worker_num, args, data, PTMmap, fragmethod, fragerror):
                 if (pcount % 500) == 0:
                     sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
 
-    if args.vector_file:
+    if vector_file:
         df = pd.DataFrame()
         for v in vectors:
             if len(v > 0):
@@ -473,6 +514,29 @@ def write_mgf(all_preds, output_filename):
             mgf_output.write("END IONS\n")
 
 
+def argument_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("pep_file", metavar="<peptide file>",
+                        help="list of peptides")
+    parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.file",
+                        help="config file (by default config.file)")
+    parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
+                        help=".mgf MS2 spectrum file (optional)")
+    parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
+                        help="write feature vectors to FILE.{pkl,h5} (optional)")
+    parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
+                        default="23", help="number of cpu's to use")
+    args = parser.parse_args()
+
+    if not args.config_file:
+        print("Please provide a configfile (-c)!")
+        exit(1)
+
+    output_filename = '.'.join(args.pep_file.split('.')[:-1])
+
+    return(args.config_file, args.pep_file, args.spec_file, args.vector_file, int(args.num_cpu), output_filename)
+
+
 def print_logo():
     logo = """
  _____ _____ ___ _____ _____ _____
@@ -485,7 +549,10 @@ def print_logo():
     print("by sven.degroeve@ugent.be\n")
 
 
-def run():
+def run(config_file, pep_file, spec_file, vector_file, num_cpu, output_filename, datasetname):
+    # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
+
+    # Create a_map:
     # a_map converts the peptide amino acids to integers, note how "L" is removed
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K", "M", "N", "P", "Q",
               "R", "S", "T", "V", "W", "Y"]
@@ -500,39 +567,25 @@ def run():
 
     print_logo()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pep_file", metavar="<peptide file>",
-                        help="list of peptides")
-    parser.add_argument("-c", metavar="FILE", action="store", dest="c", default="config.file",
-                        help="config file (by default config.file)")
-    parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
-                        help=".mgf MS2 spectrum file (optional)")
-    parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
-                        help="write feature vectors to FILE.{pkl,h5} (optional)")
-    parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
-                        default="23", help="number of cpu's to use")
-
-    args = parser.parse_args()
-
-    if not args.c:
-        print("Please provide a configfile (-c)!")
-        exit(1)
-
-    num_cpu = int(args.num_cpu)
-
-    output_filename = '.'.join(args.pep_file.split('.')[:-1])
-
+    # Get parameters from config_file
     params = None
-    if args.c:
-        params = load_configfile(args.c)
-    elif not args.datasetname:
+    if config_file:
+        params = load_configfile(config_file)
+    elif not datasetname:
         print("No config file specified")
         exit(1)
 
     fragmethod = params["frag_method"]
     fragerror = params["frag_error"]
 
-    # create amino acid masses file
+    # Check if given fragmethod exists:
+    if fragmethod in ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD"]:
+        print("Using {} models.\n".format(fragmethod))
+    else:
+        print("Unknown fragmentation method: {}".format(fragmethod))
+        exit(1)
+
+    # Create amino acid masses file
     # to be compatible with Omega
     # that might have fixed modifications
     f = tempfile.NamedTemporaryFile(delete=False)
@@ -546,30 +599,9 @@ def run():
     # This allows me to use the same C init() function in bot ms2ip and Omega
     (modfile, modfile2, PTMmap) = generate_modifications_file(params, masses, a_map)
 
-    if fragmethod == "CID":
-        import ms2pipfeatures_pyx_CID as ms2pipfeatures_pyx
-        print("using CID models.\n")
-    elif fragmethod == "HCD":
-        import ms2pipfeatures_pyx_HCD as ms2pipfeatures_pyx
-        print("using HCD models.\n")
-    elif fragmethod == "HCDiTRAQ4phospho":
-        import ms2pipfeatures_pyx_HCDiTRAQ4phospho as ms2pipfeatures_pyx
-        print("using HCD iTRAQ phospho models.\n")
-    elif fragmethod == "HCDiTRAQ4":
-        import ms2pipfeatures_pyx_HCDiTRAQ4 as ms2pipfeatures_pyx
-        print("using HCD iTRAQ pmodels.\n")
-    elif fragmethod == "ETD":
-        import ms2pipfeatures_pyx_ETD as ms2pipfeatures_pyx
-        print("using ETD models.\n")
-    else:
-        print("Unknown fragmentation method in configfile: {}".format(fragmethod))
-        exit(1)
-
-    ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
-
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
-    data = pd.read_csv(args.pep_file,
+    data = pd.read_csv(pep_file,
                        sep=" ",
                        index_col=False,
                        dtype={"spec_id": str, "modifications": str})
@@ -580,14 +612,14 @@ def run():
     sys.stdout.write("starting workers...\n")
     myPool = multiprocessing.Pool(num_cpu)
 
-    if args.spec_file:
+    if spec_file:
         """
         When an mgf file is provided, MS2PIP either saves the feature vectors to
         train models with or writes a file with the predicted spectra next to
         the empirical one.
         """
         sys.stdout.write("scanning spectrum file... \n")
-        titles = scan_spectrum_file(args.spec_file)
+        titles = scan_spectrum_file(spec_file)
         split_titles = prepare_titles(titles, num_cpu)
         results = []
 
@@ -596,15 +628,17 @@ def run():
             """
             process_spectra(
                 i,
-                args,
+                spec_file,
+                vector_file,
                 data[data["spec_id"].isin(tmp)],
-                PTMmap, fragmethod, fragerror)
+                a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror)
             """
             results.append(myPool.apply_async(process_spectra, args=(
                 i,
-                args,
+                spec_file,
+                vector_file,
                 data[data["spec_id"].isin(tmp)],
-                PTMmap, fragmethod, fragerror)))
+                a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror)))
         myPool.close()
         myPool.join()
 
@@ -614,19 +648,19 @@ def run():
             all_results.append(r.get())
         all_results = pd.concat(all_results)
         # """
-        if args.vector_file:
+        if vector_file:
             sys.stdout.write(
-                "writing vector file {}... \n".format(args.vector_file))
+                "writing vector file {}... \n".format(vector_file))
             # write result. write format depends on extension:
-            ext = args.vector_file.split(".")[-1]
+            ext = vector_file.split(".")[-1]
             if ext == "pkl":
-                all_results.to_pickle(args.vector_file + ".pkl")
+                all_results.to_pickle(vector_file + ".pkl")
             elif ext == "h5":
-                all_results.to_hdf(args.vector_file, "table")
+                all_results.to_hdf(vector_file, "table")
             # "table" is a tag used to read back the .h5
             else:  # if none of the two, default to .h5
-                # all_results.to_hdf(args.vector_file, "table")
-                all_results.to_csv(args.vector_file)
+                # all_results.to_hdf(vector_file, "table")
+                all_results.to_csv(vector_file)
         else:
             sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
             all_results.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
@@ -636,7 +670,7 @@ def run():
             """
             corr_boxplot = correlations.plot('hist')
             corr_boxplot = corr_boxplot.get_figure()
-            corr_boxplot.suptitle('Pearson corr for ' + args.spec_file + ' and predictions')
+            corr_boxplot.suptitle('Pearson corr for ' + spec_file + ' and predictions')
             corr_boxplot.savefig("{}_correlations.png".format(output_filename))
             """
 
@@ -657,15 +691,13 @@ def run():
             tmp = split_titles[i]
             results.append(myPool.apply_async(process_peptides, args=(
                 i,
-                args,
                 data[data.spec_id.isin(tmp)],
-                PTMmap, fragmethod)))
+                a_map, afile, modfile, modfile2, PTMmap, fragmethod)))
             """
             process_peptides(
                 i,
-                args,
                 data[data.spec_id.isin(tmp)],
-                PTMmap, fragmethod)
+                a_map, afile, modfile, modfile2, PTMmap, fragmethod)
             """
         myPool.close()
         myPool.join()
@@ -687,4 +719,5 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    config_file, pep_file, spec_file, vector_file, num_cpu, output_filename = argument_parser()
+    run(config_file, pep_file, spec_file, vector_file, num_cpu, output_filename, None)
