@@ -725,4 +725,4 @@ def run(pep_file, config_file=None, spec_file=None, vector_file=None, num_cpu=23
 
 if __name__ == "__main__":
     pep_file, config_file, spec_file, vector_file, num_cpu, output_filename = argument_parser()
-    run(pep_file=pep_file, config_file=config_file, spec_file=spec_file, vector_file=vector_file, num_cpu=num_cpu, output_filename=output_filename)
+    run(pep_file, config_file=config_file, spec_file=spec_file, vector_file=vector_file, num_cpu=num_cpu, output_filename=output_filename)
