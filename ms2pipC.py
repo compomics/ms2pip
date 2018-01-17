@@ -535,9 +535,7 @@ def argument_parser():
         print("Please provide a configfile (-c)!")
         exit(1)
 
-    output_filename = '.'.join(args.pep_file.split('.')[:-1])
-
-    return(args.config_file, args.pep_file, args.spec_file, args.vector_file, int(args.num_cpu), output_filename)
+    return(args.pep_file, args.config_file, args.spec_file, args.vector_file, int(args.num_cpu), output_filename)
 
 
 def print_logo():
@@ -552,7 +550,7 @@ def print_logo():
     print("by sven.degroeve@ugent.be\n")
 
 
-def run(config_file, pep_file, spec_file, vector_file, num_cpu, output_filename, datasetname):
+def run(pep_file, config_file=None, spec_file=None, vector_file=None, num_cpu=23, output_filename=None, datasetname=None, fragmethod=None):
     # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
     # Create a_map:
@@ -572,14 +570,18 @@ def run(config_file, pep_file, spec_file, vector_file, num_cpu, output_filename,
 
     # Get parameters from config_file
     params = None
-    if config_file:
+    if config_file is None:
         params = load_configfile(config_file)
     elif not datasetname:
         print("No config file specified")
         exit(1)
 
-    fragmethod = params["frag_method"]
+    if fragmethod is None:
+        fragmethod = params["frag_method"]
     fragerror = params["frag_error"]
+
+    if output_filename is None:
+        output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
     if fragmethod in ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD"]:
@@ -722,5 +724,5 @@ def run(config_file, pep_file, spec_file, vector_file, num_cpu, output_filename,
 
 
 if __name__ == "__main__":
-    config_file, pep_file, spec_file, vector_file, num_cpu, output_filename = argument_parser()
-    run(config_file, pep_file, spec_file, vector_file, num_cpu, output_filename, None)
+    pep_file, config_file, spec_file, vector_file, num_cpu, output_filename = argument_parser()
+    run(pep_file=pep_file, config_file=config_file, spec_file=spec_file, vector_file=vector_file, num_cpu=num_cpu, output_filename=output_filename)
