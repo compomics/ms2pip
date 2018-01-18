@@ -550,7 +550,7 @@ def print_logo():
     print("by sven.degroeve@ugent.be\n")
 
 
-def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None, output_filename=None, datasetname=None):
+def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None, output_filename=None, datasetname=None, return_results=False):
     # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
     # Create a_map:
@@ -580,7 +580,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     fragmethod = params["frag_method"]
     fragerror = params["frag_error"]
 
-    if output_filename is None:
+    if output_filename is None and not return_results:
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
@@ -713,14 +713,16 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
-        all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
-
         mgf = False  # set to True to write spectrum as mgf file
         if mgf:
             write_mgf(all_preds, output_filename)
 
-        sys.stdout.write("done!\n")
+        if not return_results:
+            sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
+            all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
+            sys.stdout.write("done!\n")
+        else:
+            return(all_preds)
 
 
 if __name__ == "__main__":
