@@ -535,7 +535,7 @@ def argument_parser():
         print("Please provide a configfile (-c)!")
         exit(1)
 
-    return(args.pep_file, args.config_file, args.spec_file, args.vector_file, int(args.num_cpu), output_filename)
+    return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu))
 
 
 def print_logo():
@@ -550,7 +550,7 @@ def print_logo():
     print("by sven.degroeve@ugent.be\n")
 
 
-def run(pep_file, config_file=None, spec_file=None, vector_file=None, num_cpu=23, output_filename=None, datasetname=None, fragmethod=None):
+def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None, output_filename=None, datasetname=None):
     # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
     # Create a_map:
@@ -568,16 +568,16 @@ def run(pep_file, config_file=None, spec_file=None, vector_file=None, num_cpu=23
 
     print_logo()
 
-    # Get parameters from config_file
-    params = None
-    if config_file is None:
-        params = load_configfile(config_file)
-    elif not datasetname:
-        print("No config file specified")
-        exit(1)
+    # If not specified, get parameters from config_file
+    if params is None:
+        if config_file is None:
+            if datasetname is None:
+                print("No config file specified")
+                exit(1)
+        else:
+            params = load_configfile(config_file)
 
-    if fragmethod is None:
-        fragmethod = params["frag_method"]
+    fragmethod = params["frag_method"]
     fragerror = params["frag_error"]
 
     if output_filename is None:
@@ -724,5 +724,6 @@ def run(pep_file, config_file=None, spec_file=None, vector_file=None, num_cpu=23
 
 
 if __name__ == "__main__":
-    pep_file, config_file, spec_file, vector_file, num_cpu, output_filename = argument_parser()
-    run(pep_file, config_file=config_file, spec_file=spec_file, vector_file=vector_file, num_cpu=num_cpu, output_filename=output_filename)
+    pep_file, spec_file, vector_file, config_file, num_cpu = argument_parser()
+    params = load_configfile(config_file)
+    run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu)
