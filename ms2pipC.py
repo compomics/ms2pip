@@ -6,6 +6,7 @@ import multiprocessing
 from random import shuffle
 import math
 import tempfile
+from io import StringIO
 
 # Other
 import numpy as np
@@ -502,9 +503,8 @@ def calc_correlations(df):
     return correlations
 
 
-def write_mgf(all_preds, output_filename):
-    sys.stdout.write("writing mgf file {}_predictions.mgf...\n".format(output_filename))
-    with open("{}_predictions.mgf".format(output_filename), "w+") as mgf_output:
+def write_mgf(all_preds, output_filename="MS2PIP", return_stringbuffer=False):
+    def write(all_preds, mgf_output):
         for sp in all_preds.spec_id.unique():
             tmp = all_preds[all_preds.spec_id == sp]
             tmp = tmp.sort_values("mz")
@@ -514,7 +514,16 @@ def write_mgf(all_preds, output_filename):
             for i in range(len(tmp)):
                 mgf_output.write(
                     str(tmp["mz"][i]) + " " + str(tmp["prediction"][i]) + "\n")
-            mgf_output.write("END IONS\n")
+            mgf_output.write("END IONS\n\n")
+
+    if return_stringbuffer:
+        mgf_output = StringIO()
+        write(all_preds, mgf_output)
+        return(mgf_output)
+    else:
+        sys.stdout.write("writing mgf file {}_predictions.mgf...\n".format(output_filename))
+        with open("{}_predictions.mgf".format(output_filename), "w+") as mgf_output:
+            write(all_preds, mgf_output)
 
 
 def argument_parser():
@@ -715,7 +724,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
         mgf = False  # set to True to write spectrum as mgf file
         if mgf:
-            write_mgf(all_preds, output_filename)
+            write_mgf(all_preds, output_filename=output_filename)
 
         if not return_results:
             sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
