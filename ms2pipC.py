@@ -569,7 +569,8 @@ def print_logo():
     print("by sven.degroeve@ugent.be\n")
 
 
-def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None, output_filename=None, datasetname=None, return_results=False):
+def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None,
+        output_filename=None, datasetname=None, return_results=False, limit=None):
     # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
     # Create a_map:
@@ -628,7 +629,8 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     data = pd.read_csv(pep_file,
                        sep=" ",
                        index_col=False,
-                       dtype={"spec_id": str, "modifications": str})
+                       dtype={"spec_id": str, "modifications": str},
+                       nrows=limit)
 
     # for some reason the missing values are converted to float otherwise
     data = data.fillna("-")
