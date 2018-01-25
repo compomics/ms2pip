@@ -63,6 +63,10 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
 
         modpeptide = apply_mods(peptide, mods, PTMmap)
+        if type(modpeptide) == str:
+            if modpeptide == "Unknown modification":
+                continue
+
         ch = charges[pepid]
 
         # get ion mzs
@@ -192,6 +196,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
 
                 modpeptide = apply_mods(peptide, mods, PTMmap)
+                if type(modpeptide) == str:
+                    if modpeptide == "Unknown modification":
+                        continue
 
                 if 'iTRAQ' in fragmethod:
                     # remove reporter ions
@@ -401,6 +408,7 @@ def apply_mods(peptide, mods, PTMmap):
                 modpeptide[int(l[i])] = PTMmap[tl]
             else:
                 sys.stderr.write("Unknown modification: {}\n".format(tl))
+                return("Unknown modification")
 
     return modpeptide
 
