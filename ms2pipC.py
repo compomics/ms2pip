@@ -511,17 +511,19 @@ def calc_correlations(df):
     return correlations
 
 
-def write_mgf(all_preds, output_filename="MS2PIP", return_stringbuffer=False):
+def write_mgf(all_preds, output_filename="MS2PIP", unlog=False, return_stringbuffer=False):
+    if unlog:
+        all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
+
     def write(all_preds, mgf_output):
         for sp in all_preds.spec_id.unique():
             tmp = all_preds[all_preds.spec_id == sp]
             tmp = tmp.sort_values("mz")
             mgf_output.write("BEGIN IONS\n")
-            mgf_output.write("TITLE=" + str(sp) + "\n")
-            mgf_output.write("CHARGE=" + str(tmp.charge[0]) + "\n")
+            mgf_output.write("TITLE={}\n".format(sp))
+            mgf_output.write("CHARGE={}\n".format(tmp.charge[0]))
             for i in range(len(tmp)):
-                mgf_output.write(
-                    str(tmp["mz"][i]) + " " + str(tmp["prediction"][i]) + "\n")
+                mgf_output.write("{} {:.22f}\n".format(tmp["mz"][i], tmp["prediction"][i]))
             mgf_output.write("END IONS\n\n")
 
     if return_stringbuffer:
@@ -732,7 +734,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
         mgf = False  # set to True to write spectrum as mgf file
         if mgf:
-            write_mgf(all_preds, output_filename=output_filename)
+            write_mgf(all_preds, output_filename=output_filename, unlog=False)
 
         if not return_results:
             sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
