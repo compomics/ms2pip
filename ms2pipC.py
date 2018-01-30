@@ -265,6 +265,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 if (pcount % 500) == 0:
                     sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
 
+    f.close()
+
     if vector_file:
         df = pd.DataFrame()
         for v in vectors:
@@ -511,14 +513,17 @@ def calc_correlations(df):
     return correlations
 
 
-def write_mgf(all_preds, output_filename="MS2PIP", unlog=False, return_stringbuffer=False):
+def write_mgf(all_preds, output_filename="MS2PIP", unlog=True, return_stringbuffer=False):
     if unlog:
         all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
+        all_preds.reset_index(inplace=True)
+        all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: x / x.sum())
 
     def write(all_preds, mgf_output):
         for sp in all_preds.spec_id.unique():
             tmp = all_preds[all_preds.spec_id == sp]
             tmp = tmp.sort_values("mz")
+            tmp.reset_index(inplace=True)
             mgf_output.write("BEGIN IONS\n")
             mgf_output.write("TITLE={}\n".format(sp))
             mgf_output.write("CHARGE={}\n".format(tmp.charge[0]))
@@ -734,9 +739,9 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        mgf = False  # set to True to write spectrum as mgf file
+        mgf = True  # set to True to write spectrum as mgf file
         if mgf:
-            write_mgf(all_preds, output_filename=output_filename, unlog=False)
+            write_mgf(all_preds, output_filename=output_filename)
 
         if not return_results:
             sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
