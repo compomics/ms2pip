@@ -739,7 +739,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        mgf = True  # set to True to write spectrum as mgf file
+        mgf = False  # set to True to write spectrum as mgf file
         if mgf:
             write_mgf(all_preds, output_filename=output_filename)
 
