@@ -10,7 +10,7 @@ from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 
 
-def evalerror(preds, dtrain):
+def evalerror_pearson(preds, dtrain):
     labels = dtrain.get_label()
     return 'pearsonr', pearsonr(preds, labels)[0]
 
@@ -213,10 +213,8 @@ if __name__ == "__main__":
              }
 
     # Train XGBoost
-    bst = xgb.train(plst, xtrain, 300, evallist, early_stopping_rounds=10, feval=evalerror, maximize=True)
-    # bst = xgb.train( plst, xtrain, 500, evallist, early_stopping_rounds=10)
-    # bst = xgb.train( plst, xtrain, 30, evallist)
-    # bst = xgb.cv( plst, xtrain, 200, nfold=5, callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
+    bst = xgb.train(params, xtrain, 300, evallist, early_stopping_rounds=10, feval=evalerror_pearson, maximize=True)
+    # bst = xgb.cv(params, xtrain, 200, nfold=5, callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
 
     # Save model
     bst.save_model("{}.xgboost".format(filename))
@@ -225,15 +223,11 @@ if __name__ == "__main__":
     # bst = xgb.Booster({'nthread':23}) #init model
     # bst.load_model(filename+'.xgboost') # load data
 
-    """
-    OUTPUT MODEL TO C-CODE
-    """
+    # Output model to C code
     print("Writing model to C code...")
     convert_model_to_c(bst, args, numf)
 
-    """
-    MODEL ANALYSIS
-    """
+    # Analyze newly made dump_model
     # Get feature importances
     importance = bst.get_fscore()
     importance = sorted(importance.items(), key=operator.itemgetter(1))
@@ -244,7 +238,7 @@ if __name__ == "__main__":
             ll.append(feat)
             f.write("{},{}\n".format(feat, str(n)))
 
-    #  Print feature importances
+    # Print feature importances
     print_feature_importances = False
     if print_feature_importances:
         print('[')
