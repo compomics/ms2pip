@@ -1,0 +1,24 @@
+BEGIN IONS
+TITLE=peptide1
+CHARGE=2
+36.52588 103 # b1++
+72.04444 101 # b1
+74.53390 104 # y1++
+88.03047 203 # b2++
+132.04737 204 # y2++
+145.54394 303 # b3++
+148.06048 102 # y1
+175.05362 201 # b2
+183.55196 304 # y3++
+263.08742 202 # y2
+290.08056 301 # b3
+366.09661 302 # y3
+END IONS
+
+# Peptide sequence ACDE
+# Looked up on http://db.systemsbiology.net:8080/proteomicsToolkit/FragIonServlet.html
+# Result in vector file should look like this:
+# ions   b   y  b++ y++
+# 1,3   101 302 103 304
+# 2,2   201 202 203 204
+# 3,1   301 102 303 104
