@@ -278,7 +278,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
                 pcount += 1
                 if (pcount % 500) == 0:
-                    print("w{}({})".format(worker_num, pcount))
+                    print("w{}({})".format(worker_num, pcount), end=', ')
 
     f.close()
 
