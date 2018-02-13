@@ -4,6 +4,8 @@
 
 Requirements:
 
+- Python >= 3.4
+
 - Python numpy
 - Python pandas
 - Python multiprocessing
