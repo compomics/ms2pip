@@ -222,6 +222,7 @@ if __name__ == "__main__":
     print("Creating train and test DMatrix...")
     xtrain = xgb.DMatrix(train_vectors, label=train_targets)
     xtest = xgb.DMatrix(test_vectors, label=test_targets)
+    evallist = [(xtest, 'test')]
 
     # If needed, repeat for evaluation vectors, and create evallist
     if args.vectorseval:
@@ -231,9 +232,6 @@ if __name__ == "__main__":
         print("Creating eval DMatrix...")
         xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
         del eval_vectors
-        evallist = [(xeval, 'eval'), (xtest, 'test')]
-    else:
-        evallist = [(xtest, 'test')]
 
     # Remove items to save memory
     del vectors, targets, psmids, train_vectors, train_targets, train_psmids, test_vectors
@@ -256,9 +254,10 @@ if __name__ == "__main__":
     if args.gridsearch:
         print("Performing GridSearchCV...")
         params_grid = {
-            'max_depth': [8, 10, 12],
-            'min_child_weight': [100, 250, 400, 550],
-            'gamma': [0, 1]
+            'max_depth': [7, 8, 9],
+            'min_child_weight': [300, 350, 400],
+            'gamma': [0, 1],
+            'max_delta_step': [0]
         }
 
         gs = gridsearch(xtrain, params, params_grid)
@@ -268,7 +267,7 @@ if __name__ == "__main__":
         print("Using best parameters: {}".format(best_params))
 
     print("Training XGBoost model...")
-    bst = xgb.train(params, xtrain, 300, evallist, early_stopping_rounds=10, feval=evalerror_pearson, maximize=True)
+    bst = xgb.train(params, xtrain, 200, evallist, early_stopping_rounds=10, maximize=False)
 
     bst.save_model("{}.xgboost".format(filename))
 
@@ -279,7 +278,7 @@ if __name__ == "__main__":
     print("Writing model to C code...")
     convert_model_to_c(bst, args, numf)
 
-    # Analyze newly made model
+    print("Analyzing newly made model...")
     # Get feature importances
     importance = bst.get_fscore()
     importance = sorted(importance.items(), key=itemgetter(1))
