@@ -161,7 +161,6 @@ if __name__ == "__main__":
     vectors, targets, psmids = load_data(args.vectors, args.type)
 
     print("Splitting up into train and test set...")
-    # Split data into test and train set
     upeps = psmids.unique()
     np.random.shuffle(upeps)
     test_psms = upeps[:int(len(upeps) * 0.1)]
@@ -174,7 +173,6 @@ if __name__ == "__main__":
     test_targets = targets[psmids.isin(test_psms)]
     test_psmids = psmids[psmids.isin(test_psms)]
 
-    # Get number of features
     numf = len(train_vectors.columns.values)
 
     # Rename features to understand decision tree dump
@@ -189,13 +187,17 @@ if __name__ == "__main__":
     # If needed, repeat for evaluation vectors, and create evallist
     if args.vectorseval:
         print("Loading eval data...")
-        eval_vectors, eval_targets, eval_psmids = load_data(args.vectorseval, args.type)
+        eval_vectors, eval_targets, _ = load_data(args.vectorseval, args.type)
         eval_vectors.columns = ['Feature' + str(i) for i in range(len(eval_vectors.columns))]
         print("Creating eval DMatrix...")
         xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
         evallist = [(xeval, 'eval'), (xtest, 'test')]
+        del eval_vectors, eval_targets
     else:
         evallist = [(xtest, 'test')]
+
+    # Remove items to save memory
+    del vectors, targets, psmids, train_vectors, train_targets, train_psmids, test_vectors
 
     print("Training XGboost model...")
     # Set XGBoost parameters; make sure to tune well!
@@ -231,18 +233,18 @@ if __name__ == "__main__":
     # Get feature importances
     importance = bst.get_fscore()
     importance = sorted(importance.items(), key=operator.itemgetter(1))
-    ll = []
+    importance_list = []
     with open("{}_importance.csv".format(filename), "w") as f:
         f.write("Name,F-score\n")
         for feat, n in importance[:]:
-            ll.append(feat)
+            importance_list.append(feat)
             f.write("{},{}\n".format(feat, str(n)))
 
     # Print feature importances
     print_feature_importances = False
     if print_feature_importances:
         print('[')
-        for l in ll:
+        for l in importance_list:
             sys.stderr.write("'{}',".format(l))
         print(']')
 
