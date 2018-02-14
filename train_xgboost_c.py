@@ -1,11 +1,11 @@
 import os
-import sys
 import argparse
-import math
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-import operator
+from math import ceil
+from operator import itemgetter
+from itertools import product
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 
@@ -62,7 +62,7 @@ def convert_model_to_c(bst, args, numf):
                     tmp2[1] = 1
                 tmp3 = tmp[1].split(",no=")
                 tmp4 = tmp3[1].split(',')
-                tree[int(l[0])] = [int(tmp2[0]), int(math.ceil(float(tmp2[1]))), int(tmp3[0]), int(tmp4[0])]
+                tree[int(l[0])] = [int(tmp2[0]), int(ceil(float(tmp2[1]))), int(tmp3[0]), int(tmp4[0])]
         forest.append(tree)
 
         with open('{}.c'.format(filename), 'w') as fout:
@@ -94,26 +94,15 @@ def tree_to_code(tree, pos, padding):
     return p + "if (v[{}]<{}){{\n{}}}\n{}else{{\n{}}}".format(tree[pos][0], tree[pos][1], tree_to_code(tree, tree[pos][2], padding + 1), p, tree_to_code(tree, tree[pos][3], padding + 1))
 
 
-def print_logo():
-    logo = """
-     _____ _____ _____ _____ _____
-    |_   _| __  |  _  |     |   | |
-      | | |    -|     |-   -| | | |
-      |_| |__|__|__|__|_____|_|___|
-
-    """
-    print(logo)
-
-
 def load_data(vector_filename, ion_type):
     # Read file
     if vector_filename.split('.')[-1] == 'pkl':
         vectors = pd.read_pickle(vector_filename)
     elif vector_filename.split('.')[-1] == 'h5':
-        vectors = pd.read_hdf(vector_filename, 'table')
+        vectors = pd.read_hdf(vector_filename, key='table', stop=1000)
     else:
         print("Unsuported feature vector format")
-        sys.exit()
+        exit(1)
     print("{} contains {} feature vectors".format(args.vectors, len(vectors)))
 
     # Extract targets for given ion type
@@ -121,7 +110,7 @@ def load_data(vector_filename, ion_type):
     if not 'targets{}'.format(ion_type) in target_names:
         print("Targets for {} could not be found in vector file.".format(ion_type))
         print("Vector file only contains these targets: {}".format(target_names))
-        sys.exit()
+        exit(1)
     targets = vectors.pop('targets{}'.format(ion_type))
     target_names.remove('targets{}'.format(ion_type))
     vectors.drop(labels=target_names, axis=1, inplace=True)
@@ -135,6 +124,55 @@ def load_data(vector_filename, ion_type):
     return(vectors, targets, psmids)
 
 
+def get_params_combinations(params):
+    keys, values = zip(*params.items())
+    combinations = [dict(zip(keys, v)) for v in product(*values)]
+    return(combinations)
+
+
+def get_best_params(df, params_grid):
+    params = {}
+    best = df[df['test-rmse-mean'] == df['test-rmse-mean'].min()]
+    for p in params_grid.keys():
+        params[p] = best[p].iloc[0]
+    # num_boost_round = best['boosting-round'].iloc[0]
+    return(params)
+
+
+def gridsearch(xtrain, params, params_grid):
+    cols = ['boosting-round', 'test-rmse-mean', 'test-rmse-std', 'train-rmse-mean', 'train-rmse-std']
+    cols.extend(sorted(params_grid.keys()))
+    result = pd.DataFrame(columns=cols)
+
+    count = 1
+    combinations = get_params_combinations(params_grid)
+
+    for param_overrides in combinations:
+        print("Working on combination {}/{}".format(count, len(combinations)))
+        count += 1
+        params.update(param_overrides)
+        tmp = xgb.cv(params, xtrain, nfold=5, num_boost_round=200, early_stopping_rounds=10, verbose_eval=10)
+        tmp['boosting-round'] = tmp.index
+        for param in param_overrides.keys():
+            tmp[param] = param_overrides[param]
+        result = result.append(tmp)
+
+    print("Grid search ready!\n")
+
+    return(result)
+
+
+def print_logo():
+    logo = """
+     _____ _____ _____ _____ _____
+    |_   _| __  |  _  |     |   | |
+      | | |    -|     |-   -| | | |
+      |_| |__|__|__|__|_____|_|___|
+
+    """
+    print(logo)
+
+
 if __name__ == "__main__":
     print_logo()
     print("Using XGBoost version {}".format(xgb.__version__))
@@ -144,12 +182,14 @@ if __name__ == "__main__":
                         help='feature vector file')
     parser.add_argument('type', metavar='<type>',
                         help='model type: [B,Y,C,Z]')
-    parser.add_argument('-c', metavar='INT', action="store", dest='num_cpu', default=23,
+    parser.add_argument('-c', metavar='INT', action="store", dest='num_cpu', default=24,
                         help='number of cpu\'s to use')
     parser.add_argument('-t', metavar='FILE', action="store", dest='vectorseval',
                         help='additional evaluation file')
     parser.add_argument("-p", action="store_true", dest='make_plots', default=False,
                         help="output plots")
+    parser.add_argument("-g", action="store_true", dest='gridsearch', default=False,
+                        help="perform gridsearch cv to select best parameters")
     args = parser.parse_args()
 
     np.random.seed(1)
@@ -179,7 +219,6 @@ if __name__ == "__main__":
     train_vectors.columns = ['Feature' + str(i) for i in range(len(train_vectors.columns))]
     test_vectors.columns = ['Feature' + str(i) for i in range(len(test_vectors.columns))]
 
-    # Create XGBoost data structure
     print("Creating train and test DMatrix...")
     xtrain = xgb.DMatrix(train_vectors, label=train_targets)
     xtest = xgb.DMatrix(test_vectors, label=test_targets)
@@ -187,52 +226,63 @@ if __name__ == "__main__":
     # If needed, repeat for evaluation vectors, and create evallist
     if args.vectorseval:
         print("Loading eval data...")
-        eval_vectors, eval_targets, _ = load_data(args.vectorseval, args.type)
+        eval_vectors, eval_targets, eval_psmids = load_data(args.vectorseval, args.type)
         eval_vectors.columns = ['Feature' + str(i) for i in range(len(eval_vectors.columns))]
         print("Creating eval DMatrix...")
         xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
+        del eval_vectors
         evallist = [(xeval, 'eval'), (xtest, 'test')]
-        del eval_vectors, eval_targets
     else:
         evallist = [(xtest, 'test')]
 
     # Remove items to save memory
     del vectors, targets, psmids, train_vectors, train_targets, train_psmids, test_vectors
 
-    print("Training XGboost model...")
-    # Set XGBoost parameters; make sure to tune well!
-    param = {"nthread": int(args.num_cpu),
-             "objective": "reg:linear",
-             "eval_metric": 'rmse',
-             "silent": 1,
-             "eta": 1,
-             "max_depth": 8,
-             "min_child_weight": 700,
-             "gamma": 1,
-             # "subsample": 1,
-             # "colsample_bytree": 1,
-             # "max_delta_step": 0,
-             }
+    # Set XGBoost default parameters
+    params = {
+        "nthread": int(args.num_cpu),
+        "objective": "reg:linear",
+        "eval_metric": 'rmse',
+        "silent": 1,
+        "eta": 1,
+        "max_depth": 8,
+        "min_child_weight": 700,
+        "gamma": 1,
+        # "subsample": 1,
+        # "colsample_bytree": 1,
+        # "max_delta_step": 0,
+    }
 
-    # Train XGBoost
+    if args.gridsearch:
+        print("Performing GridSearchCV...")
+        params_grid = {
+            'max_depth': [8, 10, 12],
+            'min_child_weight': [100, 250, 400, 550],
+            'gamma': [0, 1]
+        }
+
+        gs = gridsearch(xtrain, params, params_grid)
+        gs.to_csv('{}_GridSearchCV.csv'.format(filename))
+        best_params = get_best_params(gs, params_grid)
+        params.update(best_params)
+        print("Using best parameters: {}".format(best_params))
+
+    print("Training XGBoost model...")
     bst = xgb.train(params, xtrain, 300, evallist, early_stopping_rounds=10, feval=evalerror_pearson, maximize=True)
-    # bst = xgb.cv(params, xtrain, 200, nfold=5, callbacks=[xgb.callback.print_evaluation(show_stdv=False),xgb.callback.early_stop(3)])
 
-    # Save model
     bst.save_model("{}.xgboost".format(filename))
 
     # Load previously saved model here, if necessary
     # bst = xgb.Booster({'nthread':23}) #init model
     # bst.load_model(filename+'.xgboost') # load data
 
-    # Output model to C code
     print("Writing model to C code...")
     convert_model_to_c(bst, args, numf)
 
-    # Analyze newly made dump_model
+    # Analyze newly made model
     # Get feature importances
     importance = bst.get_fscore()
-    importance = sorted(importance.items(), key=operator.itemgetter(1))
+    importance = sorted(importance.items(), key=itemgetter(1))
     importance_list = []
     with open("{}_importance.csv".format(filename), "w") as f:
         f.write("Name,F-score\n")
@@ -245,15 +295,21 @@ if __name__ == "__main__":
     if print_feature_importances:
         print('[')
         for l in importance_list:
-            sys.stderr.write("'{}',".format(l))
+            print("'{}',".format(l), end='')
         print(']')
 
-    # Use new model to make predictions on test set and write to csv
-    predictions = bst.predict(xtest)
+    # Use new model to make predictions on eval/test set and write to csv
     tmp = pd.DataFrame()
-    tmp['target'] = list(test_targets.values)
-    tmp['predictions'] = predictions
-    tmp['psmid'] = list(test_psmids.values)
+    if args.vectorseval:
+        predictions = bst.predict(xeval)
+        tmp['target'] = list(eval_targets.values)
+        tmp['predictions'] = predictions
+        tmp['psmid'] = list(eval_psmids.values)
+    else:
+        predictions = bst.predict(xtest)
+        tmp['target'] = list(test_targets.values)
+        tmp['predictions'] = predictions
+        tmp['psmid'] = list(test_psmids.values)
     tmp.to_csv("{}_predictions.csv".format(filename), index=False)
     # tmp.to_pickle("{}_predictions.pkl".format(filename))
 
@@ -275,13 +331,13 @@ if __name__ == "__main__":
         print(n1 / n2)
     """
 
-    plt.figure()
-    plt.scatter(x=test_targets, y=predictions)
-    plt.title('Test set')
-    plt.xlabel('Target')
-    plt.ylabel('Prediction')
-    plt.savefig("{}_test.png".format(filename))
     if args.make_plots:
+        plt.figure()
+        plt.scatter(x=test_targets, y=predictions)
+        plt.title('Test set')
+        plt.xlabel('Target')
+        plt.ylabel('Prediction')
+        plt.savefig("{}_test.png".format(filename))
         plt.show()
 
     print("Ready!")
