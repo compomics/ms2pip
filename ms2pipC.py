@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 # Features
-# import ms2pipfeatures_pyx_HCD
+import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
 # import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
@@ -624,10 +624,12 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
-    if fragmethod in ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]:
+    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]
+    if fragmethod in known_fragmethods:
         print("Using {} models.\n".format(fragmethod))
     else:
         print("Unknown fragmentation method: {}".format(fragmethod))
+        print("Should be one of the following methods: {}".format(known_fragmethods))
         exit(1)
 
     # Create amino acid masses file

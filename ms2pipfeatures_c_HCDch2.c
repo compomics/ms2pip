@@ -4,8 +4,8 @@
 
 #include "models/vectors_train_h5B_c.c"
 #include "models/vectors_train_h5Y_c.c"
-#include "models/tmpB2.c"
-#include "models/tmpY2.c"
+#include "models/modelB2.c"
+#include "models/modelY2.c"
 
 float membuffer[10000];
 unsigned int v[30000];
