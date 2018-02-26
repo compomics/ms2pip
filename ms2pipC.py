@@ -14,6 +14,7 @@ import pandas as pd
 
 # Features
 import ms2pipfeatures_pyx_HCD
+import ms2pipfeatures_pyx_HCDch2
 # import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
 # import ms2pipfeatures_pyx_HCDiTRAQ4
@@ -37,8 +38,8 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
     elif fragmethod == "HCDiTRAQ4":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
-    elif fragmethod == "HCD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
+    elif fragmethod == "HCDch2":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
     elif fragmethod == "ETD":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
 
@@ -83,6 +84,11 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
             tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
             tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
             tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
+        elif fragmethod == 'HCDch2':
+            tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['b2'] * num_ions + ['y2'] * num_ions
+            tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
+            tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
+            tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
         else:
             tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions
             tmp["mz"] = mzs[0] + mzs[1]
@@ -95,7 +101,7 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         final_result = final_result.append(tmp)
         pcount += 1
         if (pcount % 500) == 0:
-            sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
+            print("w{}({})".format(worker_num, pcount), end=', ')
     return final_result
 
 
@@ -118,8 +124,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
     elif fragmethod == "HCDiTRAQ4":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
-    elif fragmethod == "HCD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
+    elif fragmethod == "HCDch2":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
     elif fragmethod == "ETD":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
 
@@ -231,6 +237,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     if fragmethod == 'ETD':
                         tmp["targetsC"] = targets[2]
                         tmp["targetsZ"] = targets[3][::-1]
+                    if fragmethod == 'HCDch2':
+                        tmp["targetsB2"] = targets[2]
+                        tmp["targetsY2"] = targets[3][::-1]
                     vectors.append(tmp)
                 else:
                     # predict the b- and y-ion intensities from the peptide
@@ -239,6 +248,12 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     num_ions = len(predictions[0])
                     if fragmethod == 'ETD':
                         tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['c'] * num_ions + ['z'] * num_ions
+                        tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
+                        tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
+                        tmp["target"] = targets[0] + targets[1] + targets[2] + targets[3]
+                        tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
+                    if fragmethod == 'HCDch2':
+                        tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['b2'] * num_ions + ['y2'] * num_ions
                         tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
                         tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
                         tmp["target"] = targets[0] + targets[1] + targets[2] + targets[3]
@@ -263,7 +278,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
                 pcount += 1
                 if (pcount % 500) == 0:
-                    sys.stderr.write("w" + str(worker_num) + "(" + str(pcount) + ") ")
+                    print("w{}({})".format(worker_num, pcount), end=', ')
 
     f.close()
 
@@ -609,10 +624,12 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
-    if fragmethod in ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD"]:
+    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]
+    if fragmethod in known_fragmethods:
         print("Using {} models.\n".format(fragmethod))
     else:
         print("Unknown fragmentation method: {}".format(fragmethod))
+        print("Should be one of the following methods: {}".format(known_fragmethods))
         exit(1)
 
     # Create amino acid masses file
