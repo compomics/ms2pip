@@ -48,7 +48,8 @@ The `-i` flag in combination with the `-p` flag makes MS2PIPc use the NIST iTRAQ
 
 Several MS2PIPc options need to be set in this config file.
 
-The models that should be used are set as `frag_method=X` where X is either `CID`,  `HCD`, `ETD`, `HCDiTRAQ4` or `HCDiTRAQ4phospho`.
+The models that should be used are set as `frag_method=X` where X is either `CID`,  `HCD`, `HCDch2`, `ETD`, `HCDiTRAQ4` or `HCDiTRAQ4phospho`. If the `frag_method` is set to `HCDch2`, MS2PIP will also predict intensities for charge 2+ fragment ions.
+
 The fragment ion error tolerance is set as `frag_error=X` where is X is the tolerance in Da.
 
 PTMs (see further) are set as `ptm=X,Y,o,Z` for each internal PTM where X is a string that represents
@@ -127,29 +128,26 @@ converts a spectral library in `.msp` format into a spectrum `.mgf` file,
 The script
 
 ```
-usage: train_xgboost_c.py [-h] [-c INT] [-t FILE] [-p] <_vectors.pkl> <type>
+usage: train_xgboost_c.py [-h] [-c INT] [-e FILE] [-p] [-g] <_vectors.pkl> <type>
 
 XGBoost training
 
 positional arguments:
   <_vectors.pkl>  feature vector file
-  <type>          model type: [B,Y,C,Z]
+  <type>          model type
 
 optional arguments:
   -h, --help      show this help message and exit
-  -c INT          number of cpu's to use
-  -t FILE         additional evaluation file
+  -c INT          number of CPUs to use
+  -e FILE         additional evaluation vector file
   -p              output plots
+  -g              perform Grid Search CV to select best parameters
 ```
 
-reads the pickled feature vector file `<vectors.pkl or .h5>` and trains an
-XGBoost model. The `type` option should be `B` for b-ions, `Y` for
-y-ions, `C` for c-ions and `Z` for z-ions.
+reads the pickled feature vector file `<vectors.pkl or .h5>` and trains an XGBoost model. The `type` option indicates the ion type for which a model should be trained. This has to match the name of the column in the vector file that contains the targets for the given ion type. For instance `B` will match the column `targetsB` and will lead to a model for b-ions.
 
-Hyper parameters should still be optimized.
-You will need to digg into the script for model selection.
+Hyper parameters can be optimized by performing a grid search, using the argument `g`. Be sure to define the appropriate search space. This is hard coded in the script.
 
-This script will write the XGBoost models as `.c` files that can be compiled
-and linked through Cython. Just put the models in the `/models` folder,
-change the `#include` directives in `ms2pipfeatures_c.c`, and recompile
-the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script.
+Optionally, an evaluation vector file can be given. In this case predictions will be made on these vectors using the final model. If no evaluation file was given, predictions will be made on the test set.
+
+The script will write the XGBoost models as `.c` files that can be compiled and linked through Cython. Just put the models in the `/models` folder, change the `#include` directives in `ms2pipfeatures_c.c`, and recompile the `ms2pipfeatures_pyx.so` model by running the `compile.sh` script.

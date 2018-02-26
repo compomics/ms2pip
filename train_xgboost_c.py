@@ -181,15 +181,15 @@ if __name__ == "__main__":
     parser.add_argument('vectors', metavar='<_vectors.pkl>',
                         help='feature vector file')
     parser.add_argument('type', metavar='<type>',
-                        help='model type: [B,Y,C,Z]')
+                        help='model type')
     parser.add_argument('-c', metavar='INT', action="store", dest='num_cpu', default=24,
-                        help='number of cpu\'s to use')
-    parser.add_argument('-t', metavar='FILE', action="store", dest='vectorseval',
+                        help='number of CPUs to use')
+    parser.add_argument('-e', metavar='FILE', action="store", dest='vectorseval',
                         help='additional evaluation file')
     parser.add_argument("-p", action="store_true", dest='make_plots', default=False,
                         help="output plots")
     parser.add_argument("-g", action="store_true", dest='gridsearch', default=False,
-                        help="perform gridsearch cv to select best parameters")
+                        help="perform Grid Search CV to select best parameters")
     args = parser.parse_args()
 
     np.random.seed(1)
