@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/ETD/TempBrokenModels_B.c"
-#include "models/ETD/TempBrokenModels_Y.c"
-#include "models/ETD/TempBrokenModels_C.c"
-#include "models/ETD/TempBrokenModels_Z.c"
+#include "models/ETD/SyntheticEThcD_SCO100_B.c"
+#include "models/ETD/SyntheticEThcD_SCO100_Y.c"
+#include "models/ETD/SyntheticEThcD_SCO100_C.c"
+#include "models/ETD/SyntheticEThcD_SCO100_Z.c"
 
 float membuffer[10000];
 unsigned int v[30000];
