@@ -15,7 +15,7 @@ import pandas as pd
 # Features
 import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
-# import ms2pipfeatures_pyx_CID
+import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
 # import ms2pipfeatures_pyx_HCDiTRAQ4
 # import ms2pipfeatures_pyx_ETD
