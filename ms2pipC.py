@@ -1,3 +1,4 @@
+#!/usr/bin/env python 
 # Native library
 import sys
 import pickle
