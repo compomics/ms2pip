@@ -15,10 +15,10 @@ import pandas as pd
 # Features
 import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
-# import ms2pipfeatures_pyx_CID
+import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
 # import ms2pipfeatures_pyx_HCDiTRAQ4
-# import ms2pipfeatures_pyx_ETD
+import ms2pipfeatures_pyx_ETD
 
 
 def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod):
@@ -30,6 +30,9 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
     """
 
     # Rename ms2pipfeatures_pyx
+    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
+    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
+    # MS2PIP Server (which calls the function Run), this can not be done globally.
     if fragmethod == "CID":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
     elif fragmethod == "HCD":
@@ -116,6 +119,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     """
 
     # Rename ms2pipfeatures_pyx
+    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
+    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
+    # MS2PIP Server (which calls the function Run), this can not be done globally.
     if fragmethod == "CID":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
     elif fragmethod == "HCD":
@@ -252,7 +258,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                         tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
                         tmp["target"] = targets[0] + targets[1] + targets[2] + targets[3]
                         tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
-                    if fragmethod == 'HCDch2':
+                    elif fragmethod == 'HCDch2':
                         tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['b2'] * num_ions + ['y2'] * num_ions
                         tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
                         tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
