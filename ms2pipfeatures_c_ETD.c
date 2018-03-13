@@ -101,26 +101,43 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	int i,j;
 	float mz;
 	j=0;
-	mz = modpeptide[0];
+
+	mz = 0;
+	if (modpeptide[0] != 0) {
+		mz = amino_masses[modpeptide[0]];
+	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+1.007236;  //b-ion
+		membuffer[j++] = mz + 1.007236;  //b-ion
 	}
-	mz = modpeptide[-1];
+
+	mz = 0;
+	if (modpeptide[peplen+1] != 0) {
+		mz = amino_masses[modpeptide[peplen+1]];
+	}
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = 18.0105647+mz+1.007236;  //y-ion
+		membuffer[j++] = 18.0105647 + mz + 1.007236;  //y-ion
 	}
-	mz = modpeptide[0];
+
+	mz = 0;
+	if (modpeptide[0] != 0) {
+		mz = amino_masses[modpeptide[0]];
+	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+1.007825032+17.0265491;  //c-ion: peptide + H + NH3
+		membuffer[j++] = mz + 1.007825032 + 17.0265491;  //c-ion: peptide + H + NH3
 	}
-	mz = modpeptide[-1];
+
+	mz = 0;
+	if (modpeptide[peplen+1] != 0) {
+		mz = amino_masses[modpeptide[peplen+1]];
+	}
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz+17.00273965-15.01089904+1.007825032;  //z-ion: peptide + OH - NH
+		membuffer[j++] = mz + 17.00273965 - 15.01089904 + 1.007825032;  //z-ion: peptide + OH - NH
 	}
+
 	return membuffer;
 }
 

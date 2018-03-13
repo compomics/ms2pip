@@ -101,28 +101,46 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	int i,j;
 	float mz;
 	j=0;
-	mz = modpeptide[0];
+
+	mz = 0;
+	if (modpeptide[0] != 0) {
+		mz = amino_masses[modpeptide[0]];
+	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
 		membuffer[j++] = mz+1.007236;  //b-ion
 	}
-	mz = modpeptide[-1];
+
+	mz = 0;
+	if (modpeptide[peplen+1] != 0) {
+		mz = amino_masses[modpeptide[peplen+1]];
+	}
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
 		membuffer[j++] = 18.0105647 + mz + 1.007236;  //y-ion
 	}
-	mz = modpeptide[0];
+
+	mz = 0;
+	if (modpeptide[0] != 0) {
+		mz = amino_masses[modpeptide[0]];
+	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
 		membuffer[j++] = (mz + 1.007236 + 1.007236)/2;  //b2-ion: (b-ion + H)/2
 	}
-	mz = modpeptide[-1];
+
+	mz = 0;
+	if (modpeptide[peplen+1] != 0) {
+		mz = amino_masses[modpeptide[peplen+1]];
+	}
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
 		membuffer[j++] = (18.0105647 + mz + 1.007236 + 1.007236)/2;  //y2-ion: (y-ion + H)/2
 	}
+
 	return membuffer;
 }
+
 
 //get fragment ion peaks from spectrum
 float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
