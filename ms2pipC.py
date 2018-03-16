@@ -174,7 +174,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 continue
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    title = row[6:].replace(" ", "")
+                    title = row[6:]
                     if title not in peptides:
                         skip = True
                         continue
@@ -387,7 +387,7 @@ def scan_spectrum_file(filename):
         for row in rows:
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    titles.append(row.rstrip()[6:].replace(" ", ""))
+                    titles.append(row.rstrip()[6:])
     f.close()
     return titles
 
@@ -661,7 +661,6 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
     # for some reason the missing values are converted to float otherwise
     data = data.fillna("-")
-
     sys.stdout.write("starting workers...\n")
     myPool = multiprocessing.Pool(num_cpu)
 
