@@ -1,4 +1,3 @@
-#!/usr/bin/env python 
 # Native library
 import sys
 import pickle
@@ -16,10 +15,10 @@ import pandas as pd
 # Features
 import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
-import ms2pipfeatures_pyx_CID
+# import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
 # import ms2pipfeatures_pyx_HCDiTRAQ4
-import ms2pipfeatures_pyx_ETD
+# import ms2pipfeatures_pyx_ETD
 
 
 def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod):
@@ -31,9 +30,6 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
     """
 
     # Rename ms2pipfeatures_pyx
-    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
-    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
-    # MS2PIP Server (which calls the function Run), this can not be done globally.
     if fragmethod == "CID":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
     elif fragmethod == "HCD":
@@ -120,9 +116,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     """
 
     # Rename ms2pipfeatures_pyx
-    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
-    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
-    # MS2PIP Server (which calls the function Run), this can not be done globally.
     if fragmethod == "CID":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
     elif fragmethod == "HCD":
@@ -181,7 +174,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 continue
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    title = row[6:].replace(" ", "")
+                    title = row[6:]
                     if title not in peptides:
                         skip = True
                         continue
@@ -259,7 +252,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                         tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
                         tmp["target"] = targets[0] + targets[1] + targets[2] + targets[3]
                         tmp["prediction"] = predictions[0] + predictions[1] + predictions[2] + predictions[3]
-                    elif fragmethod == 'HCDch2':
+                    if fragmethod == 'HCDch2':
                         tmp["ion"] = ['b'] * num_ions + ['y'] * num_ions + ['b2'] * num_ions + ['y2'] * num_ions
                         tmp["ionnumber"] = list(range(1, num_ions + 1)) * 4
                         tmp["mz"] = mzs[0] + mzs[1] + mzs[2] + mzs[3]
@@ -394,7 +387,7 @@ def scan_spectrum_file(filename):
         for row in rows:
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    titles.append(row.rstrip()[6:].replace(" ", ""))
+                    titles.append(row.rstrip()[6:])
     f.close()
     return titles
 
@@ -655,15 +648,19 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
+    if open(pep_file).readline()[:7] != 'spec_id':
+        print("PEPREC file does not follow the correct format!")
+        exit(1)
+    # potentially different separators in PEPREC file
+    sep = open(pep_file).readline()[7]
     data = pd.read_csv(pep_file,
-                       sep=" ",
+                       sep=sep,
                        index_col=False,
                        dtype={"spec_id": str, "modifications": str},
                        nrows=limit)
 
     # for some reason the missing values are converted to float otherwise
     data = data.fillna("-")
-
     sys.stdout.write("starting workers...\n")
     myPool = multiprocessing.Pool(num_cpu)
 
@@ -719,10 +716,10 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         else:
             sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
             all_results.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
+            """
             sys.stdout.write('computing correlations...\n')
             correlations = calc_correlations(all_results)
             correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
-            """
             corr_boxplot = correlations.plot('hist')
             corr_boxplot = corr_boxplot.get_figure()
             corr_boxplot.suptitle('Pearson corr for ' + spec_file + ' and predictions')
