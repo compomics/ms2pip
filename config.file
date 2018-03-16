@@ -11,3 +11,4 @@ ptm=Gln->pyro-Glu,-17.026549,opt,Q
 ptm=Pyro-carbamidomethyl,39.994915,opt,C
 ptm=Deamidated,0.984016,opt,N
 ptm=iTRAQ,144.102063,opt,N-term
+ptm=Acetyl,42.010565,opt,N-term
