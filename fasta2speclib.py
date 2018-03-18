@@ -1,0 +1,229 @@
+"""
+Create a spectral library starting from a proteome in fasta format.
+The script runs through the following steps:
+- In silico cleavage of proteins from the fasta file
+- Removes peptide redundancy
+- Add all variations of variable modifications (max 7 PTMs/peptide)
+- Add variations on charge state
+- Run peptides through MS2PIP
+- Write to MSP file
+"""
+
+
+__author__ = "Ralf Gabriels"
+__copyright__ = "CompOmics 2018"
+__credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
+__license__ = "Apache License, Version 2.0"
+__email__ = "Ralf.Gabriels@ugent.be"
+
+
+# Native libraries
+import argparse
+from re import finditer
+from datetime import datetime
+from multiprocessing import Pool
+from itertools import combinations
+
+# Third party libraries
+import numpy as np
+import pandas as pd
+from pyteomics import mass
+from pyteomics.parser import cleave, expasy_rules
+from Bio import SeqIO
+
+# MS2PIP
+from ms2pipC import run
+from write_msp import write_msp
+
+
+def ArgParse():
+    parser = argparse.ArgumentParser(description='Create an MS2PIP PEPREC file by in silico cleaving proteins from a fasta file.')
+    parser.add_argument('fasta_filename', action='store', help='Name of the fasta input file')
+    parser.add_argument('-o', dest='output_filename', action='store',
+                        help='Name for output file (default: derived from input file)')
+    parser.add_argument('-c', dest='charges', action='store', nargs='+', default=[2, 3],
+                        help='Precusor charges to include in peprec (default [2, 3]')
+    parser.add_argument('-p', dest='min_peplen', action='store', default=8, type=int,
+                        help='Minimum length of peptides to include in peprec (default: 8)')
+    parser.add_argument('-w', dest='max_pepmass', action='store', default=5000, type=int,
+                        help='Maximum peptide mass to include in Dalton (default: 5000)')
+    parser.add_argument('-m', dest='missed_cleavages', action='store', default=2, type=int,
+                        help='Number of missed cleavages to be allowed (default: 2)')
+    parser.add_argument('-f', dest='frag_method', action='store', default='HCD', type=str,
+                        help='Fragmentation method to use for MS2PIP predictions')
+    parser.add_argument('-n', dest='num_cpu', action='store', default=24, type=int,
+                        help='Number of processes for multithreading (default: 24)')
+    args = parser.parse_args()
+    return(args)
+
+
+def get_params():
+    args = ArgParse()
+    params = {
+        'fasta_filename': args.fasta_filename,
+        'charges': args.charges,
+        'min_peplen': args.min_peplen,
+        'max_pepmass': args.max_pepmass,
+        'missed_cleavages': args.missed_cleavages,
+        'frag_method': args.frag_method,
+        'num_cpu': args.num_cpu,
+        'modifications': [
+            # (name, specific AA, mass-shift, N-term)
+            ('Glu->pyro-Glu', 'E', -18.0153, True),
+            ('Gln->pyro-Glu', 'Q', -17.0305, True),
+            ('Acetyl', None, 42.0367, True),
+            ('Oxidation', 'M', 15.9994, False),
+            ('Carbamidomethyl', 'C', 57.0513, False),
+        ],
+    }
+    if args.output_filename:
+        params['output_filename'] = args.output_filename
+    else:
+        params['output_filename'] = '_'.join(params['fasta_filename'].split('/')[-1].split('\\')[-1].split('.')[:-1])
+    return(params)
+
+
+def prot_to_peprec(protein):
+    params = get_params()
+    tmp = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
+    pep_count = 0
+    for peptide in cleave(str(protein.seq), expasy_rules['trypsin'], params['missed_cleavages']):
+        if params['min_peplen'] <= len(peptide) < int(params['max_pepmass'] / 186 + 2):
+            if not mass.calculate_mass(sequence=peptide) > params['max_pepmass']:
+                pep_count += 1
+                row = {'spec_id': '{}_{:03d}'.format(protein.id, pep_count),
+                       'peptide': peptide, 'modifications': '-', 'charge': np.nan}
+                tmp = tmp.append(row, ignore_index=True)
+    return(tmp)
+
+
+def get_protein_list(df):
+    peptide_to_prot = {}
+    for pi, pep in zip(df['spec_id'], df['peptide']):
+        pi = '_'.join(pi.split('_')[0:2])
+        if pep in peptide_to_prot.keys():
+            peptide_to_prot[pep].append(pi)
+        else:
+            peptide_to_prot[pep] = [pi]
+    df['protein_list'] = [list(set(peptide_to_prot[pep])) for pep in df['peptide']]
+    df = df[~df.duplicated(['peptide', 'charge', 'modifications'])]
+    return(df)
+
+
+def add_mods(tup):
+    """
+    C-terminal modifications not yet supported!
+    N-terminal modifications WITH specific first AA do not yet prevent other modifications
+    to be added on that first AA. This means that the function will, for instance, combine
+    Glu->pyro-Glu (combination of N-term and normal PTM) with other PTMS for Glu on the first
+    AA, while this is not possible in reality!
+    """
+    _, row = tup
+    params = get_params()
+    mod_versions = [dict()]
+
+    for i, mod in enumerate(params['modifications']):
+        all_pos = [i for i, aa in enumerate(row['peptide']) if aa == mod[1]]
+        if len(all_pos) > 7:
+            all_pos = all_pos[:7]
+        for version in mod_versions:
+            # For non-position-specific mods:
+            if not mod[3]:
+                pos = [p for p in all_pos if p not in version.keys()]
+                combos = [x for l in range(1, len(pos) + 1) for x in combinations(pos, l)]
+                for combo in combos:
+                    new_version = version.copy()
+                    for pos in combo:
+                        new_version[pos] = mod[0]
+                    mod_versions.append(new_version)
+
+            # For N-term mods and position not yet modified:
+            elif mod[3] and 'N' not in version.keys():
+                    # N-term with specific first AA:
+                    if mod[1]:
+                        if row['peptide'][0] == mod[1]:
+                            new_version = version.copy()
+                            new_version['N'] = mod[0]
+                            mod_versions.append(new_version)
+                    # N-term without specific first AA:
+                    else:
+                        new_version = version.copy()
+                        new_version['N'] = mod[0]
+                        mod_versions.append(new_version)
+
+    df_out = pd.DataFrame(columns=row.index)
+    df_out['modifications'] = ['|'.join('{}|{}'.format(0, value) if key == 'N' else '{}|{}'.format(key + 1, value) for key, value in version.items()) for version in mod_versions]
+    df_out['modifications'] = ['-' if len(mods) == 0 else mods for mods in df_out['modifications']]
+    df_out['spec_id'] = ['{}_{:03d}'.format(row['spec_id'], i) for i in range(len(mod_versions))]
+    df_out['charge'] = row['charge']
+    df_out['peptide'] = row['peptide']
+    if 'protein_list' in row.index:
+        df_out['protein_list'] = str(row['protein_list'])
+    return(df_out)
+
+
+def add_charges(df_in):
+    params = get_params()
+    df_out = pd.DataFrame(columns=df_in.columns)
+    for charge in params['charges']:
+        tmp = df_in.copy()
+        tmp['spec_id'] = tmp['spec_id'] + '_{}'.format(charge)
+        tmp['charge'] = charge
+        df_out = df_out.append(tmp, ignore_index=True)
+    df_out.sort_values(['spec_id', 'charge'], inplace=True)
+    df_out.reset_index(drop=True, inplace=True)
+    return(df_out)
+
+
+def main():
+    params = get_params()
+    peprec = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
+
+    print("{} - Cleaving proteins, adding peptides to peprec...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    with Pool(params['num_cpu']) as p:
+        peprec = peprec.append(p.map(prot_to_peprec, SeqIO.parse(params['fasta_filename'], "fasta")), ignore_index=True)
+
+    print("{} - Removing peptide redundancy, adding protein list to peptides...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    peprec = get_protein_list(peprec)
+
+    print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(datetime.now().strftime("%y-%m-%d %H:%M"), params['output_filename']))
+    peprec_nonmod = peprec.copy()
+    peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
+    peprec_nonmod.astype(str).to_hdf('{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table', mode='w', format='table')
+
+    print("{} - Adding all modification combinations...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    peprec_mods = pd.DataFrame(columns=peprec.columns)
+    with Pool(params['num_cpu']) as p:
+        peprec_mods = peprec_mods.append(p.map(add_mods, peprec.iterrows()), ignore_index=True)
+    peprec = peprec_mods
+
+    print("{} - Adding charge states {}...".format(datetime.now().strftime("%y-%m-%d %H:%M"), params['charges']))
+    peprec = add_charges(peprec)
+
+    # peprec.astype(str).to_hdf('data/{}_expanded.peprec.hdf'.format(params['output_filename']), key='table',, mode='w', format='table')
+
+    print("{} - Running MS2PIPc...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    ms2pip_params = {
+        'frag_method': params['frag_method'],
+        'frag_error': 0.02,
+        'ptm': ['{},{},opt,{}'.format(mods[0], mods[2], mods[1]) if not mods[3] else '{},{},opt,N-term'.format(mods[0], mods[2]) for mods in params['modifications']],
+        'sptm': [],
+        'gptm': [],
+    }
+    all_preds = run(peprec, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
+                    params=ms2pip_params, return_results=True)
+
+    print("{} - Writing predictions to {}_predictions.hdf".format(datetime.now().strftime("%y-%m-%d %H:%M"), params['output_filename']))
+    all_preds.astype(str).to_hdf('_predictions.hdf'.format(params['output_filename']), key='table', mode='w', format='table')
+
+    print("{} - Writing MSP file with unmodified peptides...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    write_msp(all_preds, peprec[peprec['modifications'] == '-'], output_filename=params['output_filename'], num_cpu=params['num_cpu'])
+
+    print("{} - Writing MSP file with all peptides...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    write_msp(all_preds, peprec, output_filename=params['output_filename'], num_cpu=params['num_cpu'])
+
+    print("Fasta2SpecLib is ready!")
+
+
+if __name__ == "__main__":
+    main()
