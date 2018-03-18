@@ -613,8 +613,6 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
               101.047679, 99.068414, 186.079313, 163.063329, 147.0354]
     a_map = {a: i for i, a in enumerate(aminos)}
 
-    print_logo()
-
     # If not specified, get parameters from config_file
     if params is None:
         if config_file is None:
@@ -782,6 +780,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
 
 if __name__ == "__main__":
+    print_logo()
     pep_file, spec_file, vector_file, config_file, num_cpu = argument_parser()
     params = load_configfile(config_file)
     run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu)
