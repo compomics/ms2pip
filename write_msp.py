@@ -84,7 +84,6 @@ def writer(output_filename, q):
 
 
 def write_msp(all_preds, peprec, output_filename, num_cpu=8):
-    print("writing MSP file {}_predictions.msp...".format(output_filename))
     # Normalize spectra:
     all_preds.reset_index(drop=True, inplace=True)
     all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
