@@ -655,12 +655,14 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
-    data = pd.read_csv(pep_file,
-                       sep=" ",
-                       index_col=False,
-                       dtype={"spec_id": str, "modifications": str},
-                       nrows=limit)
-
+    if type(pep_file) == str:
+        data = pd.read_csv(pep_file,
+                           sep=" ",
+                           index_col=False,
+                           dtype={"spec_id": str, "modifications": str},
+                           nrows=limit)
+    else:
+        data = pep_file
     # for some reason the missing values are converted to float otherwise
     data = data.fillna("-")
 
