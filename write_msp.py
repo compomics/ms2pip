@@ -1,8 +1,17 @@
 """
 Write MSP Spectrum Library from MS2PIP predictions.
-Can be called from ms2pipC.py with adding line:
-`from write_msp import write_msp`
+Run by calling function `write_msp`.
 """
+
+
+__author__ = "Ralf Gabriels"
+__copyright__ = "Copyright 2018"
+__credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
+__license__ = "Apache License, Version 2.0"
+__version__ = "0.1"
+__email__ = "Ralf.Gabriels@ugent.be"
+
+
 # Native libraries
 from ast import literal_eval
 import multiprocessing as mp
@@ -77,6 +86,7 @@ def writer(output_filename, q):
 def write_msp(all_preds, peprec, output_filename, num_cpu=8):
     print("writing MSP file {}_predictions.msp...".format(output_filename))
     # Normalize spectra:
+    all_preds.reset_index(drop=True, inplace=True)
     all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
     all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: (x / x.max()) * 10000)
     all_preds['prediction'] = all_preds['prediction'].astype(int)
@@ -92,7 +102,7 @@ def write_msp(all_preds, peprec, output_filename, num_cpu=8):
 
     # Fire off workers
     jobs = []
-    for spec_id in all_preds['spec_id'].unique():
+    for spec_id in peprec['spec_id']:
         job = pool.apply_async(process, (spec_id, all_preds, peprec, add_protein, q))
         jobs.append(job)
 
