@@ -19,6 +19,7 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 # Native libraries
 import argparse
+from math import ceil
 from re import finditer
 from datetime import datetime
 from multiprocessing import Pool
@@ -79,7 +80,7 @@ def get_params():
     if args.output_filename:
         params['output_filename'] = args.output_filename
     else:
-        params['output_filename'] = '_'.join(params['fasta_filename'].split('/')[-1].split('\\')[-1].split('.')[:-1])
+        params['output_filename'] = '_'.join(params['fasta_filename'].split('\\')[-1].split('.')[:-1])
     return(params)
 
 
@@ -124,8 +125,8 @@ def add_mods(tup):
 
     for i, mod in enumerate(params['modifications']):
         all_pos = [i for i, aa in enumerate(row['peptide']) if aa == mod[1]]
-        if len(all_pos) > 7:
-            all_pos = all_pos[:7]
+        if len(all_pos) > 4:
+            all_pos = all_pos[:4]
         for version in mod_versions:
             # For non-position-specific mods:
             if not mod[3]:
@@ -175,54 +176,91 @@ def add_charges(df_in):
     return(df_out)
 
 
+def timestamp():
+    return(datetime.now().strftime("%y-%m-%d %H:%M"))
+
+
 def main():
     params = get_params()
     peprec = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
 
-    print("{} - Cleaving proteins, adding peptides to peprec...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    print("{} - Cleaving proteins, adding peptides to peprec...".format(timestamp()))
     with Pool(params['num_cpu']) as p:
         peprec = peprec.append(p.map(prot_to_peprec, SeqIO.parse(params['fasta_filename'], "fasta")), ignore_index=True)
 
-    print("{} - Removing peptide redundancy, adding protein list to peptides...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
+    print("{} - Removing peptide redundancy, adding protein list to peptides...".format(timestamp()))
     peprec = get_protein_list(peprec)
 
-    print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(datetime.now().strftime("%y-%m-%d %H:%M"), params['output_filename']))
+    print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(timestamp(), params['output_filename']))
     peprec_nonmod = peprec.copy()
     peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
     peprec_nonmod.astype(str).to_hdf('{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table', mode='w', format='table')
+    del peprec_nonmod
 
-    print("{} - Adding all modification combinations...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
-    peprec_mods = pd.DataFrame(columns=peprec.columns)
-    with Pool(params['num_cpu']) as p:
-        peprec_mods = peprec_mods.append(p.map(add_mods, peprec.iterrows()), ignore_index=True)
-    peprec = peprec_mods
+    # Split up into batches to save memory:
+    b_size = 5000
+    b_count = 0
+    num_b_counts = ceil(len(peprec) / b_size)
+    for i in range(0, len(peprec), b_size):
+        if i + b_size < len(peprec):
+            peprec_batch = peprec[i:i + b_size]
+        else:
+            peprec_batch = peprec[i:]
+        b_count += 1
+        print("\nWorking on batch {} of {}, containing {} unmodified peptides...".format(b_count, num_b_counts, len(peprec_batch)))
 
-    print("{} - Adding charge states {}...".format(datetime.now().strftime("%y-%m-%d %H:%M"), params['charges']))
-    peprec = add_charges(peprec)
+        print("{} - Adding all modification combinations...".format(timestamp()))
+        peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
+        with Pool(params['num_cpu']) as p:
+            peprec_mods = peprec_mods.append(p.map(add_mods, peprec_batch.iterrows()), ignore_index=True)
+        peprec_batch = peprec_mods
 
-    # peprec.astype(str).to_hdf('data/{}_expanded.peprec.hdf'.format(params['output_filename']), key='table',, mode='w', format='table')
+        print("{} - Adding charge states {}...".format(timestamp(), params['charges']))
+        peprec_batch = add_charges(peprec_batch)
 
-    print("{} - Running MS2PIPc...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
-    ms2pip_params = {
-        'frag_method': params['frag_method'],
-        'frag_error': 0.02,
-        'ptm': ['{},{},opt,{}'.format(mods[0], mods[2], mods[1]) if not mods[3] else '{},{},opt,N-term'.format(mods[0], mods[2]) for mods in params['modifications']],
-        'sptm': [],
-        'gptm': [],
-    }
-    all_preds = run(peprec, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
-                    params=ms2pip_params, return_results=True)
+        # peprec_batch.astype(str).to_hdf('data/{}_expanded_{}.peprec.hdf'.format(params['output_filename'], b_count), key='table',, mode='w', format='table')
 
-    print("{} - Writing predictions to {}_predictions.hdf".format(datetime.now().strftime("%y-%m-%d %H:%M"), params['output_filename']))
-    all_preds.astype(str).to_hdf('_predictions.hdf'.format(params['output_filename']), key='table', mode='w', format='table')
+        print("{} - Running MS2PIPc...".format(timestamp()))
+        ms2pip_params = {
+            'frag_method': params['frag_method'],
+            'frag_error': 0.02,
+            'ptm': ['{},{},opt,{}'.format(mods[0], mods[2], mods[1]) if not mods[3] else '{},{},opt,N-term'.format(mods[0], mods[2]) for mods in params['modifications']],
+            'sptm': [],
+            'gptm': [],
+        }
+        all_preds = run(peprec_batch, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
+                        params=ms2pip_params, return_results=True)
 
-    print("{} - Writing MSP file with unmodified peptides...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
-    write_msp(all_preds, peprec[peprec['modifications'] == '-'], output_filename=params['output_filename'], num_cpu=params['num_cpu'])
+        print("{} - Writing predictions to {}_predictions_{}.hdf".format(timestamp(), params['output_filename'], b_count))
+        all_preds.astype(str).to_hdf('{}_predictions_{}.hdf'.format(params['output_filename'], b_count), key='table', mode='w', format='table')
 
-    print("{} - Writing MSP file with all peptides...".format(datetime.now().strftime("%y-%m-%d %H:%M")))
-    write_msp(all_preds, peprec, output_filename=params['output_filename'], num_cpu=params['num_cpu'])
+        if b_count == 1:
+            write_mode = 'w'
+        else:
+            write_mode = 'a'
 
-    print("Fasta2SpecLib is ready!")
+        print("{} - Writing MSP file with unmodified peptides...".format(timestamp()))
+        write_msp(
+            all_preds,
+            peprec_batch[peprec_batch['modifications'] == '-'],
+            output_filename="{}_unmodified".format(params['output_filename']),
+            write_mode=write_mode,
+            num_cpu=params['num_cpu']
+        )
+
+        print("{} - Writing MSP file with all peptides...".format(timestamp()))
+        write_msp(
+            all_preds,
+            peprec_batch,
+            output_filename="{}_withmods".format(params['output_filename']),
+            write_mode=write_mode,
+            num_cpu=params['num_cpu']
+        )
+
+        del all_preds
+        del peprec_batch
+
+    print("\nFasta2SpecLib is ready!")
 
 
 if __name__ == "__main__":
