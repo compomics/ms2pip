@@ -71,24 +71,25 @@ def process(spec_id, all_preds, peprec, add_protein, q):
     return(out)
 
 
-def writer(output_filename, q):
-    f = open("{}_predictions.msp".format(output_filename), 'w')
+def writer(output_filename, write_mode, q):
+    f = open("{}_predictions.msp".format(output_filename), write_mode)
     while 1:
         m = q.get()
         if m == 'kill':
             break
         else:
             f.write(str(m))
-            f.flush()
+            # f.flush()
     f.close()
 
 
-def write_msp(all_preds, peprec, output_filename, num_cpu=8):
-    # Normalize spectra:
+def write_msp(all_preds, peprec, output_filename, write_mode='w', num_cpu=8):
     all_preds.reset_index(drop=True, inplace=True)
-    all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
-    all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: (x / x.max()) * 10000)
-    all_preds['prediction'] = all_preds['prediction'].astype(int)
+    # If not already normalized, normalize spectra
+    if not (all_preds['prediction'].min() == 0 and all_preds['prediction'].max() == 10000):
+        all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
+        all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: (x / x.max()) * 10000)
+        all_preds['prediction'] = all_preds['prediction'].astype(int)
 
     # Check if protein list is present in peprec
     add_protein = 'protein_list' in peprec.columns
@@ -97,7 +98,7 @@ def write_msp(all_preds, peprec, output_filename, num_cpu=8):
     manager = mp.Manager()
     q = manager.Queue()
     pool = mp.Pool(num_cpu)
-    watcher = pool.apply_async(writer, (output_filename, q,))
+    watcher = pool.apply_async(writer, (output_filename, write_mode, q,))
 
     # Fire off workers
     jobs = []
