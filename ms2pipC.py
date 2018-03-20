@@ -411,7 +411,7 @@ def prepare_titles(titles, num_cpu):
     shuffle(titles)
 
     split_titles = [titles[i * len(titles) // num_cpu: (i + 1) * len(titles) // num_cpu] for i in range(num_cpu)]
-    sys.stdout.write("{} spectra (~{:.2f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
+    sys.stdout.write("{} spectra (~{:.0f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
 
     return split_titles
 
@@ -630,7 +630,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # Check if given fragmethod exists:
     known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]
     if fragmethod in known_fragmethods:
-        print("Using {} models.\n".format(fragmethod))
+        print("using {} models".format(fragmethod))
     else:
         print("Unknown fragmentation method: {}".format(fragmethod))
         print("Should be one of the following methods: {}".format(known_fragmethods))
