@@ -197,6 +197,9 @@ def main():
     peprec_nonmod.astype(str).to_hdf('{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table', mode='w', format='table')
     del peprec_nonmod
 
+    # For testing
+    # peprec = pd.read_hdf('uniprot_proteome_yeast_head_nonexpanded.peprec.hdf', key='table')
+
     # Split up into batches to save memory:
     b_size = 5000
     b_count = 0

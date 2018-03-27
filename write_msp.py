@@ -16,6 +16,7 @@ __email__ = "Ralf.Gabriels@ugent.be"
 from ast import literal_eval
 import multiprocessing as mp
 from multiprocessing import Pool
+from operator import itemgetter
 
 # Other libraries
 import numpy as np
@@ -23,50 +24,89 @@ import pandas as pd
 
 
 def process(spec_ids_sel, all_preds, peprec, add_protein, q):
+    preds_col_names = list(all_preds.columns)
+    preds_to_slice = {}
+    preds_list = all_preds.values.tolist()
+
+    preds_spec_id_index = preds_col_names.index('spec_id')
+    mz_index = preds_col_names.index('mz')
+    prediction_index = preds_col_names.index('prediction')
+    ion_index = preds_col_names.index('ion')
+    ionnumber_index = preds_col_names.index('ionnumber')
+
+    for row in preds_list:
+        spec_id = row[preds_spec_id_index]
+        if spec_id in preds_to_slice.keys():
+            preds_to_slice[spec_id].append(row)
+        else:
+            preds_to_slice[spec_id] = [row]
+
+    peprec_col_names = list(peprec.columns)
+    peprec_to_slice = {}
+    peprec_list = peprec.values.tolist()
+
+    spec_id_index = peprec_col_names.index('spec_id')
+    peptide_index = peprec_col_names.index('peptide')
+    charge_index = peprec_col_names.index('charge')
+    modifications_index = peprec_col_names.index('modifications')
+    protein_list_index = peprec_col_names.index('protein_list')
+
+    for row in peprec_list:
+        peprec_to_slice[row[spec_id_index]] = row
+
     for spec_id in spec_ids_sel:
-        out = ''
+        out = []
+        preds = preds_to_slice[spec_id]
+        peprec_sel = peprec_to_slice[spec_id]
 
-        preds = all_preds[all_preds['spec_id'] == spec_id]
-        preds = preds.sort_values('mz')
-        preds = preds.reset_index(drop=True)
+        preds = sorted(preds, key=itemgetter(mz_index))
 
-        tmp = peprec[peprec['spec_id'] == spec_id]
-        sequence = tmp['peptide'].iloc[0]
-        charge = tmp['charge'].iloc[0]
-        mods = tmp['modifications'].iloc[0]
+        sequence = peprec_sel[peptide_index]
+        charge = peprec_sel[charge_index]
+        mods = peprec_sel[modifications_index]
         numpeaks = len(preds)
 
         # Calculate mass from fragment ions
-        mass_b = preds[(preds['ion'] == 'b') & (preds['ionnumber'] == 1)]['mz'].iloc[0]
-        mass_y = preds[(preds['ion'] == 'y') & (preds['ionnumber'] == numpeaks / 2)]['mz'].iloc[0]
+        mass_b = [row[mz_index] for row in preds if row[ion_index] == 'b' and row[ionnumber_index] == 1][0]
+        mass_y = [row[mz_index] for row in preds if row[ion_index] == 'y' and row[ionnumber_index] == numpeaks / 2][0]
         pepmass = mass_b + mass_y - 2 * 1.007236
 
-        out += 'Name: {}/{}\n'.format(sequence, charge)
-        out += 'MW: {}\n'.format(pepmass)
-        out += 'Comment: '
+        out.append('Name: {}/{}\n'.format(sequence, charge))
+        out.append('MW: {}\n'.format(pepmass))
+        out.append('Comment: ')
 
         if mods == '-':
-            out += "Mods=0 "
+            out.append("Mods=0 ")
         else:
             mods = mods.split('|')
             mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
             # Turn MS2PIP mod indexes into actual list indexes (eg 0 for first AA)
             mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
             mods = [(str(x), sequence[x], y) for (x, y) in mods]
-            out += "Mods={}/{} ".format(len(mods), '/'.join([','.join(list(x)) for x in mods]))
+            out.append("Mods={}/{} ".format(len(mods), '/'.join([','.join(list(x)) for x in mods])))
 
-        out += "Parent={} ".format(pepmass / charge)
+        out.append("Parent={} ".format(pepmass / charge))
 
         if add_protein:
-            out += 'Protein="{}" '.format('/'.join(literal_eval(tmp['protein_list'].iloc[0])))
+            try:
+                out.append('Protein="{}" '.format('/'.join(literal_eval(peprec_sel[protein_list_index]))))
+            except ValueError:
+                out.append('Protein="{}" '.format(peprec_sel[protein_list_index]))
 
-        out += 'MS2PIP_ID="{}"'.format(spec_id)
+        out.append('MS2PIP_ID="{}"'.format(spec_id))
 
-        out += '\nNum peaks: {}\n'.format(numpeaks)
-        lines = list(zip(preds['mz'], preds['prediction'], preds['ion'], preds['ionnumber']))
-        out += ''.join(['{:.4f}\t{}\t"{}{}"\n\n'.format(*l) for l in lines])
+        out.append('\nNum peaks: {}\n'.format(numpeaks))
 
-        q.put(out)
+        lines = list(zip(
+            [row[mz_index] for row in preds],
+            [row[prediction_index] for row in preds],
+            [row[ion_index] for row in preds],
+            [row[ionnumber_index] for row in preds]
+        ))
+        out.append(''.join(['{:.4f}\t{}\t"{}{}"\n'.format(*l) for l in lines]))
+
+        out_string = "".join(out)
+        q.put(out_string)
 
 
 def writer(output_filename, write_mode, q):
@@ -76,9 +116,8 @@ def writer(output_filename, write_mode, q):
         if m == 'kill':
             break
         else:
-            # f.write(str(m))
-            # f.flush()
-            pass
+            f.write(str(m))
+            f.flush()
     f.close()
 
 
