@@ -194,7 +194,10 @@ def main():
     print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(timestamp(), params['output_filename']))
     peprec_nonmod = peprec.copy()
     peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
-    peprec_nonmod.astype(str).to_hdf('{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table', mode='w', format='table')
+    peprec_nonmod.astype(str).to_hdf(
+        '{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table',
+        format='table', complevel=3, complib='zlib', mode='w'
+    )
     del peprec_nonmod
 
     # For testing
@@ -221,7 +224,10 @@ def main():
         print("{} - Adding charge states {}...".format(timestamp(), params['charges']))
         peprec_batch = add_charges(peprec_batch)
 
-        # peprec_batch.astype(str).to_hdf('data/{}_expanded_{}.peprec.hdf'.format(params['output_filename'], b_count), key='table',, mode='w', format='table')
+        # peprec_batch.astype(str).to_hdf(
+        #     '{}_expanded_{}.peprec.hdf'.format(params['output_filename'], b_count), key='table',
+        #     format='table', complevel=3, complib='zlib', mode='w'
+        # )
 
         print("{} - Running MS2PIPc...".format(timestamp()))
         ms2pip_params = {
@@ -234,13 +240,17 @@ def main():
         all_preds = run(peprec_batch, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
                         params=ms2pip_params, return_results=True)
 
-        print("{} - Writing predictions to {}_predictions_{}.hdf".format(timestamp(), params['output_filename'], b_count))
-        all_preds.astype(str).to_hdf('{}_predictions_{}.hdf'.format(params['output_filename'], b_count), key='table', mode='w', format='table')
-
         if b_count == 1:
             write_mode = 'w'
         else:
             write_mode = 'a'
+
+        print("{} - Writing predictions to {}_predictions_{}.hdf".format(timestamp(), params['output_filename'], b_count))
+        all_preds.astype(str).to_hdf(
+            '{}_predictions.hdf'.format(params['output_filename']),
+            key='table', format='table', complevel=3, complib='zlib',
+            mode=write_mode, append=append, min_itemsize=50
+        )
 
         print("{} - Writing MSP file with unmodified peptides...".format(timestamp()))
         write_msp(
