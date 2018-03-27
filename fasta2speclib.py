@@ -245,7 +245,7 @@ def main():
         else:
             write_mode = 'a'
 
-        print("{} - Writing predictions to {}_predictions_{}.hdf".format(timestamp(), params['output_filename'], b_count))
+        print("{} - Writing predictions to {}_predictions.hdf".format(timestamp(), params['output_filename']))
         all_preds.astype(str).to_hdf(
             '{}_predictions.hdf'.format(params['output_filename']),
             key='table', format='table', complevel=3, complib='zlib',
