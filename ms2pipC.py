@@ -21,6 +21,9 @@ import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4
 import ms2pipfeatures_pyx_ETD
 
+# From other Python files
+from write_msp import write_msp
+
 
 def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod):
     """
@@ -409,7 +412,7 @@ def prepare_titles(titles, num_cpu):
     shuffle(titles)
 
     split_titles = [titles[i * len(titles) // num_cpu: (i + 1) * len(titles) // num_cpu] for i in range(num_cpu)]
-    sys.stdout.write("{} spectra (~{:.2f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
+    sys.stdout.write("{} spectra (~{:.0f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
 
     return split_titles
 
@@ -558,7 +561,7 @@ def write_mgf(all_preds, output_filename="MS2PIP", unlog=True, return_stringbuff
         write(all_preds, mgf_output)
         return(mgf_output)
     else:
-        sys.stdout.write("writing mgf file {}_predictions.mgf...\n".format(output_filename))
+        print("writing mgf file {}_predictions.mgf...".format(output_filename))
         with open("{}_predictions.mgf".format(output_filename), "w+") as mgf_output:
             write(all_preds, mgf_output)
 
@@ -608,12 +611,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
               57.021464, 137.058912, 113.084064, 128.094963, 131.040485,
               114.042927, 97.052764, 128.058578, 156.101111, 87.032028,
               101.047679, 99.068414, 186.079313, 163.063329, 147.0354]
-
-    a_map = {}
-    for i, a in enumerate(aminos):
-        a_map[a] = i
-
-    print_logo()
+    a_map = {a: i for i, a in enumerate(aminos)}
 
     # If not specified, get parameters from config_file
     if params is None:
@@ -633,7 +631,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # Check if given fragmethod exists:
     known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]
     if fragmethod in known_fragmethods:
-        print("Using {} models.\n".format(fragmethod))
+        print("using {} models".format(fragmethod))
     else:
         print("Unknown fragmentation method: {}".format(fragmethod))
         print("Should be one of the following methods: {}".format(known_fragmethods))
@@ -655,12 +653,14 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
-    data = pd.read_csv(pep_file,
-                       sep=" ",
-                       index_col=False,
-                       dtype={"spec_id": str, "modifications": str},
-                       nrows=limit)
-
+    if type(pep_file) == str:
+        data = pd.read_csv(pep_file,
+                           sep=" ",
+                           index_col=False,
+                           dtype={"spec_id": str, "modifications": str},
+                           nrows=limit)
+    else:
+        data = pep_file
     # for some reason the missing values are converted to float otherwise
     data = data.fillna("-")
 
@@ -763,9 +763,13 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        mgf = False  # set to True to write spectrum as mgf file
+        mgf = False  # Set to True to write spectrum as MGF file
         if mgf:
             write_mgf(all_preds, output_filename=output_filename)
+
+        msp = False  # Set to True to write spectra as MSP file
+        if msp:
+            write_msp(all_preds, data, output_filename=output_filename, num_cpu=num_cpu)
 
         if not return_results:
             sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
@@ -776,6 +780,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
 
 if __name__ == "__main__":
+    print_logo()
     pep_file, spec_file, vector_file, config_file, num_cpu = argument_parser()
     params = load_configfile(config_file)
     run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu)
