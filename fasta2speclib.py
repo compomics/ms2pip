@@ -242,8 +242,10 @@ def main():
 
         if b_count == 1:
             write_mode = 'w'
+            append = False
         else:
             write_mode = 'a'
+            append = True
 
         print("{} - Writing predictions to {}_predictions.hdf".format(timestamp(), params['output_filename']))
         all_preds.astype(str).to_hdf(
