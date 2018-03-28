@@ -85,7 +85,7 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
             mods = [(str(x), sequence[x], y) for (x, y) in mods]
             out.append("Mods={}/{} ".format(len(mods), '/'.join([','.join(list(x)) for x in mods])))
 
-        out.append("Parent={} ".format(pepmass + charge * 1.007236) / charge)
+        out.append("Parent={} ".format((pepmass + charge * 1.007236) / charge))
 
         if add_protein:
             try:
