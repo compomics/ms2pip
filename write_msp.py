@@ -49,7 +49,8 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
     peptide_index = peprec_col_names.index('peptide')
     charge_index = peprec_col_names.index('charge')
     modifications_index = peprec_col_names.index('modifications')
-    protein_list_index = peprec_col_names.index('protein_list')
+    if add_protein:
+        protein_list_index = peprec_col_names.index('protein_list')
 
     for row in peprec_list:
         peprec_to_slice[row[spec_id_index]] = row
@@ -103,7 +104,7 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
             [row[ion_index] for row in preds],
             [row[ionnumber_index] for row in preds]
         ))
-        out.append(''.join(['{:.4f}\t{}\t"{}{}"\n'.format(*l) for l in lines]))
+        out.append(''.join(['{:.4f}\t{}\t"{}{}"\n\n'.format(*l) for l in lines]))
 
         out_string = "".join(out)
         q.put(out_string)
