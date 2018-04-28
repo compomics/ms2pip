@@ -95,12 +95,13 @@ def prot_to_peprec(protein):
     tmp = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
     pep_count = 0
     for peptide in cleave(str(protein.seq), expasy_rules['trypsin'], params['missed_cleavages']):
-        if params['min_peplen'] <= len(peptide) < int(params['max_pepmass'] / 186 + 2):
-            if not mass.calculate_mass(sequence=peptide) > params['max_pepmass']:
-                pep_count += 1
-                row = {'spec_id': '{}_{:03d}'.format(protein.id, pep_count),
-                       'peptide': peptide, 'modifications': '-', 'charge': np.nan}
-                tmp = tmp.append(row, ignore_index=True)
+        if False not in [aa not in peptide for aa in ['B', 'J', 'O', 'U', 'X', 'Z']]:
+            if params['min_peplen'] <= len(peptide) < int(params['max_pepmass'] / 186 + 2):
+                if not mass.calculate_mass(sequence=peptide) > params['max_pepmass']:
+                    pep_count += 1
+                    row = {'spec_id': '{}_{:03d}'.format(protein.id, pep_count),
+                           'peptide': peptide, 'modifications': '-', 'charge': np.nan}
+                    tmp = tmp.append(row, ignore_index=True)
     return(tmp)
 
 
