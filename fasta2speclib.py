@@ -33,7 +33,7 @@ from pyteomics.parser import cleave, expasy_rules
 from Bio import SeqIO
 
 # MS2PIP
-from ms2pipC import run
+from ms2pipC import run, write_mgf
 from write_msp import write_msp
 
 
@@ -42,6 +42,8 @@ def ArgParse():
     parser.add_argument('fasta_filename', action='store', help='Name of the fasta input file')
     parser.add_argument('-o', dest='output_filename', action='store',
                         help='Name for output file (default: derived from input file)')
+    parser.add_argument('-t', dest='output_filetype', action='store', nargs='+', default=['msp'],
+                        help='Output file formats for spectral library: HDF, MSP and/or MGF (default ["msp"]).')
     parser.add_argument('-c', dest='charges', action='store', nargs='+', default=[2, 3],
                         help='Precusor charges to include in peprec (default [2, 3]')
     parser.add_argument('-p', dest='min_peplen', action='store', default=8, type=int,
@@ -79,6 +81,7 @@ def get_params():
             ('Carbamidomethyl', 'C', 57.0513, False),
         ],
         'decoy': args.decoy,
+        'output_filetype': args.output_filetype,
         'batch_size': 5000,
     }
 
@@ -238,30 +241,41 @@ def run_batches(peprec, decoy=False):
             write_mode = 'a'
             append = True
 
-        print("{} - Writing predictions to {}_predictions.hdf".format(timestamp(), params['output_filename']))
-        all_preds.astype(str).to_hdf(
-            '{}_predictions.hdf'.format(params['output_filename']),
-            key='table', format='table', complevel=3, complib='zlib',
-            mode=write_mode, append=append, min_itemsize=50
-        )
+        if 'hdf' in params['output_filetype']:
+            print("{} - Writing predictions to {}_predictions.hdf".format(timestamp(), params['output_filename']))
+            all_preds.astype(str).to_hdf(
+                '{}_predictions.hdf'.format(params['output_filename']),
+                key='table', format='table', complevel=3, complib='zlib',
+                mode=write_mode, append=append, min_itemsize=50
+            )
 
-        print("{} - Writing MSP file with unmodified peptides...".format(timestamp()))
-        write_msp(
-            all_preds,
-            peprec_batch[peprec_batch['modifications'] == '-'],
-            output_filename="{}_unmodified".format(params['output_filename']),
-            write_mode=write_mode,
-            num_cpu=params['num_cpu']
-        )
+        if 'msp' in params['output_filetype']:
+            print("{} - Writing MSP file with unmodified peptides...".format(timestamp()))
+            write_msp(
+                all_preds,
+                peprec_batch[peprec_batch['modifications'] == '-'],
+                output_filename="{}_unmodified".format(params['output_filename']),
+                write_mode=write_mode,
+                num_cpu=params['num_cpu']
+            )
 
-        print("{} - Writing MSP file with all peptides...".format(timestamp()))
-        write_msp(
-            all_preds,
-            peprec_batch,
-            output_filename="{}_withmods".format(params['output_filename']),
-            write_mode=write_mode,
-            num_cpu=params['num_cpu']
-        )
+            print("{} - Writing MSP file with all peptides...".format(timestamp()))
+            write_msp(
+                all_preds,
+                peprec_batch,
+                output_filename="{}_withmods".format(params['output_filename']),
+                write_mode=write_mode,
+                num_cpu=params['num_cpu']
+            )
+
+        if 'mgf' in params['output_filetype']:
+            print("{} - Writing MGF file with all peptides...".format(timestamp()))
+            write_mgf(
+                all_preds,
+                peprec=peprec_batch,
+                output_filename="{}_withmods".format(params['output_filename']),
+                write_mode=write_mode
+            )
 
         del all_preds
         del peprec_batch

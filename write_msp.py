@@ -104,7 +104,8 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
             [row[ion_index] for row in preds],
             [row[ionnumber_index] for row in preds]
         ))
-        out.append(''.join(['{:.4f}\t{}\t"{}{}"\n\n'.format(*l) for l in lines]))
+        out.append(''.join(['{:.4f}\t{}\t"{}{}"\n'.format(*l) for l in lines]))
+        out.append('')
 
         out_string = "".join(out)
         q.put(out_string)
@@ -122,7 +123,8 @@ def writer(output_filename, write_mode, q):
     f.close()
 
 
-def write_msp(all_preds, peprec, output_filename, write_mode='w', num_cpu=8):
+def write_msp(all_preds_in, peprec, output_filename, write_mode='w', num_cpu=8):
+    all_preds = all_preds_in.copy()
     all_preds.reset_index(drop=True, inplace=True)
     # If not already normalized, normalize spectra
     if not (all_preds['prediction'].min() == 0 and all_preds['prediction'].max() == 10000):
@@ -156,3 +158,5 @@ def write_msp(all_preds, peprec, output_filename, write_mode='w', num_cpu=8):
     # Now we are done, kill the listener
     q.put('kill')
     pool.close()
+
+    del all_preds
