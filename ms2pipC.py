@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 # Native library
 import sys
 import pickle
@@ -7,6 +7,7 @@ import multiprocessing
 from random import shuffle
 import math
 import tempfile
+from operator import itemgetter
 from io import StringIO
 
 # Other
@@ -538,32 +539,78 @@ def calc_correlations(df):
     return correlations
 
 
-def write_mgf(all_preds, output_filename="MS2PIP", unlog=True, return_stringbuffer=False):
+def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False, peprec=None):
+    all_preds = all_preds_in.copy()
     if unlog:
         all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
         all_preds.reset_index(inplace=True)
         all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: x / x.sum())
 
-    def write(all_preds, mgf_output):
-        for sp in all_preds.spec_id.unique():
-            tmp = all_preds[all_preds.spec_id == sp]
-            tmp = tmp.sort_values("mz")
-            tmp.reset_index(inplace=True)
-            mgf_output.write("BEGIN IONS\n")
-            mgf_output.write("TITLE={}\n".format(sp))
-            mgf_output.write("CHARGE={}\n".format(tmp.charge[0]))
-            for i in range(len(tmp)):
-                mgf_output.write("{} {:.22f}\n".format(tmp["mz"][i], tmp["prediction"][i]))
-            mgf_output.write("END IONS\n\n")
+    def write(all_preds, mgf_output, peprec=None):
+        out = []
+
+        # Create easy to access dict from all_preds and peprec dataframe
+        if type(peprec) == pd.DataFrame:
+            peprec_to_dict = peprec.copy()
+            peprec_to_dict.index = peprec_to_dict['spec_id']
+            peprec_to_dict.drop('spec_id', axis=1, inplace=True)
+            peprec_dict = peprec_to_dict.to_dict(orient='index')
+            del peprec_to_dict
+            spec_id_list = list(peprec['spec_id'])
+        else:
+            spec_id_list = list(all_preds['spec_id'].unique())
+
+        preds_dict = {}
+        preds_list = all_preds[['mz', 'prediction', 'spec_id', 'charge']].values.tolist()
+
+        for row in preds_list:
+            spec_id = row[2]
+            if spec_id in preds_dict.keys():
+                preds_dict[spec_id]['peaks'].append(row[:2])
+            else:
+                preds_dict[spec_id] = {
+                    'charge': row[3],
+                    'peaks': [row[:2]]
+                }
+        # Write MGF
+        for spec_id in spec_id_list:
+            peaks = preds_dict[spec_id]['peaks']
+            peaks = sorted(peaks, key=itemgetter(0))
+
+            out.append('BEGIN IONS')
+            out.append('TITLE={}'.format(spec_id))
+            out.append('CHARGE={}+'.format(preds_dict[spec_id]['charge']))
+
+            # If peprec passed, add comments
+            if type(peprec) == pd.DataFrame:
+                seq = peprec_dict[spec_id]['peptide']
+                mods = peprec_dict[spec_id]['modifications']
+                if mods == '-':
+                    mods_out = '0'
+                else:
+                    mods = mods.split('|')
+                    mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
+                    # Turn MS2PIP mod indexes into actual list indexes (eg 0 for first AA)
+                    mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
+                    mods = [(str(x), seq[x], y) for (x, y) in mods]
+                    mods_out = '{}/{}'.format(len(mods), '/'.join([','.join(list(x)) for x in mods]))
+
+                out.append('COMMENT=Sequence:"{}", Mods:"{}"'.format(seq, mods_out))
+
+            out.append('\n'.join([' '.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
+            out.append('END IONS\n')
+
+        mgf_output.write('\n'.join(out))
 
     if return_stringbuffer:
         mgf_output = StringIO()
-        write(all_preds, mgf_output)
+        write(all_preds, mgf_output, peprec=peprec)
         return(mgf_output)
     else:
-        print("writing mgf file {}_predictions.mgf...".format(output_filename))
-        with open("{}_predictions.mgf".format(output_filename), "w+") as mgf_output:
-            write(all_preds, mgf_output)
+        with open("{}_predictions.mgf".format(output_filename), write_mode) as mgf_output:
+            write(all_preds, mgf_output, peprec=peprec)
+
+    del all_preds
 
 
 def argument_parser():
@@ -765,10 +812,12 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
         mgf = False  # Set to True to write spectrum as MGF file
         if mgf:
-            write_mgf(all_preds, output_filename=output_filename)
+            print("writing MGF file {}_predictions.mgf...".format(output_filename))
+            write_mgf(all_preds, peprec=data, output_filename=output_filename)
 
         msp = False  # Set to True to write spectra as MSP file
         if msp:
+            print("writing MGF file {}_predictions.mgf...".format(output_filename))
             write_msp(all_preds, data, output_filename=output_filename, num_cpu=num_cpu)
 
         if not return_results:
