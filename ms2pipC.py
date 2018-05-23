@@ -597,7 +597,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
 
                 out.append('COMMENT=Sequence:"{}", Mods:"{}"'.format(seq, mods_out))
 
-            out.append('\n'.join([' '.join(['{:.4f}'.format(p) for p in peak]) for peak in peaks]))
+            out.append('\n'.join([' '.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
             out.append('END IONS\n')
 
         mgf_output.write('\n'.join(out))

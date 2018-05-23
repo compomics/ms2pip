@@ -105,7 +105,7 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
             [row[ionnumber_index] for row in preds]
         ))
         out.append(''.join(['{:.4f}\t{}\t"{}{}"\n'.format(*l) for l in lines]))
-        out.append('')
+        out.append('\n')
 
         out_string = "".join(out)
         q.put(out_string)

@@ -6,7 +6,7 @@ The script runs through the following steps:
 - Add all variations of variable modifications (max 7 PTMs/peptide)
 - Add variations on charge state
 - Run peptides through MS2PIP
-- Write to MSP file
+- Write to MSP, MGF or HDF file
 """
 
 
@@ -269,6 +269,14 @@ def run_batches(peprec, decoy=False):
             )
 
         if 'mgf' in params['output_filetype']:
+            print("{} - Writing MGF file with unmodified peptides...".format(timestamp()))
+            write_mgf(
+                all_preds,
+                peprec=peprec_batch[peprec_batch['modifications'] == '-'],
+                output_filename="{}_unmodified".format(params['output_filename']),
+                write_mode=write_mode
+            )
+
             print("{} - Writing MGF file with all peptides...".format(timestamp()))
             write_mgf(
                 all_preds,
@@ -292,13 +300,16 @@ def main():
     print("{} - Removing peptide redundancy, adding protein list to peptides...".format(timestamp()))
     peprec = get_protein_list(peprec)
 
-    print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(timestamp(), params['output_filename']))
     peprec_nonmod = peprec.copy()
-    peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
-    peprec_nonmod.astype(str).to_hdf(
-        '{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table',
-        format='table', complevel=3, complib='zlib', mode='w'
-    )
+
+    save_peprec = False
+    if save_peprec:
+        print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(timestamp(), params['output_filename']))
+        peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
+        peprec_nonmod.astype(str).to_hdf(
+            '{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table',
+            format='table', complevel=3, complib='zlib', mode='w'
+        )
 
     if not params['decoy']:
         del peprec_nonmod
@@ -315,7 +326,7 @@ def main():
         peprec_decoy['spec_id'] = 'decoy_' + peprec_decoy['spec_id']
         peprec_decoy['peptide'] = peprec_decoy['peptide'].apply(lambda pep: pep[-2::-1] + pep[-1])
         peprec_decoy = peprec_decoy[~peprec_decoy['peptide'].isin(peprec_nonmod['peptide'])]
-        del peprec_decoy['protein_list']
+        peprec_decoy['protein_list'] = 'decoy'
         del peprec_nonmod
 
         print("{} - Predicting spectra for decoy peptides...".format(timestamp()))
