@@ -817,7 +817,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
         msp = False  # Set to True to write spectra as MSP file
         if msp:
-            print("writing MGF file {}_predictions.mgf...".format(output_filename))
+            print("writing MSP file {}_predictions.msp...".format(output_filename))
             write_msp(all_preds, data, output_filename=output_filename, num_cpu=num_cpu)
 
         if not return_results:
