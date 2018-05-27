@@ -210,15 +210,15 @@ def run_batches(peprec, decoy=False):
         else:
             peprec_batch = peprec[i:]
         b_count += 1
-        logging.info("Working on batch {} of {}, containing {} unmodified peptides".format(b_count, num_b_counts, len(peprec_batch)))
+        logging.info("Predicting batch {} of {}, containing {} unmodified peptides".format(b_count, num_b_counts, len(peprec_batch)))
 
-        logging.info("Adding all modification combinations")
+        logging.debug("Adding all modification combinations")
         peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
         with Pool(params['num_cpu']) as p:
             peprec_mods = peprec_mods.append(p.map(add_mods, peprec_batch.iterrows()), ignore_index=True)
         peprec_batch = peprec_mods
 
-        logging.info("Adding charge states {}".format(params['charges']))
+        logging.debug("Adding charge states {}".format(params['charges']))
         peprec_batch = add_charges(peprec_batch)
 
         # Write ptm/charge-extended peprec from this batch to H5 file:
