@@ -561,42 +561,47 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
             spec_id_list = list(all_preds['spec_id'].unique())
 
         preds_dict = {}
-        preds_list = all_preds[['mz', 'prediction', 'spec_id', 'charge']].values.tolist()
+        preds_list = all_preds[['spec_id', 'charge', 'ion', 'mz', 'prediction']].values.tolist()
 
         for row in preds_list:
-            spec_id = row[2]
+            spec_id = row[0]
             if spec_id in preds_dict.keys():
-                preds_dict[spec_id]['peaks'].append(row[:2])
+                if row[2] in preds_dict[spec_id]['peaks']:
+                    preds_dict[spec_id]['peaks'][row[2]].append(tuple(row[3:]))
+                else:
+                    preds_dict[spec_id]['peaks'][row[2]] = [tuple(row[3:])]
             else:
                 preds_dict[spec_id] = {
-                    'charge': row[3],
-                    'peaks': [row[:2]]
+                    'charge': row[1],
+                    'peaks': {row[2]: [tuple(row[3:])]}
                 }
+
         # Write MGF
         for spec_id in spec_id_list:
-            peaks = preds_dict[spec_id]['peaks']
+            out.append('BEGIN IONS')
+            pepmass = preds_dict[spec_id]['peaks']['b'][0][0] + preds_dict[spec_id]['peaks']['y'][-1][0] - 2 * 1.007236
+            peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
             peaks = sorted(peaks, key=itemgetter(0))
 
-            out.append('BEGIN IONS')
-            out.append('TITLE={}'.format(spec_id))
-            out.append('CHARGE={}+'.format(preds_dict[spec_id]['charge']))
-
-            # If peprec passed, add comments
             if type(peprec) == pd.DataFrame:
                 seq = peprec_dict[spec_id]['peptide']
                 mods = peprec_dict[spec_id]['modifications']
                 if mods == '-':
                     mods_out = '0'
                 else:
+                    # Write MSP style PTM string
                     mods = mods.split('|')
                     mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
                     # Turn MS2PIP mod indexes into actual list indexes (eg 0 for first AA)
                     mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
                     mods = [(str(x), seq[x], y) for (x, y) in mods]
                     mods_out = '{}/{}'.format(len(mods), '/'.join([','.join(list(x)) for x in mods]))
+                out.append('TITLE={} {} {}'.format(spec_id, seq, mods_out))
+            else:
+                out.append('TITLE={}'.format(spec_id))
 
-                out.append('COMMENT=Sequence:"{}", Mods:"{}"'.format(seq, mods_out))
-
+            out.append('PEPMASS={}'.format(pepmass))
+            out.append('CHARGE={}+'.format(preds_dict[spec_id]['charge']))
             out.append('\n'.join([' '.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
             out.append('END IONS\n')
 

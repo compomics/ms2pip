@@ -18,6 +18,7 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 
 # Native libraries
+import logging
 import argparse
 from math import ceil
 from re import finditer
@@ -43,7 +44,7 @@ def ArgParse():
     parser.add_argument('-o', dest='output_filename', action='store',
                         help='Name for output file (default: derived from input file)')
     parser.add_argument('-t', dest='output_filetype', action='store', nargs='+', default=['msp'],
-                        help='Output file formats for spectral library: HDF, MSP and/or MGF (default ["msp"]).')
+                        help='Output file formats for spectral library: HDF, MSP and/or MGF (default msp).')
     parser.add_argument('-c', dest='charges', action='store', nargs='+', default=[2, 3],
                         help='Precusor charges to include in peprec (default [2, 3]')
     parser.add_argument('-p', dest='min_peplen', action='store', default=8, type=int,
@@ -186,10 +187,6 @@ def add_charges(df_in):
     return(df_out)
 
 
-def timestamp():
-    return(datetime.now().strftime("%y-%m-%d %H:%M"))
-
-
 def run_batches(peprec, decoy=False):
     params = get_params()
     if decoy:
@@ -213,15 +210,15 @@ def run_batches(peprec, decoy=False):
         else:
             peprec_batch = peprec[i:]
         b_count += 1
-        print("\nWorking on batch {} of {}, containing {} unmodified peptides...".format(b_count, num_b_counts, len(peprec_batch)))
+        logging.info("Working on batch {} of {}, containing {} unmodified peptides".format(b_count, num_b_counts, len(peprec_batch)))
 
-        print("{} - Adding all modification combinations...".format(timestamp()))
+        logging.info("Adding all modification combinations")
         peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
         with Pool(params['num_cpu']) as p:
             peprec_mods = peprec_mods.append(p.map(add_mods, peprec_batch.iterrows()), ignore_index=True)
         peprec_batch = peprec_mods
 
-        print("{} - Adding charge states {}...".format(timestamp(), params['charges']))
+        logging.info("Adding charge states {}".format(params['charges']))
         peprec_batch = add_charges(peprec_batch)
 
         # Write ptm/charge-extended peprec from this batch to H5 file:
@@ -230,7 +227,7 @@ def run_batches(peprec, decoy=False):
         #     format='table', complevel=3, complib='zlib', mode='w'
         # )
 
-        print("{} - Running MS2PIPc...".format(timestamp()))
+        logging.info("Running MS2PIPc for {} peptides".format(len(peprec_batch)))
         all_preds = run(peprec_batch, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
                         params=ms2pip_params, return_results=True)
 
@@ -242,7 +239,7 @@ def run_batches(peprec, decoy=False):
             append = True
 
         if 'hdf' in params['output_filetype']:
-            print("{} - Writing predictions to {}_predictions.hdf".format(timestamp(), params['output_filename']))
+            logging.info("Writing predictions to {}_predictions.hdf".format(params['output_filename']))
             all_preds.astype(str).to_hdf(
                 '{}_predictions.hdf'.format(params['output_filename']),
                 key='table', format='table', complevel=3, complib='zlib',
@@ -250,7 +247,7 @@ def run_batches(peprec, decoy=False):
             )
 
         if 'msp' in params['output_filetype']:
-            print("{} - Writing MSP file with unmodified peptides...".format(timestamp()))
+            logging.info("Writing MSP file with unmodified peptides")
             write_msp(
                 all_preds,
                 peprec_batch[peprec_batch['modifications'] == '-'],
@@ -259,7 +256,7 @@ def run_batches(peprec, decoy=False):
                 num_cpu=params['num_cpu']
             )
 
-            print("{} - Writing MSP file with all peptides...".format(timestamp()))
+            logging.info("Writing MSP file with all peptides")
             write_msp(
                 all_preds,
                 peprec_batch,
@@ -269,7 +266,7 @@ def run_batches(peprec, decoy=False):
             )
 
         if 'mgf' in params['output_filetype']:
-            print("{} - Writing MGF file with unmodified peptides...".format(timestamp()))
+            logging.info("Writing MGF file with unmodified peptides")
             write_mgf(
                 all_preds,
                 peprec=peprec_batch[peprec_batch['modifications'] == '-'],
@@ -277,7 +274,7 @@ def run_batches(peprec, decoy=False):
                 write_mode=write_mode
             )
 
-            print("{} - Writing MGF file with all peptides...".format(timestamp()))
+            logging.info("Writing MGF file with all peptides")
             write_mgf(
                 all_preds,
                 peprec=peprec_batch,
@@ -291,20 +288,25 @@ def run_batches(peprec, decoy=False):
 
 def main():
     params = get_params()
+    logging.basicConfig(
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=logging.INFO
+    )
     peprec = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
 
-    print("{} - Cleaving proteins, adding peptides to peprec...".format(timestamp()))
+    logging.info("Cleaving proteins, adding peptides to peprec")
     with Pool(params['num_cpu']) as p:
         peprec = peprec.append(p.map(prot_to_peprec, SeqIO.parse(params['fasta_filename'], "fasta")), ignore_index=True)
 
-    print("{} - Removing peptide redundancy, adding protein list to peptides...".format(timestamp()))
+    logging.info("Removing peptide redundancy, adding protein list to peptides")
     peprec = get_protein_list(peprec)
 
     peprec_nonmod = peprec.copy()
 
     save_peprec = False
     if save_peprec:
-        print("{} - Saving non-expanded PEPREC to {}.peprec.hdf...".format(timestamp(), params['output_filename']))
+        logging.info("Saving non-expanded PEPREC to {}.peprec.hdf".format(params['output_filename']))
         peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
         peprec_nonmod.astype(str).to_hdf(
             '{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table',
@@ -320,7 +322,7 @@ def main():
     # peprec_nonmod = pd.read_hdf('data/uniprot_proteome_yeast_head_nonexpanded.peprec.hdf', key='table')
 
     if params['decoy']:
-        print("{} - Reversing sequences for decoy peptides...".format(timestamp()))
+        logging.info("Reversing sequences for decoy peptides")
         # Copy peptides, add 'decoy_' to spec_id, reverse sequences, remove palindromic sequences, delete protein_list
         peprec_decoy = peprec_nonmod.copy()
         peprec_decoy['spec_id'] = 'decoy_' + peprec_decoy['spec_id']
@@ -329,10 +331,10 @@ def main():
         peprec_decoy['protein_list'] = 'decoy'
         del peprec_nonmod
 
-        print("{} - Predicting spectra for decoy peptides...".format(timestamp()))
+        logging.info("Predicting spectra for decoy peptides")
         run_batches(peprec_decoy, decoy=True)
 
-    print("\nFasta2SpecLib is ready!")
+    logging.info("Fasta2SpecLib is ready!")
 
 
 if __name__ == "__main__":
