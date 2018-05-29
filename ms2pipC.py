@@ -579,6 +579,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
         # Write MGF
         for spec_id in spec_id_list:
             out.append('BEGIN IONS')
+            charge = preds_dict[spec_id]['charge']
             pepmass = preds_dict[spec_id]['peaks']['b'][0][0] + preds_dict[spec_id]['peaks']['y'][-1][0] - 2 * 1.007236
             peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
             peaks = sorted(peaks, key=itemgetter(0))
@@ -600,8 +601,8 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
             else:
                 out.append('TITLE={}'.format(spec_id))
 
-            out.append('PEPMASS={}'.format(pepmass))
-            out.append('CHARGE={}+'.format(preds_dict[spec_id]['charge']))
+            out.append('PEPMASS={}'.format((pepmass + (charge * 1.007825032)) / charge))
+            out.append('CHARGE={}+'.format(charge))
             out.append('\n'.join([' '.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
             out.append('END IONS\n')
 
