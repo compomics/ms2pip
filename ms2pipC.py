@@ -557,6 +557,9 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
             peprec_dict = peprec_to_dict.to_dict(orient='index')
             del peprec_to_dict
             spec_id_list = list(peprec['spec_id'])
+
+            rt_present = 'rt' in peprec.columns
+
         else:
             spec_id_list = list(all_preds['spec_id'].unique())
 
@@ -587,6 +590,8 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
             if type(peprec) == pd.DataFrame:
                 seq = peprec_dict[spec_id]['peptide']
                 mods = peprec_dict[spec_id]['modifications']
+                if rt_present:
+                    rt = peprec_dict[spec_id]['rt']
                 if mods == '-':
                     mods_out = '0'
                 else:
@@ -603,6 +608,8 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
 
             out.append('PEPMASS={}'.format((pepmass + (charge * 1.007825032)) / charge))
             out.append('CHARGE={}+'.format(charge))
+            if rt_present:
+                out.append('RTINSECONDS={}'.format(rt))
             out.append('\n'.join([' '.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
             out.append('END IONS\n')
 
@@ -816,12 +823,12 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        mgf = False  # Set to True to write spectrum as MGF file
+        mgf = True  # Set to True to write spectrum as MGF file
         if mgf:
             print("writing MGF file {}_predictions.mgf...".format(output_filename))
             write_mgf(all_preds, peprec=data, output_filename=output_filename)
 
-        msp = False  # Set to True to write spectra as MSP file
+        msp = True  # Set to True to write spectra as MSP file
         if msp:
             print("writing MSP file {}_predictions.msp...".format(output_filename))
             write_msp(all_preds, data, output_filename=output_filename, num_cpu=num_cpu)
