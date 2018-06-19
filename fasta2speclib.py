@@ -187,6 +187,33 @@ def add_charges(df_in):
     return(df_out)
 
 
+def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, remove_redundancy=True):
+    """
+    Create decoy peptides by reversing the sequences in a PEPREC DataFrame.
+
+    Keyword arguments:
+    spec_id_prefix -- string to prefix the decoy spec_ids (default: 'decoy_')
+    keep_cterm_aa -- True if the last amino acid should stay in place (for example to keep tryptic properties) (default: True)
+    remove_redundancy -- True if reversed peptides that are also found in the set of normal peptide should be removed (default: True)
+    """
+
+    peprec_decoy = peprec.copy()
+    peprec_decoy['spec_id'] = spec_id_prefix + peprec_decoy['spec_id'].astype(str)
+
+    if keep_cterm_aa:
+        peprec_decoy['peptide'] = peprec_decoy['peptide'].apply(lambda pep: pep[-2::-1] + pep[-1])
+    else:
+        peprec_decoy['peptide'] = peprec_decoy['peptide'].apply(lambda pep: pep[-1::-1])
+
+    if remove_redundancy:
+        peprec_decoy = peprec_decoy[~peprec_decoy['peptide'].isin(peprec['peptide'])]
+
+    if 'protein_list' in peprec_decoy.columns:
+        peprec_decoy['protein_list'] = 'decoy'
+
+    return peprec_decoy
+
+
 def run_batches(peprec, decoy=False):
     params = get_params()
     if decoy:
@@ -323,12 +350,7 @@ def main():
 
     if params['decoy']:
         logging.info("Reversing sequences for decoy peptides")
-        # Copy peptides, add 'decoy_' to spec_id, reverse sequences, remove palindromic sequences, delete protein_list
-        peprec_decoy = peprec_nonmod.copy()
-        peprec_decoy['spec_id'] = 'decoy_' + peprec_decoy['spec_id']
-        peprec_decoy['peptide'] = peprec_decoy['peptide'].apply(lambda pep: pep[-2::-1] + pep[-1])
-        peprec_decoy = peprec_decoy[~peprec_decoy['peptide'].isin(peprec_nonmod['peptide'])]
-        peprec_decoy['protein_list'] = 'decoy'
+        peprec_decoy = create_decoy_peprec(peprec_nonmod)
         del peprec_nonmod
 
         logging.info("Predicting spectra for decoy peptides")
