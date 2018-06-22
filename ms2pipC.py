@@ -552,13 +552,16 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
         # Create easy to access dict from all_preds and peprec dataframe
         if type(peprec) == pd.DataFrame:
             peprec_to_dict = peprec.copy()
+
+            rt_present = 'rt' in peprec_to_dict.columns
+            if rt_present:
+                peprec_to_dict['rt'] = peprec_to_dict['rt'] * 60
+
             peprec_to_dict.index = peprec_to_dict['spec_id']
             peprec_to_dict.drop('spec_id', axis=1, inplace=True)
             peprec_dict = peprec_to_dict.to_dict(orient='index')
             del peprec_to_dict
             spec_id_list = list(peprec['spec_id'])
-
-            rt_present = 'rt' in peprec.columns
 
         else:
             spec_id_list = list(all_preds['spec_id'].unique())
@@ -823,12 +826,12 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         for r in results:
             all_preds = all_preds.append(r.get())
 
-        mgf = True  # Set to True to write spectrum as MGF file
+        mgf = False  # Set to True to write spectrum as MGF file
         if mgf:
             print("writing MGF file {}_predictions.mgf...".format(output_filename))
             write_mgf(all_preds, peprec=data, output_filename=output_filename)
 
-        msp = True  # Set to True to write spectra as MSP file
+        msp = False  # Set to True to write spectra as MSP file
         if msp:
             print("writing MSP file {}_predictions.msp...".format(output_filename))
             write_msp(all_preds, data, output_filename=output_filename, num_cpu=num_cpu)
