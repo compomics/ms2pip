@@ -18,6 +18,7 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 
 # Native libraries
+import os
 import logging
 import argparse
 from math import ceil
@@ -57,6 +58,9 @@ def ArgParse():
                         help='Fragmentation method to use for MS2PIP predictions')
     parser.add_argument('-d', dest='decoy', action='store_true',
                         help='Create decoy spectral library by reversing peptide sequences')
+    parser.add_argument('-e', dest='elude_model_file', action='store', default=None,
+                        help='If given, predict retention times with given ELUDE model.\
+                         ELUDE needs to be installed for this functionality.')
     parser.add_argument('-n', dest='num_cpu', action='store', default=24, type=int,
                         help='Number of processes for multithreading (default: 24)')
     args = parser.parse_args()
@@ -74,16 +78,18 @@ def get_params():
         'frag_method': args.frag_method,
         'num_cpu': args.num_cpu,
         'modifications': [
-            # (name, specific AA, mass-shift, N-term)
-            ('Glu->pyro-Glu', 'E', -18.0153, True),
-            ('Gln->pyro-Glu', 'Q', -17.0305, True),
-            ('Acetyl', None, 42.0367, True),
-            ('Oxidation', 'M', 15.9994, False),
-            ('Carbamidomethyl', 'C', 57.0513, False),
+            # (name, specific AA, mass-shift, N-term, UniMod accession)
+            #('Glu->pyro-Glu', 'E', -18.0153, True, 27),
+            #('Gln->pyro-Glu', 'Q', -17.0305, True, 28),
+            #('Acetyl', None, 42.0367, True, 1),
+            ('Oxidation', 'M', 15.9994, False, 35),
+            ('Carbamidomethyl', 'C', 57.0513, False, 4),
         ],
         'decoy': args.decoy,
+        'elude_model_file': args.elude_model_file,
         'output_filetype': args.output_filetype,
         'batch_size': 5000,
+        'log_level': logging.DEBUG,
     }
 
     if args.output_filename:
@@ -164,7 +170,9 @@ def add_mods(tup):
                         mod_versions.append(new_version)
 
     df_out = pd.DataFrame(columns=row.index)
-    df_out['modifications'] = ['|'.join('{}|{}'.format(0, value) if key == 'N' else '{}|{}'.format(key + 1, value) for key, value in version.items()) for version in mod_versions]
+    df_out['modifications'] = ['|'.join('{}|{}'.format(0, value) if key == 'N'
+                               else '{}|{}'.format(key + 1, value) for key, value
+                               in version.items()) for version in mod_versions]
     df_out['modifications'] = ['-' if len(mods) == 0 else mods for mods in df_out['modifications']]
     df_out['spec_id'] = ['{}_{:03d}'.format(row['spec_id'], i) for i in range(len(mod_versions))]
     df_out['charge'] = row['charge']
@@ -214,6 +222,82 @@ def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, rem
     return peprec_decoy
 
 
+def elude_insert_mods(row, peptide_column='peptide', mods_column='modifications',
+                      unimod_mapping={'Oxidation': 35, 'Carbamidomethyl': 4}):
+    """
+    Insert PEPREC modifications into peptide sequence for ELUDE.
+
+    Accepts normal, N-terminal and C-terminal modifications.
+
+    Positional arguments:
+    row -- pandas.DataFrame row, for use with .apply(elude_insert_mods, axis=1)
+
+    Keyword arguments:
+    peptide_column -- Column name of column with peptide sequences
+    mods_column -- Column name of column with MS2PIP PEPREC encoded
+    modifications
+    unimod_mapping -- Dictionary that maps the MS2PIP modification names to
+    UniMod accessions
+    """
+
+    unimod_mapping[''] = ''
+
+    peptide = row[peptide_column]
+    mods = row[mods_column]
+
+    if type(mods) == str:
+        if mods == '-':
+            peptide_mods = peptide
+
+        else:
+            mods = mods.split('|')
+            pos, names = [list(tup) for tup in zip(*sorted(zip([int(p) for p in mods[::2]], mods[1::2])))]
+
+            # Add 0 to pos, if no N-term PTMs present
+            if pos[0] != 0:
+                pos.insert(0, 0)
+                names.insert(0, '')
+
+            # Replace "-1" index from C-term PTMs to index of last aa
+            if pos[-1] == -1:
+                pos[-1] = len(peptide)
+
+            pep_split = [peptide[i:j] for i, j in zip(list(pos), list(pos)[1:] + [None])]
+            peptide_mods = ''.join([''.join(tup) for tup in zip(['[unimod:{}]'.format(unimod_mapping[n])
+                                    if n else '' for n in names], pep_split)])
+
+    else:
+        peptide_mods = peptide
+
+    return peptide_mods
+
+
+def get_elude_predictions(peprec, elude_model_file, **kwargs):
+    """
+    Return ELUDE retention time predictions for peptide sequences in MS2PIP PEPREC.
+
+    ELUDE needs to be installed and callable with os.system(elude). Tested with ELUDE v3.2
+
+    Positional arguments:
+    peprec -- MS2PIP PEPREC in pandas.DataFrame()
+    elude_model_file -- filename of ELUDE model to apply
+
+    kwargs -- keyword arguments are passed to elude_insert_mods
+    """
+
+    filename_in = '{}_Test.txt'.format(elude_model_file)
+    filename_out = '{}_Preds.txt'.format(elude_model_file)
+    filename_model = elude_model_file
+
+    peprec.apply(elude_insert_mods, **kwargs, axis=1)\
+          .to_csv(filename_in, sep=' ', index=False, header=False)
+    os.system('elude -l "{}" -e "{}" -o "{}" -p'.format(filename_model, filename_in, filename_out))
+    preds = pd.read_csv(filename_out, sep='\t', comment='#')
+    os.system('rm {}; rm {}'.format(filename_in, filename_out))
+
+    return preds['Predicted_RT']
+
+
 def run_batches(peprec, decoy=False):
     params = get_params()
     if decoy:
@@ -244,6 +328,14 @@ def run_batches(peprec, decoy=False):
         with Pool(params['num_cpu']) as p:
             peprec_mods = peprec_mods.append(p.map(add_mods, peprec_batch.iterrows()), ignore_index=True)
         peprec_batch = peprec_mods
+
+        logging.debug("Adding ELUDE predicted retention times")
+        if type(params['elude_model_file']) == str:
+            peprec_batch['rt'] = get_elude_predictions(
+                peprec_batch,
+                params['elude_model_file'],
+                unimod_mapping={tup[0]: tup[4] for tup in params['modifications']}
+            )
 
         logging.debug("Adding charge states {}".format(params['charges']))
         peprec_batch = add_charges(peprec_batch)
@@ -318,7 +410,7 @@ def main():
     logging.basicConfig(
         format='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
-        level=logging.INFO
+        level=params['log_level']
     )
     peprec = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
 
