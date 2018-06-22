@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 
-def process(spec_ids_sel, all_preds, peprec, add_protein, q):
+def process(spec_ids_sel, all_preds, peprec, add_protein, add_rt, q):
     preds_col_names = list(all_preds.columns)
     preds_to_slice = {}
     preds_list = all_preds.values.tolist()
@@ -51,6 +51,8 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
     modifications_index = peprec_col_names.index('modifications')
     if add_protein:
         protein_list_index = peprec_col_names.index('protein_list')
+    if add_rt:
+        rt_index = peprec_col_names.index('rt')
 
     for row in peprec_list:
         peprec_to_slice[row[spec_id_index]] = row
@@ -94,6 +96,9 @@ def process(spec_ids_sel, all_preds, peprec, add_protein, q):
             except ValueError:
                 out.append('Protein="{}" '.format(peprec_sel[protein_list_index]))
 
+        if add_rt:
+            out.append('RTINSECONDS={} '.format(peprec_sel[rt_index]))
+
         out.append('MS2PIP_ID="{}"'.format(spec_id))
 
         out.append('\nNum peaks: {}\n'.format(numpeaks))
@@ -123,8 +128,9 @@ def writer(output_filename, write_mode, q):
     f.close()
 
 
-def write_msp(all_preds_in, peprec, output_filename, write_mode='w', num_cpu=8):
+def write_msp(all_preds_in, peprec_in, output_filename, write_mode='w', num_cpu=8):
     all_preds = all_preds_in.copy()
+    peprec = peprec_in.copy()
     all_preds.reset_index(drop=True, inplace=True)
     # If not already normalized, normalize spectra
     if not (all_preds['prediction'].min() == 0 and all_preds['prediction'].max() == 10000):
@@ -132,8 +138,13 @@ def write_msp(all_preds_in, peprec, output_filename, write_mode='w', num_cpu=8):
         all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: (x / x.max()) * 10000)
         all_preds['prediction'] = all_preds['prediction'].astype(int)
 
-    # Check if protein list is present in peprec
+    # Check if protein list and rt are present in peprec
     add_protein = 'protein_list' in peprec.columns
+    add_rt = 'rt' in peprec.columns
+
+    # Convert RT from min to sec
+    if add_rt:
+        peprec['rt'] = peprec['rt'] * 60
 
     # Use manager for advanced multiprocessing
     manager = mp.Manager()
@@ -148,7 +159,7 @@ def write_msp(all_preds_in, peprec, output_filename, write_mode='w', num_cpu=8):
     # Fire off workers
     jobs = []
     for spec_ids_sel in split_spec_ids:
-        job = pool.apply_async(process, (spec_ids_sel, all_preds, peprec, add_protein, q))
+        job = pool.apply_async(process, (spec_ids_sel, all_preds, peprec, add_protein, add_rt, q))
         jobs.append(job)
 
     # Collect results from the workers through the pool result queue
