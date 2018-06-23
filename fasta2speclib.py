@@ -2,7 +2,7 @@
 Create a spectral library starting from a proteome in fasta format.
 The script runs through the following steps:
 - In silico cleavage of proteins from the fasta file
-- Removes peptide redundancy
+- Remove peptide redundancy
 - Add all variations of variable modifications (max 7 PTMs/peptide)
 - Add variations on charge state
 - Run peptides through MS2PIP
@@ -22,8 +22,6 @@ import os
 import logging
 import argparse
 from math import ceil
-from re import finditer
-from datetime import datetime
 from multiprocessing import Pool
 from itertools import combinations
 
@@ -58,9 +56,11 @@ def ArgParse():
                         help='Fragmentation method to use for MS2PIP predictions')
     parser.add_argument('-d', dest='decoy', action='store_true',
                         help='Create decoy spectral library by reversing peptide sequences')
-    parser.add_argument('-e', dest='elude_model_file', action='store', default=None,
+    parser.add_argument('--elude_model', dest='elude_model_file', action='store', default=None,
                         help='If given, predict retention times with given ELUDE model.\
                          ELUDE needs to be installed for this functionality.')
+    parser.add_argument('--peprec_filter', dest='peprec_filter', action='store', default=None,
+                        help='Do not predict spectra for peptides present in this peprec.')
     parser.add_argument('-n', dest='num_cpu', action='store', default=24, type=int,
                         help='Number of processes for multithreading (default: 24)')
     args = parser.parse_args()
@@ -79,14 +79,15 @@ def get_params():
         'num_cpu': args.num_cpu,
         'modifications': [
             # (name, specific AA, mass-shift, N-term, UniMod accession)
-            #('Glu->pyro-Glu', 'E', -18.0153, True, 27),
-            #('Gln->pyro-Glu', 'Q', -17.0305, True, 28),
-            #('Acetyl', None, 42.0367, True, 1),
+            # ('Glu->pyro-Glu', 'E', -18.0153, True, 27),
+            # ('Gln->pyro-Glu', 'Q', -17.0305, True, 28),
+            # ('Acetyl', None, 42.0367, True, 1),
             ('Oxidation', 'M', 15.9994, False, 35),
             ('Carbamidomethyl', 'C', 57.0513, False, 4),
         ],
         'decoy': args.decoy,
         'elude_model_file': args.elude_model_file,
+        'peprec_filter': args.peprec_filter,
         'output_filetype': args.output_filetype,
         'batch_size': 5000,
         'log_level': logging.DEBUG,
@@ -179,7 +180,7 @@ def add_mods(tup):
     df_out['peptide'] = row['peptide']
     if 'protein_list' in row.index:
         df_out['protein_list'] = str(row['protein_list'])
-    return(df_out)
+    return df_out
 
 
 def add_charges(df_in):
@@ -192,7 +193,7 @@ def add_charges(df_in):
         df_out = df_out.append(tmp, ignore_index=True)
     df_out.sort_values(['spec_id', 'charge'], inplace=True)
     df_out.reset_index(drop=True, inplace=True)
-    return(df_out)
+    return df_out
 
 
 def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, remove_redundancy=True):
@@ -298,6 +299,12 @@ def get_elude_predictions(peprec, elude_model_file, **kwargs):
     return preds['Predicted_RT']
 
 
+def remove_from_peprec_filter(peprec_pred, peprec_filter):
+    peprec_pred_comb = peprec_pred['modifications'] + peprec_pred['peptide'] + peprec_pred['charge'].astype(str)
+    peprec_filter_comb = peprec_filter['modifications'] + peprec_filter['peptide'] + peprec_filter['charge'].astype(str)
+    return peprec_pred[~peprec_pred_comb.isin(peprec_filter_comb)].copy()
+
+
 def run_batches(peprec, decoy=False):
     params = get_params()
     if decoy:
@@ -306,7 +313,10 @@ def run_batches(peprec, decoy=False):
     ms2pip_params = {
         'frag_method': params['frag_method'],
         'frag_error': 0.02,
-        'ptm': ['{},{},opt,{}'.format(mods[0], mods[2], mods[1]) if not mods[3] else '{},{},opt,N-term'.format(mods[0], mods[2]) for mods in params['modifications']],
+        'ptm': ['{},{},opt,{}'.format(mods[0], mods[2], mods[1])
+                if not mods[3]
+                else '{},{},opt,N-term'.format(mods[0], mods[2])
+                for mods in params['modifications']],
         'sptm': [],
         'gptm': [],
     }
@@ -329,8 +339,8 @@ def run_batches(peprec, decoy=False):
             peprec_mods = peprec_mods.append(p.map(add_mods, peprec_batch.iterrows()), ignore_index=True)
         peprec_batch = peprec_mods
 
-        logging.debug("Adding ELUDE predicted retention times")
         if type(params['elude_model_file']) == str:
+            logging.debug("Adding ELUDE predicted retention times")
             peprec_batch['rt'] = get_elude_predictions(
                 peprec_batch,
                 params['elude_model_file'],
@@ -339,6 +349,13 @@ def run_batches(peprec, decoy=False):
 
         logging.debug("Adding charge states {}".format(params['charges']))
         peprec_batch = add_charges(peprec_batch)
+
+        peprec_batch.to_csv('data/for_filter.peprec', sep=' ')
+
+        if type(params['peprec_filter']) == str:
+            logging.debug("Removing peptides present in peprec filter")
+            peprec_filter = pd.read_csv(params['peprec_filter'], sep=' ')
+            peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
 
         # Write ptm/charge-extended peprec from this batch to H5 file:
         # peprec_batch.astype(str).to_hdf(
