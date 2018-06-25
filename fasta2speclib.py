@@ -90,7 +90,7 @@ def get_params():
         'peprec_filter': args.peprec_filter,
         'output_filetype': args.output_filetype,
         'batch_size': 5000,
-        'log_level': logging.DEBUG,
+        'log_level': logging.INFO,
     }
 
     if args.output_filename:
@@ -349,8 +349,6 @@ def run_batches(peprec, decoy=False):
 
         logging.debug("Adding charge states {}".format(params['charges']))
         peprec_batch = add_charges(peprec_batch)
-
-        peprec_batch.to_csv('data/for_filter.peprec', sep=' ')
 
         if type(params['peprec_filter']) == str:
             logging.debug("Removing peptides present in peprec filter")
