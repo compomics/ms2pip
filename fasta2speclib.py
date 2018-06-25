@@ -196,7 +196,7 @@ def add_charges(df_in):
     return df_out
 
 
-def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, remove_redundancy=True):
+def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, remove_redundancy=True, move_mods=True):
     """
     Create decoy peptides by reversing the sequences in a PEPREC DataFrame.
 
@@ -204,7 +204,24 @@ def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, rem
     spec_id_prefix -- string to prefix the decoy spec_ids (default: 'decoy_')
     keep_cterm_aa -- True if the last amino acid should stay in place (for example to keep tryptic properties) (default: True)
     remove_redundancy -- True if reversed peptides that are also found in the set of normal peptide should be removed (default: True)
+    move_mods -- True to move modifications according to reversed sequence (default: True)
+
+    Known issues:
+    - C-terminal modifications (with position `-1`) are sorted to the front (eg: `-1|Cterm|0|Nterm|2|NormalPTM`).
     """
+
+    def move_mods(row):
+        mods = row['modifications']
+        if type(mods) == str:
+            if not mods == '-':
+                mods = mods.split('|')
+                mods = sorted(zip([int(p) if (p == '-1' or p == '0')
+                                   else len(row['peptide']) - int(p)
+                                   for p in mods[::2]
+                                   ], mods[1::2]))
+                mods = '|'.join(['|'.join([str(x) for x in mod]) for mod in mods])
+                row['modifications'] = mods
+        return row
 
     peprec_decoy = peprec.copy()
     peprec_decoy['spec_id'] = spec_id_prefix + peprec_decoy['spec_id'].astype(str)
@@ -219,6 +236,9 @@ def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, rem
 
     if 'protein_list' in peprec_decoy.columns:
         peprec_decoy['protein_list'] = 'decoy'
+
+    if move_mods:
+        peprec_decoy = peprec_decoy.apply(move_mods, axis=1)
 
     return peprec_decoy
 
@@ -457,7 +477,7 @@ def main():
 
     if params['decoy']:
         logging.info("Reversing sequences for decoy peptides")
-        peprec_decoy = create_decoy_peprec(peprec_nonmod)
+        peprec_decoy = create_decoy_peprec(peprec_nonmod, move_mods=False)
         del peprec_nonmod
 
         logging.info("Predicting spectra for decoy peptides")
