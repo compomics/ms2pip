@@ -148,14 +148,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     # cols contains the names of the computed features
     cols_n = get_feature_names()
 
-    dataresult = pd.DataFrame(columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "mz", "target", "prediction"])
-    dataresult["peplen"] = dataresult["peplen"].astype(np.uint8)
-    dataresult["charge"] = dataresult["charge"].astype(np.uint8)
-    dataresult["ion"] = dataresult["ion"].astype(np.uint8)
-    dataresult["ionnumber"] = dataresult["ionnumber"].astype(np.uint8)
-    dataresult["mz"] = dataresult["mz"].astype(np.float32)
-    dataresult["target"] = dataresult["target"].astype(np.float32)
-    dataresult["prediction"] = dataresult["prediction"].astype(np.float32)
+    dataresult_list = []
 
     title = ""
     charge = 0
@@ -283,13 +276,19 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     tmp["mz"] = tmp["mz"].astype(np.float32)
                     tmp["target"] = tmp["target"].astype(np.float32)
                     tmp["prediction"] = tmp["prediction"].astype(np.float32)
-                    dataresult = dataresult.append(tmp, ignore_index=True)
+
+                    dataresult_list.append(tmp)
 
                 pcount += 1
                 if (pcount % 500) == 0:
                     print("w{}({})".format(worker_num, pcount), end=', ')
 
     f.close()
+    
+    if dataresult_list:
+        dataresult = pd.concat(dataresult_list)
+    else:
+        dataresult = None
 
     if vector_file:
         df = pd.DataFrame()
