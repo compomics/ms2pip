@@ -176,7 +176,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 continue
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    title = row[6:].replace(" ", "")
+                    title = row[6:]#.replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
                     if title not in peptides:
                         skip = True
                         continue
@@ -284,7 +284,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     print("w{}({})".format(worker_num, pcount), end=', ')
 
     f.close()
-    
+
     if dataresult_list:
         dataresult = pd.concat(dataresult_list)
     else:
@@ -393,7 +393,7 @@ def scan_spectrum_file(filename):
         for row in rows:
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    titles.append(row.rstrip()[6:].replace(" ", ""))
+                    titles.append(row.rstrip()[6:])#.replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
     f.close()
     return titles
 
