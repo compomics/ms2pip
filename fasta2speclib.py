@@ -64,7 +64,7 @@ def ArgParse():
     parser.add_argument('-n', dest='num_cpu', action='store', default=24, type=int,
                         help='Number of processes for multithreading (default: 24)')
     args = parser.parse_args()
-    return(args)
+    return args
 
 
 def get_params():
@@ -98,7 +98,7 @@ def get_params():
     else:
         params['output_filename'] = '_'.join(params['fasta_filename'].split('\\')[-1].split('.')[:-1])
 
-    return(params)
+    return params
 
 
 def prot_to_peprec(protein):
@@ -113,7 +113,7 @@ def prot_to_peprec(protein):
                     row = {'spec_id': '{}_{:03d}'.format(protein.id, pep_count),
                            'peptide': peptide, 'modifications': '-', 'charge': np.nan}
                     tmp = tmp.append(row, ignore_index=True)
-    return(tmp)
+    return tmp
 
 
 def get_protein_list(df):
@@ -126,7 +126,7 @@ def get_protein_list(df):
             peptide_to_prot[pep] = [pi]
     df['protein_list'] = [list(set(peptide_to_prot[pep])) for pep in df['peptide']]
     df = df[~df.duplicated(['peptide', 'charge', 'modifications'])]
-    return(df)
+    return df
 
 
 def add_mods(tup):
@@ -141,7 +141,7 @@ def add_mods(tup):
     params = get_params()
     mod_versions = [dict()]
 
-    for i, mod in enumerate(params['modifications']):
+    for mod in params['modifications']:
         all_pos = [i for i, aa in enumerate(row['peptide']) if aa == mod[1]]
         if len(all_pos) > 4:
             all_pos = all_pos[:4]
@@ -158,23 +158,23 @@ def add_mods(tup):
 
             # For N-term mods and position not yet modified:
             elif mod[3] and 'N' not in version.keys():
-                    # N-term with specific first AA:
-                    if mod[1]:
-                        if row['peptide'][0] == mod[1]:
-                            new_version = version.copy()
-                            new_version['N'] = mod[0]
-                            mod_versions.append(new_version)
-                    # N-term without specific first AA:
-                    else:
+                # N-term with specific first AA:
+                if mod[1]:
+                    if row['peptide'][0] == mod[1]:
                         new_version = version.copy()
                         new_version['N'] = mod[0]
                         mod_versions.append(new_version)
+                # N-term without specific first AA:
+                else:
+                    new_version = version.copy()
+                    new_version['N'] = mod[0]
+                    mod_versions.append(new_version)
 
     df_out = pd.DataFrame(columns=row.index)
     df_out['modifications'] = ['|'.join('{}|{}'.format(0, value) if key == 'N'
                                else '{}|{}'.format(key + 1, value) for key, value
                                in version.items()) for version in mod_versions]
-    df_out['modifications'] = ['-' if len(mods) == 0 else mods for mods in df_out['modifications']]
+    df_out['modifications'] = ['-' if not mods else mods for mods in df_out['modifications']]
     df_out['spec_id'] = ['{}_{:03d}'.format(row['spec_id'], i) for i in range(len(mod_versions))]
     df_out['charge'] = row['charge']
     df_out['peptide'] = row['peptide']
@@ -196,7 +196,7 @@ def add_charges(df_in):
     return df_out
 
 
-def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, remove_redundancy=True):
+def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, remove_redundancy=True, move_mods=True):
     """
     Create decoy peptides by reversing the sequences in a PEPREC DataFrame.
 
@@ -204,7 +204,24 @@ def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, rem
     spec_id_prefix -- string to prefix the decoy spec_ids (default: 'decoy_')
     keep_cterm_aa -- True if the last amino acid should stay in place (for example to keep tryptic properties) (default: True)
     remove_redundancy -- True if reversed peptides that are also found in the set of normal peptide should be removed (default: True)
+    move_mods -- True to move modifications according to reversed sequence (default: True)
+
+    Known issues:
+    - C-terminal modifications (with position `-1`) are sorted to the front (eg: `-1|Cterm|0|Nterm|2|NormalPTM`).
     """
+
+    def move_mods(row):
+        mods = row['modifications']
+        if type(mods) == str:
+            if not mods == '-':
+                mods = mods.split('|')
+                mods = sorted(zip([int(p) if (p == '-1' or p == '0')
+                                   else len(row['peptide']) - int(p)
+                                   for p in mods[::2]
+                                  ], mods[1::2]))
+                mods = '|'.join(['|'.join([str(x) for x in mod]) for mod in mods])
+                row['modifications'] = mods
+        return row
 
     peprec_decoy = peprec.copy()
     peprec_decoy['spec_id'] = spec_id_prefix + peprec_decoy['spec_id'].astype(str)
@@ -220,11 +237,14 @@ def create_decoy_peprec(peprec, spec_id_prefix='decoy_', keep_cterm_aa=True, rem
     if 'protein_list' in peprec_decoy.columns:
         peprec_decoy['protein_list'] = 'decoy'
 
+    if move_mods:
+        peprec_decoy = peprec_decoy.apply(move_mods, axis=1)
+
     return peprec_decoy
 
 
 def elude_insert_mods(row, peptide_column='peptide', mods_column='modifications',
-                      unimod_mapping={'Oxidation': 35, 'Carbamidomethyl': 4}):
+                      unimod_mapping=None):
     """
     Insert PEPREC modifications into peptide sequence for ELUDE.
 
@@ -241,7 +261,8 @@ def elude_insert_mods(row, peptide_column='peptide', mods_column='modifications'
     UniMod accessions
     """
 
-    unimod_mapping[''] = ''
+    if not unimod_mapping:
+        unimod_mapping = {'Oxidation': 35, 'Carbamidomethyl': 4}
 
     peptide = row[peptide_column]
     mods = row[mods_column]
@@ -331,7 +352,7 @@ def run_batches(peprec, decoy=False):
         else:
             peprec_batch = peprec[i:]
         b_count += 1
-        logging.info("Predicting batch {} of {}, containing {} unmodified peptides".format(b_count, num_b_counts, len(peprec_batch)))
+        logging.info("Predicting batch %d of %d, containing %d unmodified peptides", b_count, num_b_counts, len(peprec_batch))
 
         logging.debug("Adding all modification combinations")
         peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
@@ -347,7 +368,7 @@ def run_batches(peprec, decoy=False):
                 unimod_mapping={tup[0]: tup[4] for tup in params['modifications']}
             )
 
-        logging.debug("Adding charge states {}".format(params['charges']))
+        logging.debug("Adding charge states %s", str(params['charges']))
         peprec_batch = add_charges(peprec_batch)
 
         if type(params['peprec_filter']) == str:
@@ -361,7 +382,7 @@ def run_batches(peprec, decoy=False):
         #     format='table', complevel=3, complib='zlib', mode='w'
         # )
 
-        logging.info("Running MS2PIPc for {} peptides".format(len(peprec_batch)))
+        logging.info("Running MS2PIPc for %d peptides", len(peprec_batch))
         all_preds = run(peprec_batch, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
                         params=ms2pip_params, return_results=True)
 
@@ -373,7 +394,7 @@ def run_batches(peprec, decoy=False):
             append = True
 
         if 'hdf' in params['output_filetype']:
-            logging.info("Writing predictions to {}_predictions.hdf".format(params['output_filename']))
+            logging.info("Writing predictions to %s_predictions.hdf", params['output_filename'])
             all_preds.astype(str).to_hdf(
                 '{}_predictions.hdf'.format(params['output_filename']),
                 key='table', format='table', complevel=3, complib='zlib',
@@ -440,7 +461,7 @@ def main():
 
     save_peprec = False
     if save_peprec:
-        logging.info("Saving non-expanded PEPREC to {}.peprec.hdf".format(params['output_filename']))
+        logging.info("Saving non-expanded PEPREC to %s.peprec.hdf", params['output_filename'])
         peprec_nonmod['protein_list'] = ['/'.join(prot) for prot in peprec_nonmod['protein_list']]
         peprec_nonmod.astype(str).to_hdf(
             '{}_nonexpanded.peprec.hdf'.format(params['output_filename']), key='table',
@@ -457,7 +478,7 @@ def main():
 
     if params['decoy']:
         logging.info("Reversing sequences for decoy peptides")
-        peprec_decoy = create_decoy_peprec(peprec_nonmod)
+        peprec_decoy = create_decoy_peprec(peprec_nonmod, move_mods=False)
         del peprec_nonmod
 
         logging.info("Predicting spectra for decoy peptides")

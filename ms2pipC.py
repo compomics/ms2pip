@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # Native library
 import sys
-import pickle
 import argparse
 import multiprocessing
 from random import shuffle
-import math
 import tempfile
 from operator import itemgetter
 from io import StringIO
@@ -150,14 +148,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     # cols contains the names of the computed features
     cols_n = get_feature_names()
 
-    dataresult = pd.DataFrame(columns=["spec_id", "peplen", "charge", "ion", "ionnumber", "mz", "target", "prediction"])
-    dataresult["peplen"] = dataresult["peplen"].astype(np.uint8)
-    dataresult["charge"] = dataresult["charge"].astype(np.uint8)
-    dataresult["ion"] = dataresult["ion"].astype(np.uint8)
-    dataresult["ionnumber"] = dataresult["ionnumber"].astype(np.uint8)
-    dataresult["mz"] = dataresult["mz"].astype(np.float32)
-    dataresult["target"] = dataresult["target"].astype(np.float32)
-    dataresult["prediction"] = dataresult["prediction"].astype(np.float32)
+    dataresult_list = []
 
     #SD
     dresults = []
@@ -192,7 +183,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 continue
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    title = row[6:].replace(" ", "")
+                    title = row[6:]#.replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
                     if title not in peptides:
                         skip = True
                         continue
@@ -251,7 +242,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
                 if vector_file:
                     #SD
-                    #tmp = pd.DataFrame(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), columns=cols_n, dtype=np.uint16)
                     psmids.extend([title]*len(targets[0]))
                     dvectors.extend(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge))
                     dtargetsB.extend(targets[0])
@@ -291,9 +281,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     tmp["mz"] = tmp["mz"].astype(np.float32)
                     tmp["target"] = tmp["target"].astype(np.float32)
                     tmp["prediction"] = tmp["prediction"].astype(np.float32)
+
                     #SD
                     dresults.append(tmp[["spec_id","peplen","charge","ion","ionnumber","mz","target","prediction"]])
-                    #dataresult = dataresult.append(tmp, ignore_index=True)
 
                 pcount += 1
                 if (pcount % 500) == 0:
@@ -302,7 +292,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     f.close()
 
     if vector_file:
-        
         df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16)
         df["targetsB"] = dtargetsB
         df["targetsY"] = dtargetsY
@@ -311,7 +300,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     else:
         #SD
         return pd.concat(dresults)
-        #return dataresult
 
 
 def get_feature_names():
@@ -365,8 +353,6 @@ def get_feature_names_chem(peplen):
     """
     feature names for the fixed peptide length feature vectors
     """
-    aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K",
-              "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
 
     names = []
     names += ["pmz", "peplen", "ionnumber", "ionnumber_rel", "mean_mz"]
@@ -407,7 +393,7 @@ def scan_spectrum_file(filename):
         for row in rows:
             if row[0] == "T":
                 if row[:5] == "TITLE":
-                    titles.append(row.rstrip()[6:].replace(" ", ""))
+                    titles.append(row.rstrip()[6:])#.replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
     f.close()
     return titles
 
@@ -435,8 +421,7 @@ def apply_mods(peptide, mods, PTMmap):
     """
     modpeptide = np.array(peptide[:], dtype=np.uint16)
 
-    nptm = 0
-    cptm = 0
+
     if mods != "-":
         l = mods.split("|")
         for i in range(0, len(l), 2):
@@ -445,7 +430,7 @@ def apply_mods(peptide, mods, PTMmap):
                 modpeptide[int(l[i])] = PTMmap[tl]
             else:
                 sys.stderr.write("Unknown modification: {}\n".format(tl))
-                return("Unknown modification")
+                return "Unknown modification"
 
     return modpeptide
 
@@ -519,13 +504,13 @@ def generate_modifications_file(params, masses, a_map):
 
     f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
     f.write(str.encode("{}\n".format(len(pbuffer))))
-    for i in range(len(pbuffer)):
+    for i, _ in enumerate(pbuffer):
         f.write(str.encode("{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2])))
     f.close()
 
     f2 = tempfile.NamedTemporaryFile(delete=False, mode='wb')
     f2.write(str.encode("{}\n".format(len(spbuffer))))
-    for i in range(len(spbuffer)):
+    for i, _ in enumerate(spbuffer):
         f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])))
     f2.close()
 
@@ -630,7 +615,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
     if return_stringbuffer:
         mgf_output = StringIO()
         write(all_preds, mgf_output, peprec=peprec)
-        return(mgf_output)
+        return mgf_output
     else:
         with open("{}_predictions.mgf".format(output_filename), write_mode) as mgf_output:
             write(all_preds, mgf_output, peprec=peprec)
@@ -850,7 +835,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
             sys.stdout.write("done!\n")
         else:
-            return(all_preds)
+            return all_preds
 
 
 if __name__ == "__main__":
