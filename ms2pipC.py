@@ -528,7 +528,6 @@ def generate_modifications_file(params, masses, a_map):
 	for i in range(len(spbuffer)):
 		f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])))
 	f2.close()
-	print(PTMmap)
 
 	return (f.name, f2.name, PTMmap)
 

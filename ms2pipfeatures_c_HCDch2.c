@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/vectors_train_h5B_c.c"
-#include "models/vectors_train_h5Y_c.c"
+#include "models/human_ms2pip_train_B.c"
+#include "models/human_ms2pip_train_Y.c"
 #include "models/modelB2.c"
 #include "models/modelY2.c"
 
