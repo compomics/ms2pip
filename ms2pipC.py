@@ -13,11 +13,12 @@ import numpy as np
 import pandas as pd
 
 # Features
-#import ms2pipfeatures_pyx_HCD
+import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
 #import ms2pipfeatures_pyx_CID
 # import ms2pipfeatures_pyx_HCDiTRAQ4phospho
 # import ms2pipfeatures_pyx_HCDiTRAQ4
+import ms2pipfeatures_pyx_HCDTMT
 #import ms2pipfeatures_pyx_ETD
 
 # From other Python files
@@ -44,6 +45,8 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
     elif fragmethod == "HCDiTRAQ4":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
+    elif fragmethod == "HCDTMT":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDTMT
     elif fragmethod == "HCDch2":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
     elif fragmethod == "ETD":
@@ -133,6 +136,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
     elif fragmethod == "HCDiTRAQ4":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
+    elif fragmethod == "HCDTMT":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDTMT
     elif fragmethod == "HCDch2":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
     elif fragmethod == "ETD":
@@ -218,10 +223,16 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     if modpeptide == "Unknown modification":
                         continue
 
+                # remove reporter ions
                 if 'iTRAQ' in fragmethod:
-                    # remove reporter ions
                     for mi, mp in enumerate(msms):
                         if (mp >= 113) & (mp <= 118):
+                            peaks[mi] = 0
+
+                # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
+                if 'TMT' in fragmethod:
+                    for mi, mp in enumerate(msms):
+                        if (mp >= 125) & (mp <= 132):
                             peaks[mi] = 0
 
                 # normalize and convert MS2 peaks
@@ -283,7 +294,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     tmp["prediction"] = tmp["prediction"].astype(np.float32)
 
                     #SD
-                    dresults.append(tmp[["spec_id","peplen","charge","ion","ionnumber","mz","target","prediction"]])
+                    dresults.append(tmp[["spec_id", "peplen", "charge", "ion", "ionnumber", "mz", "target", "prediction"]])
 
                 pcount += 1
                 if (pcount % 500) == 0:
@@ -297,9 +308,10 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
         df["targetsY"] = dtargetsY
         df["psmid"] = psmids
         return df
-    else:
-        #SD
+    elif dresults:
         return pd.concat(dresults)
+    else:
+        return pd.DataFrame()
 
 
 def get_feature_names():
@@ -686,7 +698,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
-    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]
+    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "HCDTMT", "ETD", "HCDch2"]
     if fragmethod in known_fragmethods:
         print("using {} models".format(fragmethod))
     else:

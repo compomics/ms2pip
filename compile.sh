@@ -15,3 +15,6 @@
 
 rm -f ms2pipfeatures_pyx_HCDch2.c ms2pipfeatures_pyx_HCDch2.so
 python3 setup_HCDch2.py build_ext --inplace
+
+rm -f ms2pipfeatures_pyx_HCDTMT.c ms2pipfeatures_pyx_HCDTMT.so
+python3 setup_HCDTMT.py build_ext --inplace
