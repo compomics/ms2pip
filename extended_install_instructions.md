@@ -18,7 +18,7 @@ sh compile.sh
 ```
 
 ## Configure MS2PIPc to your use case
-A few parameters need to be set in the configuration file (by default `config.file`):
+A few parameters need to be set in the configuration file (by default `config.txt`):
 - `frag_method`: The peptide fragmentation method for which you want to predict spectra. This can be `HCD`, `CID` or `ETD`. The ETD models are still under heavy development and are not ready for general usage. Also, CID models are temporarily not included in the repository.
 - `frag_error`: The MS/MS tolerance in Da. This defines the width of the region around theoretical fragment peak m/z's where MS2PIPc looks for emperical peaks. This value is only of importance if you provide MGF spectrum files.
 - Post-translational modifications (PTMs): This part of the configuration file describes the PTMs that are present in the PEPREC file. Each line represents a certain PTM and is written as follows: `ptm=name,mass-shift,opt,AA`. The name should be identical to the PTM name that is used in the PEPREC file and is case-sensitive. Next is the mass-shift of the PTM in Da. The next variable should, for MS2PIP, be `opt` and is required for Omega compatibility. Last in line is the one-letter code of the amino acid (AA) on which the PTM occurs. If a certain PTM occurs on different AAs, every AA should have it's own line in the configuration file and have a unique name (eg `PhosphoT`, `PhosphoS` and `PhosphoY`). For N- and C-terminal modifications `AA` should be `N-term` or `C-term`, respectively. This leads, for instance, to the following syntax: `ptm=name,mass-shift,opt,N-term`
@@ -49,8 +49,8 @@ python3 ms2pipC.py PEPREC
 
 You can also add the following optional arguments:
 ```
-  -h, --help      show help message and exit
-  -c FILE         config file (by default config.file)
+  -h, --help      show this help message and exit
+  -c FILE         config file (by default config.txt)
   -s FILE         .mgf MS2 spectrum file (optional)
   -w FILE         write feature vectors to FILE.{pkl,h5} (optional)
   -m INT          number of cpu's to use

@@ -15,11 +15,11 @@ import pandas as pd
 # Features
 import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
-#import ms2pipfeatures_pyx_CID
-# import ms2pipfeatures_pyx_HCDiTRAQ4phospho
-# import ms2pipfeatures_pyx_HCDiTRAQ4
+import ms2pipfeatures_pyx_CID
+import ms2pipfeatures_pyx_HCDiTRAQ4phospho
+import ms2pipfeatures_pyx_HCDiTRAQ4
 import ms2pipfeatures_pyx_HCDTMT
-#import ms2pipfeatures_pyx_ETD
+import ms2pipfeatures_pyx_ETD
 
 # From other Python files
 from write_msp import write_msp
@@ -639,8 +639,8 @@ def argument_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("pep_file", metavar="<peptide file>",
                         help="list of peptides")
-    parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.file",
-                        help="config file (by default config.file)")
+    parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.txt",
+                        help="config file (by default config.txt)")
     parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
                         help=".mgf MS2 spectrum file (optional)")
     parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
