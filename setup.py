@@ -1,11 +1,16 @@
+from sys import argv
 from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
 import numpy
 
-setup(name='ms2pipfeatures_pyx_HCDTMT',
-      ext_modules=[Extension('ms2pipfeatures_pyx_HCDTMT',
-                             sources=['ms2pipfeatures_pyx_HCDTMT.pyx'],
+
+model = argv[-1]
+argv.remove(model)
+
+setup(name='ms2pipfeatures_pyx_{}'.format(model),
+      ext_modules=[Extension('ms2pipfeatures_pyx_{}'.format(model),
+                             sources=['ms2pipfeatures_pyx_{}.pyx'.format(model)],
                              extra_compile_args=['-fno-var-tracking-assignments',
                                                  '-fno-var-tracking',
                                                  '-O3',
