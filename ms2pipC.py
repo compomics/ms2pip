@@ -15,11 +15,12 @@ import pandas as pd
 # Features
 import ms2pipfeatures_pyx_HCD
 import ms2pipfeatures_pyx_HCDch2
-import ms2pipfeatures_pyx_CID
-import ms2pipfeatures_pyx_HCDiTRAQ4phospho
-import ms2pipfeatures_pyx_HCDiTRAQ4
+#import ms2pipfeatures_pyx_CID
+#import ms2pipfeatures_pyx_HCDiTRAQ4phospho
+#import ms2pipfeatures_pyx_HCDiTRAQ4
 import ms2pipfeatures_pyx_HCDTMT
-import ms2pipfeatures_pyx_ETD
+import ms2pipfeatures_pyx_TTOF5600
+#import ms2pipfeatures_pyx_ETD
 
 # From other Python files
 from write_msp import write_msp
@@ -51,6 +52,8 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
     elif fragmethod == "ETD":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
+    elif fragmethod == "TTOF5600":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_TTOF5600
 
     ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
@@ -142,6 +145,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
     elif fragmethod == "ETD":
         ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
+    elif fragmethod == "TTOF5600":
+        ms2pipfeatures_pyx = ms2pipfeatures_pyx_TTOF5600
 
     ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
@@ -698,7 +703,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
-    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "HCDTMT", "ETD", "HCDch2"]
+    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "HCDTMT", "ETD", "HCDch2", "TTOF5600"]
     if fragmethod in known_fragmethods:
         print("using {} models".format(fragmethod))
     else:
