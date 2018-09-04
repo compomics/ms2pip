@@ -1,5 +1,4 @@
 __author__ = "Ralf Gabriels"
-__copyright__ = "Copyright 2018"
 __credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
 __license__ = "Apache License, Version 2.0"
 __version__ = "0.1"
