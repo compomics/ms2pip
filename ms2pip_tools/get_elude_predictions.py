@@ -6,6 +6,7 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 
 # Standard library
+import os
 import argparse
 
 # Third party packages
