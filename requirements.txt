@@ -1,0 +1,20 @@
+# setup.py
+numpy==1.15.1
+Cython==0.28.5
+
+# ms2pipC.py
+#numpy==1.15.1
+pandas==0.23.4
+tqdm==4.25.0
+
+# train_xgboost_c.py
+#numpy==1.15.1
+#pandas==0.23.4
+xgboost==0.80
+scipy==1.1.0
+matplotlib==2.2.3
+
+# fasta2speclib.py
+pyteomics==3.5.1
+biopython==1.72
+#tqdm==4.25.0
