@@ -32,8 +32,8 @@ from pyteomics.parser import cleave, expasy_rules
 from Bio import SeqIO
 
 # MS2PIP
-from ms2pipC import run, write_mgf
-from write_msp import write_msp
+from ms2pipC import run
+from ms2pip_tools.spectrum_output import write_mgf, write_msp
 from ms2pip_tools.get_elude_predictions import get_elude_predictions
 
 
