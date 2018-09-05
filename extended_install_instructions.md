@@ -1,8 +1,8 @@
 # MS2PIPc extended instructions
 ## Prerequisites
-Install the necessary Python3 modules. If Python3 is the only installed version of Python on your system, you can probably use `pip` instead of `pip3`
+Install the required Python3 modules, which are listed in `requirements.txt`. If Python3 is the only installed version of Python on your system, you can probably use `pip` instead of `pip3`
 ```
-sudo pip3 install numpy pandas multiprocessing tables cython
+sudo pip3 install -r requirements.txt
 ```
 To train models (instead of just running predictions with the pre-trained models), XGBoost is also required:
 ```
@@ -19,9 +19,9 @@ sh compile.sh
 
 ## Configure MS2PIPc to your use case
 A few parameters need to be set in the configuration file (by default `config.txt`):
-- `frag_method`: The peptide fragmentation method for which you want to predict spectra. This can be `HCD`, `CID` or `ETD`. The ETD models are still under heavy development and are not ready for general usage. Also, CID models are temporarily not included in the repository.
-- `frag_error`: The MS/MS tolerance in Da. This defines the width of the region around theoretical fragment peak m/z's where MS2PIPc looks for emperical peaks. This value is only of importance if you provide MGF spectrum files.
-- Post-translational modifications (PTMs): This part of the configuration file describes the PTMs that are present in the PEPREC file. Each line represents a certain PTM and is written as follows: `ptm=name,mass-shift,opt,AA`. The name should be identical to the PTM name that is used in the PEPREC file and is case-sensitive. Next is the mass-shift of the PTM in Da. The next variable should, for MS2PIP, be `opt` and is required for Omega compatibility. Last in line is the one-letter code of the amino acid (AA) on which the PTM occurs. If a certain PTM occurs on different AAs, every AA should have it's own line in the configuration file and have a unique name (eg `PhosphoT`, `PhosphoS` and `PhosphoY`). For N- and C-terminal modifications `AA` should be `N-term` or `C-term`, respectively. This leads, for instance, to the following syntax: `ptm=name,mass-shift,opt,N-term`
+- `frag_method`: The peptide fragmentation method or specific MS2PIP model to employ to predict peak intensities. The available models are listed in `README.md`.
+- `frag_error`: The MS/MS error tolerance in Da. This defines the width of the region around theoretical fragment peak m/z's where MS2PIPc looks for emperical peaks. This value is only of importance if you provide MGF spectrum files.
+- Post-translational modifications (PTMs): This part of the configuration file describes the PTMs that are present in the PEPREC file. Each line represents a certain PTM and is written as follows: `ptm=name,mass-shift,opt,AA`. The name should be identical to the PTM name that is used in the PEPREC file and is case-sensitive. Next is the mass-shift of the PTM in Da. The next variable is not relevant for MS2PIP, so it can be `opt`. Last in line is the one-letter code of the amino acid (AA) on which the PTM occurs. If a certain PTM occurs on different AAs, every AA should have it's own line in the configuration file and have a unique name (eg `PhosphoT`, `PhosphoS` and `PhosphoY`). For N- and C-terminal modifications `AA` should be `N-term` or `C-term`, respectively. This leads, for instance, to the following syntax: `ptm=name,mass-shift,opt,N-term`
 - Lines can be commented out using a hash tag (`#`).
 
 ## Prepare your input data

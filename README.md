@@ -1,18 +1,13 @@
 # MS2PIPc
 ## Installation
 
-Requirements:
+MS2PIPc runs on Python 3.5 or greater. The required Python packages are listed
+in `requirements.txt` and can be installed using pip with the command:
+```
+pip install -r requirements.txt
+``` 
 
-- Python >= 3.4
-
-- Python numpy
-- Python pandas
-- Python multiprocessing
-- PyTables
-- XGBoost (python API) (only required for training)
-- Cython (http://cython.org/)
-
-MS2PIPc requires the machine specific compilation of the C-code:
+MS2PIPc also requires machine specific compilation of the C-code:
 
 ```
 sh compile.sh
