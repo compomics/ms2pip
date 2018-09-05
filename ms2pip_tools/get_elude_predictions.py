@@ -1,3 +1,20 @@
+"""
+ELUDE RT prediction integration for MS2PIP
+
+ELUDE needs to be installed and callable with os.system(elude). Tested with
+ELUDE v3.2.
+
+Can be run as a script or by calling the `get_elude_predictions` function.
+Both the script and the function take an MS2PIP PEPREC file and an ELUDE model
+file.
+
+If the given PEPREC contains PTMs, these need to be configured in the (for now)
+hardcoded dictionary `unimod_mapping`. This is a dictionary where the keys
+represent the name of the PTM in the PEPREC file and the values contain the
+corresponding UniMod IDs.
+"""
+
+
 __author__ = "Ralf Gabriels"
 __credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
 __license__ = "Apache License, Version 2.0"
