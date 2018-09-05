@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/TTOF5600/TTOF5600_consensus_B.c"
-#include "models/TTOF5600/TTOF5600_consensus_Y.c"
+#include "../models/TTOF5600/TTOF5600_consensus_B.c"
+#include "../models/TTOF5600/TTOF5600_consensus_Y.c"
 
 float membuffer[10000];
 unsigned int v[30000];

@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/vectors_train_h5B_c.c"
-#include "models/vectors_train_h5Y_c.c"
+#include "../models/vectors_train_h5B_c.c"
+#include "../models/vectors_train_h5Y_c.c"
 
 float membuffer[10000];
 unsigned int v[30000];

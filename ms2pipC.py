@@ -10,16 +10,6 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-# Features
-import ms2pipfeatures_pyx_HCD
-import ms2pipfeatures_pyx_HCDch2
-#import ms2pipfeatures_pyx_CID
-#import ms2pipfeatures_pyx_HCDiTRAQ4phospho
-#import ms2pipfeatures_pyx_HCDiTRAQ4
-import ms2pipfeatures_pyx_HCDTMT
-import ms2pipfeatures_pyx_TTOF5600
-#import ms2pipfeatures_pyx_ETD
-
 # From other Python files
 from ms2pip_tools.spectrum_output import write_mgf, write_msp
 
@@ -32,26 +22,14 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
     spectra for all the peptides.
     """
 
-    # Rename ms2pipfeatures_pyx
-    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
-    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
-    # MS2PIP Server (which calls the function Run), this can not be done globally.
-    if fragmethod == "CID":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
-    elif fragmethod == "HCD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
-    elif fragmethod == "HCDiTRAQ4phospho":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
-    elif fragmethod == "HCDiTRAQ4":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
-    elif fragmethod == "HCDTMT":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDTMT
-    elif fragmethod == "HCDch2":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
-    elif fragmethod == "ETD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
-    elif fragmethod == "TTOF5600":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_TTOF5600
+    # Import ms2pipfeatures_pyx
+    # Import is variable, depending on the frag_method defined by the user.
+    # This needs to be done inside process_peptides and inside process_spectra,
+    # as ms2pipfeatures_pyx cannot be passed as an argument through multiprocessing.
+    # Also, in order to be compatible with MS2PIP Server (which calls the
+    # function Run), this can not be done globally.
+    cython_module_name = 'ms2pipfeatures_pyx_{}'.format(fragmethod)
+    ms2pipfeatures_pyx = getattr(__import__('cython_modules', fromlist=[cython_module_name]), cython_module_name)
 
     ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
@@ -125,26 +103,14 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     empirical intensities.
     """
 
-    # Rename ms2pipfeatures_pyx
-    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
-    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
-    # MS2PIP Server (which calls the function Run), this can not be done globally.
-    if fragmethod == "CID":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
-    elif fragmethod == "HCD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
-    elif fragmethod == "HCDiTRAQ4phospho":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
-    elif fragmethod == "HCDiTRAQ4":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
-    elif fragmethod == "HCDTMT":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDTMT
-    elif fragmethod == "HCDch2":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
-    elif fragmethod == "ETD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
-    elif fragmethod == "TTOF5600":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_TTOF5600
+    # Import ms2pipfeatures_pyx
+    # Import is variable, depending on the frag_method defined by the user.
+    # This needs to be done inside process_peptides and inside process_spectra,
+    # as ms2pipfeatures_pyx cannot be passed as an argument through multiprocessing.
+    # Also, in order to be compatible with MS2PIP Server (which calls the
+    # function Run), this can not be done globally.
+    cython_module_name = 'ms2pipfeatures_pyx_{}'.format(fragmethod)
+    ms2pipfeatures_pyx = getattr(__import__('cython_modules', fromlist=[cython_module_name]), cython_module_name)
 
     ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
