@@ -25,8 +25,7 @@ C-code:
 ```
 sh compile.sh
 ```
-Check out the [extended install
-instructions](https://github.com/compomics/ms2pip_c/wiki/Extended-install-instructions)
+Check out the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended-install-instructions)
 for a more detailed explanation.
 
 
@@ -34,7 +33,7 @@ for a more detailed explanation.
 MS2PIPc comes with pre-trained models for a variety of fragmentation methods and
 modifications. These models can easily be applied by configuring MS2PIPc in the
 [config.txt file](https://github.com/compomics/ms2pip_c#config-file) and
-providing a list of peptides in the form of a [PEPREC file](https://github.com/compomics/ms2pip_c#PEPREC-file).
+providing a list of peptides in the form of a [PEPREC file](https://github.com/compomics/ms2pip_c#peprec-file).
 
 ### MS2PIPc command line interface
 ```
