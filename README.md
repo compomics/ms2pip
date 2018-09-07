@@ -1,28 +1,42 @@
-# MS2PIPc
+# MS²PIP
+MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
+It employs the XGBoost machine learning algorithm and is written in Python.
+
+You can install MS²PIP on your machine by following the [instructions below](https://github.com/compomics/ms2pip_c#installation) or the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended-install-instructions).
+For a more user friendly experience, we created a [web server](https://iomics.ugent.be/ms2pip)
+. There, you can easily upload a list of peptide sequences, after which the
+corresponding predicted MS² spectra can be downloaded in a CSV or MGF file
+format. The web server can also be contacted through the
+[REST API](https://iomics.ugent.be/ms2pip/api/).
+
+If you use MS²PIP for your research, please cite the following papers:
+- Degroeve, S., Maddelein, D., & Martens, L. (2015). MS²PIP prediction server:
+compute and visualize MS² peak intensity predictions for CID and HCD
+fragmentation. Nucleic Acids Research, 43(W1), W326–W330.
+https://doi.org/10.1093/nar/gkv542
+- Degroeve, S., & Martens, L. (2013). MS²PIP: a tool for MS/MS peak intensity
+prediction. Bioinformatics (Oxford, England), 29(24), 3199–203.
+https://doi.org/10.1093/bioinformatics/btt544
+
 ## Installation
-
 MS2PIPc runs on Python 3.5 or greater. The required Python packages are listed
-in `requirements.txt` and can be installed using pip with the command:
-```
-pip install -r requirements.txt
-``` 
-
-MS2PIPc also requires machine specific compilation of the C-code:
-
+in `requirements.txt`. MS2PIPc also requires machine specific compilation of the
+C-code:
 ```
 sh compile.sh
 ```
-See `extended_install_instructions.md` for more information.
+Check out the [extended install
+instructions](https://github.com/compomics/ms2pip_c/wiki/Extended-install-instructions)
+for a more detailed explanation.
 
 
-## MS2 peak intensity predictions
-### Calling MS2PIP from the command line
-Pre-trained HCD models for the b- and y-ions can be found in
-the `/models` folder. These C-coded decision tree models are compiled
-by running the `compile.sh` script that writes the python module
-`ms2pipfeatures_pyx.so` which is imported into the main python script
-`ms2pipC.py`:
+## Predicting MS2 peak intensities
+MS2PIPc comes with pre-trained models for a variety of fragmentation methods and
+modifications. These models can easily be applied by configuring MS2PIPc in the
+[config.txt file](https://github.com/compomics/ms2pip_c#config-file) and
+providing a list of peptides in the form of a [PEPREC file](https://github.com/compomics/ms2pip_c#PEPREC-file).
 
+### MS2PIPc command line interface
 ```
 usage: ms2pipC.py [-h] [-c FILE] [-s FILE] [-w FILE] [-m INT] <peptide file>
 
@@ -37,8 +51,7 @@ optional arguments:
   -m INT          number of cpu's to use
 ```
 
-
-### Config file (-c option)
+### Config file
 Several MS2PIPc options need to be set in this config file.
 
 The models that should be used are set as `frag_method=X` where X is
@@ -52,12 +65,12 @@ the tolerance in Da.
 PTMs (see further) are set as `ptm=X,Y,opt,Z` for each internal PTM
 where X is a string that represents the PTM, Y is the difference in Da
 associated with the PTM, opt is a required for compatibility with
-Omega, and Z is the amino acid that is modified by the PTM. For N- and
-C-terminal modifications, Z should be `N-term` or `C-term`,
+other CompOmics projects, and Z is the amino acid that is modified by the PTM.
+For N- and C-terminal modifications, Z should be `N-term` or `C-term`,
 respectively.
 
 
-### Getting predictions from a peptide file
+### PEPREC file
 To apply the pre-trained models you need to pass *only* a `<peptide file>`
 to `ms2pipC.py`. This file contains the peptide sequences for which you
 want to predict the b- and y-ion peak intensities. The file is space
@@ -67,11 +80,6 @@ separated and contains four columns with the following header names:
 - `modifications`: a string indicating the modified amino acids
 - `peptide`: the unmodified amino acid sequence
 - `charge`: charge state to predict
-
-The predictions are saved in a `.csv` file with the name
-`<peptide_file>_predictions.csv`.
-If you want the output to be in the form of an `.mgf` file, replace the
-variable `mgf` in line 142 of `ms2pipC.py`.
 
 The *spec_id* column is a unique identifier for each peptide that will
 be used in the TITLE field of the predicted MS2 `.mgf` file. The
@@ -94,65 +102,9 @@ which means that the second and fifth amino acid is modified with `Cam`,
 that there is an N-terminal modification `Ace`, and that there is a
 C-terminal modification `Glyloss`.
 
-### Writing feature vectors for model training
-To compile a feature vector dataset you need to supply the
-MS2 .mgf file (option `-s`) and the name of the file to write the
-feature vectors to (option `-w`) to `ms2pipC.py`.
-The `spec_id` column in the `<peptide file>` should match the `TITLE`
-field of the corresponding MS2 spectrum in the .mgf file and is used to
-find the targets for the feature vectors.
+The predictions are saved in a `.csv` file with the name
+`<peptide_file>_predictions.csv`.
+If you want the output to be in the form of an `.mgf` file, replace the
+variable `mgf` in line 716 of `ms2pipC.py`.
 
-#### Testing feature extraction
-In the folder `tests`, run `pytest`. This will run the tests in
-`test_features.py`, which verify if the feature and target extraction
-are working properly. (The tests must be updated when we add or remove
-features!) To do this the `pytest` package must be installed (`pip install pytest`)
-
-
-## Convert .msp spectral library to MS2PIP input files
-The python script
-```
-$ python convert_to_mgf.py <file>.msp <title>
-```
-converts a spectral library in `.msp` format into a spectrum `.mgf` file,
- a `<peptide file>` and a `<meta>` file.
-
-## Optimize and Train XGBoost models
-The script
-```
-usage: train_xgboost_c.py [-h] [-c INT] [-e FILE] [-p] [-g] <_vectors.pkl> <type>
-
-XGBoost training
-
-positional arguments:
-  <_vectors.pkl>  feature vector file
-  <type>          model type
-
-optional arguments:
-  -h, --help      show this help message and exit
-  -c INT          number of CPUs to use
-  -e FILE         additional evaluation file
-  -p              output plots
-  -g              perform Grid Search CV to select best parameters
-```
-
-reads the pickled feature vector file `<vectors.pkl or .h5>` and trains
-an XGBoost model. The `type` option indicates the ion type for which a
-model should be trained. This has to match the name of the column in
-the vector file that contains the targets for the given ion type. For
-instance `B` will match the column `targetsB` and will lead to a model
-for b-ions.
-
-Hyper parameters can be optimized by performing a grid search, using
-the argument `g`. Be sure to define the appropriate search space. This
-is hard coded in the script.
-
-Optionally, an evaluation vector file can be given. In this case
-predictions will be made on these vectors using the final model. If no
-evaluation file was given, predictions will be made on the test set.
-
-The script will write the XGBoost models as `.c` files that can be
-compiled and linked through Cython. Just put the models in the
-`/models` folder, change the `#include` directives in
-`ms2pipfeatures_c.c`, and recompile the `ms2pipfeatures_pyx.so` model
-by running the `compile.sh` script.
+To train custom MS2PIPc models, please refer to [Training new MS2PIP models](https://github.com/compomics/ms2pip_c/wiki/Training-new-MS2PIP-models) on our Wiki pages.
