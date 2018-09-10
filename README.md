@@ -2,7 +2,7 @@
 MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
 It employs the XGBoost machine learning algorithm and is written in Python.
 
-You can install MS²PIP on your machine by following the [instructions below](https://github.com/compomics/ms2pip_c#installation) or the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended-install-instructions).
+You can install MS²PIP on your machine by following the [instructions below](https://github.com/compomics/ms2pip_c#installation) or the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended_install_instructions).
 For a more user friendly experience, we created a [web server](https://iomics.ugent.be/ms2pip)
 . There, you can easily upload a list of peptide sequences, after which the
 corresponding predicted MS² spectra can be downloaded in a CSV or MGF file
@@ -25,7 +25,7 @@ C-code:
 ```
 sh compile.sh
 ```
-Check out the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended-install-instructions)
+Check out the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended_install_instructions)
 for a more detailed explanation.
 
 
@@ -106,4 +106,4 @@ The predictions are saved in a `.csv` file with the name
 If you want the output to be in the form of an `.mgf` file, replace the
 variable `mgf` in line 716 of `ms2pipC.py`.
 
-To train custom MS2PIPc models, please refer to [Training new MS2PIP models](https://github.com/compomics/ms2pip_c/wiki/Training-new-MS2PIP-models) on our Wiki pages.
+To train custom MS2PIPc models, please refer to [Training new MS2PIP models](https://github.com/compomics/ms2pip_c/wiki/Training_new_MS2PIP_models) on our Wiki pages.
