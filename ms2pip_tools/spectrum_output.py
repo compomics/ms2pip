@@ -17,8 +17,12 @@ from io import StringIO
 
 # Third party libraries
 import pandas as pd
-from tqdm import tqdm
-
+try:
+    from tqdm import tqdm
+except:
+    use_tqdm = False
+else:
+    use_tqdm = True
 
 def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
     """
@@ -79,7 +83,7 @@ def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
         peprec_to_slice[row[spec_id_index]] = row
 
     with open("{}_predictions.msp".format(output_filename), write_mode) as f:
-        if len(spec_ids) > 100000:
+        if use_tqdm & len(spec_ids) > 100000:
             spec_ids_iterator = tqdm(spec_ids)
         else:
             spec_ids_iterator = spec_ids
@@ -171,6 +175,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
             spec_id_list = list(peprec['spec_id'])
 
         else:
+            rt_present = False
             spec_id_list = list(all_preds['spec_id'].unique())
 
         preds_dict = {}
