@@ -1,23 +1,23 @@
-#rm -f ms2pipfeatures_pyx_CID.c ms2pipfeatures_pyx_CID.so
-#python3 setup_CID.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_CID.c cython_modules/ms2pipfeatures_pyx_CID.so
+#python3 setup.py build_ext --inplace CID
 
-#rm -f ms2pipfeatures_pyx_HCD.c ms2pipfeatures_pyx_HCD.so
-#python3 setup_HCD.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_HCD.c cython_modules/ms2pipfeatures_pyx_HCD.so
+#python3 setup.py build_ext --inplace HCD
 
-#rm -f ms2pipfeatures_pyx_HCDiTRAQ4.c ms2pipfeatures_pyx_HCDiTRAQ4.so
-#python3 setup_HCDiTRAQ.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_HCDiTRAQ4.c cython_modules/ms2pipfeatures_pyx_HCDiTRAQ4.so
+#python3 setup.py build_ext --inplace HCDiTRAQ
 
-#rm -f ms2pipfeatures_pyx_HCDiTRAQ4phospho.c ms2pipfeatures_pyx_HCDiTRAQ4phospho.so
-#python3 setup_HCDiTRAQphospho.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_HCDiTRAQ4phospho.c cython_modules/ms2pipfeatures_pyx_HCDiTRAQ4phospho.so
+#python3 setup.py build_ext --inplace HCDiTRAQphospho
 
-#rm -f ms2pipfeatures_pyx_ETD.c ms2pipfeatures_pyx_ETD.so
-#python3 setup_ETD.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_ETD.c cython_modules/ms2pipfeatures_pyx_ETD.so
+#python3 setup.py build_ext --inplace ETD
 
-rm -f ms2pipfeatures_pyx_HCDch2.c ms2pipfeatures_pyx_HCDch2.so
-python3 setup_HCDch2.py build_ext --inplace
+rm -f cython_modules/ms2pipfeatures_pyx_HCDch2.c cython_modules/ms2pipfeatures_pyx_HCDch2.so
+python3 setup.py build_ext --inplace HCDch2
 
-#rm -f pkl_B.c pkl_B.so
-#python3 setup_B.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_HCDTMT.c cython_modules/ms2pipfeatures_pyx_HCDTMT.so
+#python3 setup.py build_ext --inplace HCDTMT
 
-#rm -f pkl_Y.c pkl_Y.so
-#python3 setup_Y.py build_ext --inplace
+#rm -f cython_modules/ms2pipfeatures_pyx_TTOF5600.c cython_modules/ms2pipfeatures_pyx_TTOF5600.so
+#python3 setup.py build_ext --inplace TTOF5600

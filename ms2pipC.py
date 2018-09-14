@@ -13,16 +13,8 @@ import xgboost as xgb
 import numpy as np
 import pandas as pd
 
-# Features
-#import ms2pipfeatures_pyx_HCD
-import ms2pipfeatures_pyx_HCDch2
-#import ms2pipfeatures_pyx_CID
-# import ms2pipfeatures_pyx_HCDiTRAQ4phospho
-# import ms2pipfeatures_pyx_HCDiTRAQ4
-#import ms2pipfeatures_pyx_ETD
-
 # From other Python files
-from write_msp import write_msp
+from ms2pip_tools.spectrum_output import write_mgf, write_msp
 
 
 def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod):
@@ -33,22 +25,14 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
     spectra for all the peptides.
     """
 
-    # Rename ms2pipfeatures_pyx
-    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
-    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
-    # MS2PIP Server (which calls the function Run), this can not be done globally.
-    if fragmethod == "CID":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
-    elif fragmethod == "HCD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
-    elif fragmethod == "HCDiTRAQ4phospho":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
-    elif fragmethod == "HCDiTRAQ4":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
-    elif fragmethod == "HCDch2":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
-    elif fragmethod == "ETD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETDg
+    # Import ms2pipfeatures_pyx
+    # Import is variable, depending on the frag_method defined by the user.
+    # This needs to be done inside process_peptides and inside process_spectra,
+    # as ms2pipfeatures_pyx cannot be passed as an argument through multiprocessing.
+    # Also, in order to be compatible with MS2PIP Server (which calls the
+    # function Run), this can not be done globally.
+    cython_module_name = 'ms2pipfeatures_pyx_{}'.format(fragmethod)
+    ms2pipfeatures_pyx = getattr(__import__('cython_modules', fromlist=[cython_module_name]), cython_module_name)
 
     ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
@@ -105,22 +89,14 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     empirical intensities.
     """
 
-    # Rename ms2pipfeatures_pyx
-    # This needs to be done inside process_peptides and inside process_spectra, as ms2pipfeatures_pyx
-    # cannot be passed as an argument through multiprocessing. Also, in order to be compatible with
-    # MS2PIP Server (which calls the function Run), this can not be done globally.
-    if fragmethod == "CID":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_CID
-    elif fragmethod == "HCD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCD
-    elif fragmethod == "HCDiTRAQ4phospho":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4phospho
-    elif fragmethod == "HCDiTRAQ4":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDiTRAQ4
-    elif fragmethod == "HCDch2":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_HCDch2
-    elif fragmethod == "ETD":
-        ms2pipfeatures_pyx = ms2pipfeatures_pyx_ETD
+    # Import ms2pipfeatures_pyx
+    # Import is variable, depending on the frag_method defined by the user.
+    # This needs to be done inside process_peptides and inside process_spectra,
+    # as ms2pipfeatures_pyx cannot be passed as an argument through multiprocessing.
+    # Also, in order to be compatible with MS2PIP Server (which calls the
+    # function Run), this can not be done globally.
+    cython_module_name = 'ms2pipfeatures_pyx_{}'.format(fragmethod)
+    ms2pipfeatures_pyx = getattr(__import__('cython_modules', fromlist=[cython_module_name]), cython_module_name)
 
     ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
@@ -214,10 +190,16 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     if modpeptide == "Unknown modification":
                         continue
 
+                # remove reporter ions
                 if 'iTRAQ' in fragmethod:
-                    # remove reporter ions
                     for mi, mp in enumerate(msms):
                         if (mp >= 113) & (mp <= 118):
+                            peaks[mi] = 0
+
+                # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
+                if 'TMT' in fragmethod:
+                    for mi, mp in enumerate(msms):
+                        if (mp >= 125) & (mp <= 132):
                             peaks[mi] = 0
 
                 # normalize and convert MS2 peaks
@@ -236,7 +218,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 targets = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 
                 if vector_file:
-                    #SD
                     psmids.extend([title]*(len(targets[0])))
                     dvectors.extend(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge))
                     dtargetsB.extend(targets[0])
@@ -275,7 +256,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
         df["psmid"] = psmids
         return df
     else:
-        #SD
         return [mz_buf,prediction_buf,target_buf,peplen_buf,charge_buf,pepid_buf]
 
 
@@ -602,102 +582,12 @@ def calc_correlations(df):
     return correlations
 
 
-def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False, peprec=None):
-    all_preds = all_preds_in.copy()
-    if unlog:
-        all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
-        all_preds.reset_index(inplace=True)
-        all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: x / x.sum())
-
-    def write(all_preds, mgf_output, peprec=None):
-        out = []
-
-        # Create easy to access dict from all_preds and peprec dataframe
-        if type(peprec) == pd.DataFrame:
-            peprec_to_dict = peprec.copy()
-
-            rt_present = 'rt' in peprec_to_dict.columns
-            if rt_present:
-                peprec_to_dict['rt'] = peprec_to_dict['rt'] * 60
-
-            peprec_to_dict.index = peprec_to_dict['spec_id']
-            peprec_to_dict.drop('spec_id', axis=1, inplace=True)
-            peprec_dict = peprec_to_dict.to_dict(orient='index')
-            del peprec_to_dict
-            spec_id_list = list(peprec['spec_id'])
-
-        else:
-            spec_id_list = list(all_preds['spec_id'].unique())
-
-        preds_dict = {}
-        preds_list = all_preds[['spec_id', 'charge', 'ion', 'mz', 'prediction']].values.tolist()
-
-        for row in preds_list:
-            spec_id = row[0]
-            if spec_id in preds_dict.keys():
-                if row[2] in preds_dict[spec_id]['peaks']:
-                    preds_dict[spec_id]['peaks'][row[2]].append(tuple(row[3:]))
-                else:
-                    preds_dict[spec_id]['peaks'][row[2]] = [tuple(row[3:])]
-            else:
-                preds_dict[spec_id] = {
-                    'charge': row[1],
-                    'peaks': {row[2]: [tuple(row[3:])]}
-                }
-
-        # Write MGF
-        for spec_id in spec_id_list:
-            out.append('BEGIN IONS')
-            charge = preds_dict[spec_id]['charge']
-            pepmass = preds_dict[spec_id]['peaks']['b'][0][0] + preds_dict[spec_id]['peaks']['y'][-1][0] - 2 * 1.007236
-            peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
-            peaks = sorted(peaks, key=itemgetter(0))
-
-            if type(peprec) == pd.DataFrame:
-                seq = peprec_dict[spec_id]['peptide']
-                mods = peprec_dict[spec_id]['modifications']
-                if rt_present:
-                    rt = peprec_dict[spec_id]['rt']
-                if mods == '-':
-                    mods_out = '0'
-                else:
-                    # Write MSP style PTM string
-                    mods = mods.split('|')
-                    mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
-                    # Turn MS2PIP mod indexes into actual list indexes (eg 0 for first AA)
-                    mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
-                    mods = [(str(x), seq[x], y) for (x, y) in mods]
-                    mods_out = '{}/{}'.format(len(mods), '/'.join([','.join(list(x)) for x in mods]))
-                out.append('TITLE={} {} {}'.format(spec_id, seq, mods_out))
-            else:
-                out.append('TITLE={}'.format(spec_id))
-
-            out.append('PEPMASS={}'.format((pepmass + (charge * 1.007825032)) / charge))
-            out.append('CHARGE={}+'.format(charge))
-            if rt_present:
-                out.append('RTINSECONDS={}'.format(rt))
-            out.append('\n'.join([' '.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
-            out.append('END IONS\n')
-
-        mgf_output.write('\n'.join(out))
-
-    if return_stringbuffer:
-        mgf_output = StringIO()
-        write(all_preds, mgf_output, peprec=peprec)
-        return mgf_output
-    else:
-        with open("{}_predictions.mgf".format(output_filename), write_mode) as mgf_output:
-            write(all_preds, mgf_output, peprec=peprec)
-
-    del all_preds
-
-
 def argument_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("pep_file", metavar="<peptide file>",
                         help="list of peptides")
-    parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.file",
-                        help="config file (by default config.file)")
+    parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.txt",
+                        help="config file (by default config.txt)")
     parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
                         help=".mgf MS2 spectrum file (optional)")
     parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
@@ -755,7 +645,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
-    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "ETD", "HCDch2"]
+    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "HCDTMT", "ETD", "HCDch2", "TTOF5600"]
     if fragmethod in known_fragmethods:
         print("using {} models".format(fragmethod))
     else:
@@ -938,7 +828,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         msp = False  # Set to True to write spectra as MSP file
         if msp:
             print("writing MSP file {}_predictions.msp...".format(output_filename))
-            write_msp(all_preds, data, output_filename=output_filename, num_cpu=num_cpu)
+            write_msp(all_preds, data, output_filename=output_filename)
 
         if not return_results:
             sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))

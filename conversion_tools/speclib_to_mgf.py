@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Convert msp files
+Convert MSP and SPTXT spectral library files
 
 Writes three files: mgf with the spectra; PEPREC with the peptide sequences;
 meta with additional metainformation.
 
 Arguments:
-    arg1 path to msp file
+    arg1 path to spectral library file
     arg2 prefix for spec_id
 """
 
+import re
 import sys
 
 
@@ -23,19 +24,30 @@ def main():
     }
 
     # Get arguments
-    msp_filename = sys.argv[1]
+    speclib_filename = sys.argv[1]
     title_prefix = sys.argv[2]
 
     # Open files
-    fpip = open(msp_filename + '.PEPREC', 'w')
+    fpip = open(speclib_filename + '.PEPREC', 'w')
     fpip.write("spec_id modifications peptide charge\n")
-    fmgf = open(msp_filename + '.mgf', 'w')
-    fmeta = open(msp_filename + '.meta', 'w')
+    fmgf = open(speclib_filename + '.mgf', 'w')
+    fmeta = open(speclib_filename + '.meta', 'w')
 
     PTMs = {}
 
+    speclib_ext = speclib_filename.split('.')[-1]
+    if speclib_ext in {'sptxt', 'SPTXT'}:
+        speclib_format = 'sptxt'
+    elif speclib_ext in {'msp', 'MSP'}:
+        speclib_format = 'msp'
+    else:
+        print('Unknown spectral library format: {}'.format(speclib_ext))
+        exit(1)
+
+    print("Converting {} to MGF, PEPREC and meta file...".format(speclib_filename))
+
     specid = 1
-    with open(msp_filename) as f:
+    with open(speclib_filename) as f:
         peptide = None
         charge = None
         parentmz = None
@@ -49,7 +61,7 @@ def main():
         for row in f:
             if read_spec:
                 line = row.rstrip().split('\t')
-                if len(line) != 3:
+                if len(line) < 3:
                     if peptide[0] != prev:
                         prev = peptide[0]
                         # sys.stderr.write(prev)
@@ -62,8 +74,8 @@ def main():
                             if (tmp2[0] == '0') & (tmp2[2] == 'iTRAQ'):
                                 m += '0|' + tmp2[2] + '|'
                             else:
-                                # m += str(int(tmp2[0])+1)+'|'+tmp2[2] +'|'
-                                m += str(int(tmp2[0]) + 1) + '|' + tmp2[2] + peptide[int(tmp2[0])] + '|'
+                                m += str(int(tmp2[0])+1)+'|'+tmp2[2] +'|'
+                                # m += str(int(tmp2[0]) + 1) + '|' + tmp2[2] + peptide[int(tmp2[0])] + '|'
                             if not tmp2[2] in PTMs:
                                 PTMs[tmp2[2]] = 0
                             PTMs[tmp2[2]] += 1
@@ -94,15 +106,19 @@ def main():
                     mgf = ""
                     continue
                 else:
-                    tt = float(line[1])
+                    # tt = float(line[1])
                     mgf += ' '.join([line[0], line[1]]) + '\n'
                     continue
+
             if row.startswith("Name:"):
                 line = row.rstrip().split(' ')
                 tmp = line[1].split('/')
                 peptide = tmp[0].replace('(O)', '')
+                if speclib_format == 'sptxt':
+                    peptide = re.sub(r'\[\d*\]|[a-z]', '', peptide)
                 charge = tmp[1].split('_')[0]
                 continue
+
             if row.startswith("Comment:"):
                 line = row.rstrip().split(' ')
                 for i in range(1, len(line)):
@@ -119,15 +135,22 @@ def main():
                         tmp = line[i].split('=')
                         HCDenergy = tmp[1].replace('eV', '')
                 continue
-            if row.startswith("Num peaks:"):
-                read_spec = True
-                continue
+
+            if speclib_format == 'msp':
+                if row.startswith("Num peaks:"):
+                    read_spec = True
+                    continue
+
+            elif speclib_format == 'sptxt':
+                if row.startswith("NumPeaks:"):
+                    read_spec = True
+                    continue
 
     fmgf.close()
     fpip.close()
     fmeta.close()
 
-    print("Spectral library contains these PTMs: {}".format(PTMs))
+    print("Finished!\nSpectral library contains {} peptides and these PTMs: {}".format(specid, PTMs))
 
 
 if __name__ == "__main__":

@@ -2,17 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "models/pkl_B.c"
-#include "models/pkl_Y.c"
+#include "../models/pkl_B.c"
+#include "../models/pkl_Y.c"
 
-//#include "models/kuster_massive_B.c"
-//#include "models/kuster_massive_Y.c"
-//#include "models/kuster_massive_Y2.c"
-
-//#include "models/human_ms2pip_train_B.c"
-//#include "models/human_ms2pip_train_Y.c"
-//#include "models/modelB2.c"
-//#include "models/modelY2.c"
+//#include "../models/human_ms2pip_train_B.c"
+//#include "../models/human_ms2pip_train_Y.c"
+//#include "../models/modelB2.c"
+//#include "../models/modelY2.c"
 
 float membuffer[10000];
 unsigned int v[300000];
