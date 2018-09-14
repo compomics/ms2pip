@@ -15,3 +15,9 @@
 
 rm -f ms2pipfeatures_pyx_HCDch2.c ms2pipfeatures_pyx_HCDch2.so
 python3 setup_HCDch2.py build_ext --inplace
+
+#rm -f pkl_B.c pkl_B.so
+#python3 setup_B.py build_ext --inplace
+
+#rm -f pkl_Y.c pkl_Y.so
+#python3 setup_Y.py build_ext --inplace

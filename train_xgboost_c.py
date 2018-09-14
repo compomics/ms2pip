@@ -9,12 +9,6 @@ from itertools import product
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 
-
-def evalerror_pearson(preds, dtrain):
-	labels = dtrain.get_label()
-	return 'pearsonr', pearsonr(preds, labels)[0]
-
-
 def convert_model_to_c(bst, args, numf):
 	filename = "{}_{}".format(args.vectors.split('.')[-2], args.type)
 	bst.dump_model("{}_dump.raw.txt".format(filename))
@@ -72,14 +66,14 @@ def convert_model_to_c(bst, args, numf):
 				fout.write(tree_to_code(forest[tt], 0, 1))
 			fout.write("\nreturn s;}\n")
 
-		"""
+		#"""
 		with open('{}.pyx'.format(filename), 'w') as fout:
 			fout.write("cdef extern from \"{}.c\":\n".format(filename))
 			fout.write("\tfloat score_{}(short unsigned short[{}] v)\n\n".format(args.type, numf))
 			fout.write("def myscore(sv):\n")
 			fout.write("\tcdef unsigned short[{}] v = sv\n".format(numf))
 			fout.write("\treturn score_{}(v)\n".format(args.type))
-		"""
+		#"""
 
 	os.remove("{}_dump.raw.txt".format(filename))
 
@@ -115,11 +109,11 @@ def load_data(vector_filename, ion_type):
 	targets = vectors.pop('targets{}'.format(ion_type))
 	target_names.remove('targets{}'.format(ion_type))
 	vectors.drop(labels=target_names, axis=1, inplace=True)
-
 	# Get psmids
 	psmids = vectors.pop('psmid')
+	print(vectors.dtypes)
 	# Cast vectors to numpy float for XGBoost
-	vectors.astype(np.float32)
+	#vectors.astype(np.float32)
 
 	return(vectors, targets, psmids)
 
@@ -194,16 +188,30 @@ if __name__ == "__main__":
 
 	np.random.seed(1)
 
+	evalsets = []
+	#evalsets.append("/home/compomics/local/ms2pip_c_new/pxd000138.pkl.pkl")
+	evalsets.append("/home/compomics/local/ms2pip_c_new/pxd001468.pkl.pkl")
+	#evalsets.append("/home/compomics/local/ms2pip_c_new/kuster_massive_small.pkl.pkl")
+	
 	filename = "{}_{}".format(args.vectors.split('.')[-2], args.type)
 	print("Using output filename {}".format(filename))
 
 	print("Loading train and test data...")
 	vectors, targets, psmids = load_data(args.vectors, args.type)
+	vectors_e = []
+	targets_e = []
+	psmids_e = []
+	if args.vectorseval:
+		for efn in evalsets:
+			vectors_t, targets_t, psmids_t = load_data(efn, args.type)
+			vectors_e.append(vectors_t)
+			targets_e.append(targets_t)
+			psmids_e.append(psmids_t)	
 
 	print("Splitting up into train and test set...")
 	upeps = psmids.unique()
 	np.random.shuffle(upeps)
-	test_psms = upeps[:int(len(upeps) * 0.1)]
+	test_psms = upeps[:int(len(upeps) * 0.02)]
 
 	train_vectors = vectors[~psmids.isin(test_psms)]
 	train_targets = targets[~psmids.isin(test_psms)]
@@ -213,6 +221,19 @@ if __name__ == "__main__":
 	test_targets = targets[psmids.isin(test_psms)]
 	test_psmids = psmids[psmids.isin(test_psms)]
 
+	"""
+	
+	vectors["target"] = targets
+	vectors = vectors.sample(frac=1)
+	
+	train_vectors = vectors.iloc[:int(0.5*(len(vectors))),:]
+	test_vectors = vectors.iloc[int(0.5*(len(vectors))):,:]
+	train_targets = train_vectors.pop("target")
+	test_targets = test_vectors.pop("target")
+	"""
+	#train_targets = [1 if x > -9 else 0 for x in train_targets]
+	#test_targets = [1 if x > -9 else 0 for x in test_targets]
+
 	numf = len(train_vectors.columns.values)
 
 	print(train_vectors.columns)
@@ -220,38 +241,47 @@ if __name__ == "__main__":
 	# Rename features to understand decision tree dump
 	train_vectors.columns = ['Feature' + str(i) for i in range(len(train_vectors.columns))]
 	test_vectors.columns = ['Feature' + str(i) for i in range(len(test_vectors.columns))]
+	if args.vectorseval:
+		for j in range(len(evalsets)):
+			vectors_e[j].columns = ['Feature' + str(i) for i in range(len(vectors_e[j].columns))]
 	
 	print(train_vectors.shape)
 
 	print("Creating train and test DMatrix...")
 	xtrain = xgb.DMatrix(train_vectors, label=train_targets)
 	xtest = xgb.DMatrix(test_vectors, label=test_targets)
-	evallist = [(xtest, 'test'),(xtrain, 'train')]
-
-	# If needed, repeat for evaluation vectors, and create evallist
+	evallist = [(xtrain, 'train'),(xtest, 'test')]
+	xeval = []
 	if args.vectorseval:
-		print("Loading eval data...")
-		eval_vectors, eval_targets, eval_psmids = load_data(args.vectorseval, args.type)
-		eval_vectors.columns = ['Feature' + str(i) for i in range(len(eval_vectors.columns))]
-		print("Creating eval DMatrix...")
-		xeval = xgb.DMatrix(eval_vectors, label=eval_targets)
-		del eval_vectors
+		for j in range(len(evalsets)):
+			xeval.append(xgb.DMatrix(vectors_e[j], label=targets_e[j]))
+			evallist.append((xeval[j],"eval"+str(j)))
 
 	# Remove items to save memory
-	del vectors, targets, psmids, train_vectors, train_targets, train_psmids, test_vectors
+	del vectors, targets, train_vectors, train_targets, vectors_t
+
+	def evalerror_pearson(preds, dtrain):
+		labels = dtrain.get_label()
+		return 'pearsonr', pearsonr(preds, labels)[0]
 
 	# Set XGBoost default parameters
 	params = {
+		#"booster":"dart",
+		#"tree_method":"hist",
+		#"grow_policy":"lossguide",
 		"nthread": int(args.num_cpu),
 		"objective": "reg:linear",
+		#"objective": "binary:logistic",
 		"eval_metric": 'mae',
+		#"eval_metric": 'auc',
 		"silent": 1,
 		"eta": 0.5,
 		"max_depth": 4,
-		"min_child_weight": 10,
-		"gamma": 1,
+		"lambda":1,
+		"min_child_weight": 100,
+		"gamma": 0,
 		"subsample": 1,
-		# "colsample_bytree": 1,
+		"colsample_bytree": 1,
 		# "max_delta_step": 0,
 	}
 
@@ -271,15 +301,28 @@ if __name__ == "__main__":
 		print("Using best parameters: {}".format(best_params))
 
 	print("Training XGBoost model...")
-	bst = xgb.train(params, xtrain, 30, evallist, early_stopping_rounds=10, maximize=False)
+	bst = xgb.train(params, xtrain, 50, evallist, maximize=False)
 
 	bst.save_model("{}.xgboost".format(filename))
+	
+	predictions = bst.predict(xeval[0])
+	print(pearsonr(predictions,targets_e[0]))
 
+	#check!!
+	"""
+	bst2 = xgb.Booster({'nthread':23}) #init model
+	bst2.load_model("{}.xgboost".format(filename))
+	predictions2 = bst2.predict(xeval[0])
+	for t1,t2 in zip(predictions,predictions2):
+		if abs(t1-t2)>0.001:
+			print("%f %f"%(t1,t2))	
+	print(pearsonr(predictions2,targets_e[0]))
+	"""
 	# Load previously saved model here, if necessary
 	# bst = xgb.Booster({'nthread':23}) #init model
 	# bst.load_model(filename+'.xgboost') # load data
 
-	print("Writing model to C code...")
+	#print("Writing model to C code...")
 	convert_model_to_c(bst, args, numf)
 
 	print("Analyzing newly made model...")
@@ -300,39 +343,26 @@ if __name__ == "__main__":
 		for l in importance_list:
 			print("'{}',".format(l), end='')
 		print(']')
+	
 
 	# Use new model to make predictions on eval/test set and write to csv
 	tmp = pd.DataFrame()
 	if args.vectorseval:
-		predictions = bst.predict(xeval)
-		tmp['target'] = list(eval_targets.values)
+		predictions = bst.predict(xeval[0])
+		tmp['target'] = list(targets_e[0].values)
 		tmp['predictions'] = predictions
-		tmp['psmid'] = list(eval_psmids.values)
+		tmp['psmid'] = list(psmids_e[0].values)
 	else:
 		predictions = bst.predict(xtest)
 		tmp['target'] = list(test_targets.values)
 		tmp['predictions'] = predictions
 		tmp['psmid'] = list(test_psmids.values)
+		#tmp['charge'] = list(test_vectors.charge)
+		#tmp['peplen'] = list(test_vectors.peplen)
 	tmp.to_csv("{}_predictions.csv".format(filename), index=False)
 	# tmp.to_pickle("{}_predictions.pkl".format(filename))
 
-	"""
-	for ch in range(8, 20):
-		print("len {}".format(ch))
-		n1 = 0
-		n2 = 0
-		tmp3 = tmp[tmp.peplen == ch]
-		for pid in tmp3.psmid.unique().values:
-			tmp2 = tmp3[tmp3.psmid == pid]
-			print(pid)
-			for (t, p) in zip(tmp2.target, tmp2.predictions):
-				print("{} {}".format(t, p))
-			# n1 += pearsonr(tmp2.target, tmp2.predictions)[0]
-			n1 += np.mean(np.abs(tmp2.target - tmp2.predictions))
-			# print(n1)
-			n2 += 1
-		print(n1 / n2)
-	"""
+	print(pearsonr(tmp["target"],tmp["predictions"]))
 
 	if args.make_plots:
 		plt.figure()
