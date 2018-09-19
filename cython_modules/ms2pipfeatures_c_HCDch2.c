@@ -2,8 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../models/pkl_B.c"
-#include "../models/pkl_Y.c"
+// pred_test returns (with current models) feature len_n and len_c
+// so get_prediction functions can be tested
+//#include "../models/HCD/pred_test_B.c"
+//#include "../models/HCD/pred_test_Y.c"
+
+#include "../models/HCD/hcd_fast_B.c"
+#include "../models/HCD/hcd_fast_Y.c"
 
 //#include "../models/human_ms2pip_train_B.c"
 //#include "../models/human_ms2pip_train_Y.c"
@@ -127,7 +132,7 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
     }
     for (i=1; i < peplen; i++) {
         mz += amino_masses[modpeptide[i]];
-        membuffer[j++] = mz+1.007236;  //b-ion
+        membuffer[j++] = mz + 1.007236;  //b-ion
     }
 
     mz = 0;
@@ -170,7 +175,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
     int mem_pos;
     float max, tmp2;
 
-    for (i=0; i < 4*peplen; i++) {
+    for (i=0; i < 4*(peplen-1); i++) {
         ions[i] = -9.96578428466; //HARD CODED!!
     }
 

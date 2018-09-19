@@ -5,15 +5,12 @@ import argparse
 import multiprocessing
 from random import shuffle
 import tempfile
-from operator import itemgetter
-from io import StringIO
-import xgboost as xgb
 
-# Other
+# Third party
 import numpy as np
 import pandas as pd
 
-# From other Python files
+# From project
 from ms2pip_tools.spectrum_output import write_mgf, write_msp
 
 
@@ -38,13 +35,22 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
 
     pcount = 0
 
+    # Prepare output variables
     mz_buf = []
     prediction_buf = []
     peplen_buf = []
     charge_buf = []
     pepid_buf = []
-    
-    for pepid in peptides:
+
+    # transform pandas dataframe into dictionary for easy access
+    specdict = data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
+    pepids = data['spec_id'].tolist()
+    peptides = specdict["peptide"]
+    modifications = specdict["modifications"]
+    charges = specdict["charge"]
+    del specdict
+
+    for pepid in pepids:
         peptide = peptides[pepid]
         peptide = peptide.replace("L", "I")
         mods = modifications[pepid]
@@ -58,27 +64,30 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
                 continue
 
         pepid_buf.append(pepid)
-        peplen_buf.append(len(peptide)-2)
-        
+        peplen_buf.append(len(peptide) - 2)
+
         ch = charges[pepid]
         charge_buf.append(ch)
-        
+
         # get ion mzs
         mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
-        mz_buf.append(np.array(mzs[0]+mzs[1],dtype=np.float32))
-        
-        # get ion intensities
+        mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+
+        # Predict the b- and y-ion intensities from the peptide
+        # For C-term ion types (y, y++, z), flip the order of predictions,
+        # because get_predictions follows order from vector file
+        # enumerate works for variable number (and all) ion types
         predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
-        prediction_buf.append(np.array(predictions[0]+predictions[1],dtype=np.float32))
+        prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else p[::-1] for i, p in enumerate(predictions)])
 
         pcount += 1
         if (pcount % 500) == 0:
             sys.stdout.write("(%i)%i "%(worker_num, pcount))
             sys.stdout.flush()
 
-    #return final_result
-    return [mz_buf,prediction_buf,peplen_buf,charge_buf,pepid_buf]
-    
+    return mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf
+
+
 def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror):
     """
     Function for each worker to process a list of spectra. Each peptide's
@@ -107,19 +116,14 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
     # cols contains the names of the computed features
     cols_n = get_feature_names_new()
-    
+
     #for ti,tt in enumerate(names):
     #   print("%i %s"%(ti+1,tt))
-    
-    dataresult_list = []
 
     #SD
-    dresults = []
+    # dresults = []
     dvectors = []
-    dtargetsB = []
-    dtargetsY = []
-    dtargetsB2 = []
-    dtargetsY2 = []
+    dtargets = dict()
     psmids = []
 
     mz_buf = []
@@ -131,12 +135,10 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
     title = ""
     charge = 0
-    pepmass = 0
     msms = []
     peaks = []
     f = open(spec_file)
     skip = False
-    vectors = []
     pcount = 0
     while 1:
         rows = f.readlines(50000)
@@ -180,11 +182,12 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 peptide = peptide.replace("L", "I")
                 mods = modifications[title]
                 #SD
-                if "mut" in mods:continue
-                                
+                if "mut" in mods:
+                    continue
+
                 # convert peptide string to integer list to speed up C code
                 peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
-                
+
                 modpeptide = apply_mods(peptide, mods, PTMmap)
                 if type(modpeptide) == str:
                     if modpeptide == "Unknown modification":
@@ -203,60 +206,70 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                             peaks[mi] = 0
 
                 # normalize and convert MS2 peaks
-                
                 msms = np.array(msms, dtype=np.float32)
-                
-                peaks = peaks / np.sum(peaks)
-                peaks = np.log2(np.array(peaks) + 0.001)
+                #peaks = peaks / np.sum(peaks)
+                #peaks = np.log2(np.array(peaks) + 0.001)
                 peaks = np.array(peaks)
                 peaks = peaks.astype(np.float32)
 
                 # get ion mzs
                 mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
-                
+
                 # get targets
                 targets = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
 
                 if vector_file:
                     psmids.extend([title]*(len(targets[0])))
-                    dvectors.extend(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge))
-                    dtargetsB.extend(targets[0])
-                    dtargetsY.extend(targets[1][::-1])
-                    dtargetsB2.extend(targets[2])
-                    dtargetsY2.extend(targets[3][::-1])
-                else:                                                       
-                    # predict the b- and y-ion intensities from the peptide
-                    predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)   
-                    prediction_buf.append(np.array(predictions[0]+predictions[1],dtype=np.float32))
-                    
-                    target_buf.append(np.array(targets[0]+targets[1][::-1],dtype=np.float32))
+                    # Temporary: until new features are incorporated into other fragmethods
+                    if fragmethod in ['HCD', 'HCDch2']:
+                        dvectors.extend(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge))
+                    else:
+                        dvectors.extend(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge))
 
+                    # Collecting targets to dict; works for variable number of ion types
+                    # For C-term ion types (y, y++, z), flip the order of targets,
+                    # for correct order in vectors DataFrame
+                    for i, t in enumerate(targets):
+                        if i in dtargets.keys():
+                            if i % 2 == 0:
+                                dtargets[i].extend(t)
+                            else:
+                                dtargets[i].extend(t[::-1])
+                        else:
+                            if i % 2 == 0:
+                                dtargets[i] = [t]
+                            else:
+                                dtargets[i] = [t[::-1]]
+
+                else:
+                    # Predict the b- and y-ion intensities from the peptide
+                    # For C-term ion types (y, y++, z), flip the order of predictions,
+                    # because get_predictions follows order from vector file
+                    # enumerate works for variable number (and all) ion types
                     pepid_buf.append(title)
-                    peplen_buf.append(len(peptide)-2)
-            
+                    peplen_buf.append(len(peptide) - 2)
                     charge_buf.append(charge)
-        
-                    # get ion mzs
+
+                    # get/append ion mzs, targets and predictions
                     mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
-                    mz_buf.append(np.array(mzs[0]+mzs[1],dtype=np.float32))
-        
+                    mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+
+                    target_buf.append([np.array(t, dtype=np.float32) for t in targets])
+
+                    predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
+                    prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else p[::-1] for i, p in enumerate(predictions)])
+
+
                 pcount += 1
                 if (pcount % 500) == 0:
                     sys.stdout.write("(%i)%i "%(worker_num, pcount))
-                    sys.stdout.flush()                  
-                    
+                    sys.stdout.flush()
+
     f.close()
 
     if vector_file:
-        df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16)
-        df["targetsB"] = dtargetsB
-        df["targetsY"] = dtargetsY
-        df["targetsB2"] = dtargetsB2
-        df["targetsY2"] = dtargetsY2
-        df["psmid"] = psmids
-        return df
-    else:
-        return [mz_buf,prediction_buf,target_buf,peplen_buf,charge_buf,pepid_buf]
+        return psmids, dvectors, dtargets, cols_n
+    return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
 
 
 def get_feature_names():
@@ -274,8 +287,8 @@ def get_feature_names():
     names.append("meanIywikiG")
 
     names += ["pmz", "peplen", "ionnumber", "ionnumber_rel"]
-    
-    for c in ["aG","wikiG","mz", "bas", "heli", "hydro", "pI"]:
+
+    for c in ["aG", "wikiG", "mz", "bas", "heli", "hydro", "pI"]:
         names.append("sum_" + c)
 
     for c in ["mz", "bas", "heli", "hydro", "pI"]:
@@ -306,7 +319,7 @@ def get_feature_names():
             names.append("loc_" + pos + "_" + c)
 
     for pos in ["i", "i+1"]:
-        for c in ["wikiG","P", "D", "E", "K", "R"]:
+        for c in ["wikiG", "P", "D", "E", "K", "R"]:
             names.append("loc_" + pos + "_" + c)
 
     for c in ["bas", "heli", "hydro", "pI", "mz"]:
@@ -319,8 +332,8 @@ def get_feature_names():
 
 
 def get_feature_names_new():
-    num_props =4
-    names = ["peplen","charge"]
+    num_props = 4
+    names = ["peplen", "charge"]
     for t in range(5):
         names.append("charge"+str(t))
     for t in range(num_props):
@@ -331,14 +344,15 @@ def get_feature_names_new():
         names.append("qmax_%i"%t)
     names.append("len_n")
     names.append("len_c")
-    
-    for a in ['A','C','D','E','F','G','H','I','K','M','N','P','Q','R','S','T','V','W','Y']:
+
+    for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
+              'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
         names.append("I_n_%s"%a)
         names.append("I_c_%s"%a)
-    
+
     for t in range(num_props):
-        for pos in ["p0","pend","pi-1","pi","pi+1","pi+2"]:
-            names.append("prop_%i_%s"%(t,pos))
+        for pos in ["p0", "pend", "pi-1", "pi", "pi+1", "pi+2"]:
+            names.append("prop_%i_%s"%(t, pos))
         names.append("sum_%i_n"%t)
         names.append("q0_%i_n"%t)
         names.append("q1_%i_n"%t)
@@ -352,7 +366,8 @@ def get_feature_names_new():
         names.append("q3_%i_c"%t)
         names.append("q4_%i_c"%t)
 
-    return names    
+    return names
+
 
 def get_feature_names_small(ionnumber):
     """
@@ -360,7 +375,7 @@ def get_feature_names_small(ionnumber):
     """
     names = []
     names += ["pmz", "peplen"]
-    
+
     for c in ["bas", "heli", "hydro", "pI"]:
         names.append("sum_" + c)
 
@@ -390,7 +405,7 @@ def get_feature_names_small(ionnumber):
 
     for i in range(ionnumber):
         for c in ["bas", "heli", "hydro", "pI", "mz"]:
-            names.append("P_%i_%s"%(i,c))
+            names.append("P_%i_%s"%(i, c))
         names.append("P_%i_P"%i)
         names.append("P_%i_K"%i)
         names.append("P_%i_R"%i)
@@ -563,7 +578,7 @@ def generate_modifications_file(params, masses, a_map):
         f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])))
     f2.close()
 
-    return (f.name, f2.name, PTMmap)
+    return f.name, f2.name, PTMmap
 
 
 def peakcount(x):
@@ -645,12 +660,21 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         output_filename = '.'.join(pep_file.split('.')[:-1])
 
     # Check if given fragmethod exists:
-    known_fragmethods = ["CID", "HCD", "HCDiTRAQ4phospho", "HCDiTRAQ4", "HCDTMT", "ETD", "HCDch2", "TTOF5600"]
-    if fragmethod in known_fragmethods:
+    frag_method_ion_types = {
+        'CID': ['b', 'y'],
+        'HCD': ['b', 'y'],
+        'HCDiTRAQ4phospho': ['b', 'y'],
+        'HCDiTRAQ4': ['b', 'y'],
+        'HCDTMT': ['b', 'y'],
+        'ETD': ['b', 'y', 'c', 'z'],
+        'HCDch2': ['b', 'y', 'b2', 'y2'],
+        'TTOF5600': ['b', 'y'],
+    }
+    if fragmethod in frag_method_ion_types.keys():
         print("using {} models".format(fragmethod))
     else:
         print("Unknown fragmentation method: {}".format(fragmethod))
-        print("Should be one of the following methods: {}".format(known_fragmethods))
+        print("Should be one of the following methods: {}".format(frag_method_ion_types.keys()))
         exit(1)
 
     # Create amino acid masses file
@@ -716,23 +740,39 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
         sys.stdout.write("merging results...\n")
 
+        # Create vector file
         if vector_file:
             all_results = []
             for r in results:
-                all_results.append(r.get())
-            all_results = pd.concat(all_results)
-            sys.stdout.write(
-                "writing vector file {}... \n".format(vector_file))
+                psmids, dvectors, dtargets, cols_n = r.get()
+
+                # Temporary: until new features are incorporated into other fragmethods
+                if fragmethod in ['HCD', 'HCDch2']:
+                    df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16)
+                else:
+                    df = pd.DataFrame(dvectors, dtype=np.uint16)
+
+                # dtargets is a dict, containing targets for every ion type (keys are int)
+                for i, t in dtargets.items():
+                    df["targets{}".format(frag_method_ion_types[fragmethod][i])] = np.concatenate(t, axis=None)
+                df["psmid"] = psmids
+                all_results.append(df)
+            # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
+            all_results = pd.concat([df for df in all_results if len(df) != 0])
+            print(all_results)
+
+            sys.stdout.write("writing vector file {}... \n".format(vector_file))
             # write result. write format depends on extension:
             ext = vector_file.split(".")[-1]
             if ext == "pkl":
                 all_results.to_pickle(vector_file + ".pkl")
-            elif ext == "h5":
-                all_results.to_hdf(vector_file, "table")
-            # "table" is a tag used to read back the .h5
-            else:  # if none of the two, default to .h5
-                # all_results.to_hdf(vector_file, "table")
+            elif ext == "csv":
                 all_results.to_csv(vector_file)
+            else:
+                # "table" is a tag used to read back the .h5
+                all_results.to_hdf(vector_file, "table")
+
+        # Predict and compare with MGF file
         else:
             mz_bufs = []
             prediction_bufs = []
@@ -741,36 +781,39 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             charge_bufs = []
             pepid_bufs = []
             for r in results:
-                [mz_buf,prediction_buf,target_buf,peplen_buf,charge_buf,pepid_buf] = r.get()
+                mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf = r.get()
                 mz_bufs.extend(mz_buf)
                 prediction_bufs.extend(prediction_buf)
                 target_bufs.extend(target_buf)
                 peplen_bufs.extend(peplen_buf)
                 charge_bufs.extend(charge_buf)
                 pepid_bufs.extend(pepid_buf)
-    
-            #reconstruct DataFrame
+
+            # Reconstruct DataFrame
+            num_ion_types = len(mz_bufs[0])
             ions = []
             ionnumbers = []
             charges = []
             pepids = []
-            for pi,pl in enumerate(peplen_bufs):
-                ions.extend((['b']*(pl-1))+(['y']*(pl-1)))
-                ionnumbers.extend([x+1 for x in range(pl-1)] + [x+1 for x in range(pl-1)])
-                charges.extend([charge_bufs[pi]]*(2*(pl-1)))
-                pepids.extend([pepid_bufs[pi]]*(2*(pl-1)))
+            for pi, pl in enumerate(peplen_bufs):
+                [ions.extend([ion_type] * (pl - 1)) for ion_type in frag_method_ion_types[fragmethod]]
+                ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
+                charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
+                pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
             all_preds = pd.DataFrame()
             all_preds["spec_id"] = pepids
             all_preds["charge"] = charges
             all_preds["ion"] = ions
             all_preds["ionnumber"] = ionnumbers
-            all_preds["mz"] = np.hstack(mz_bufs)
-            all_preds["target"] = np.hstack(target_bufs)
-            all_preds["prediction"] = np.hstack(prediction_bufs)
-            
+            all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
+            all_preds["target"] = np.hstack(np.concatenate(target_bufs, axis=None))
+            all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
+
             sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
             all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
             sys.stdout.write("done! \n")
+
+    # Only get the predictions
     else:
         sys.stdout.write("scanning peptide file... ")
 
@@ -795,31 +838,34 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         charge_bufs = []
         pepid_bufs = []
         for r in results:
-            [mz_buf,prediction_buf,peplen_buf,charge_buf,pepid_buf] = r.get()
+            mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf = r.get()
             mz_bufs.extend(mz_buf)
             prediction_bufs.extend(prediction_buf)
             peplen_bufs.extend(peplen_buf)
             charge_bufs.extend(charge_buf)
             pepid_bufs.extend(pepid_buf)
 
-        #reconstruct DataFrame
+        # Reconstruct DataFrame
+        num_ion_types = len(mz_bufs[0])
+
         ions = []
         ionnumbers = []
         charges = []
         pepids = []
-        for pi,pl in enumerate(peplen_bufs):
-            ions.extend((['b']*(pl-1))+(['y']*(pl-1)))
-            ionnumbers.extend([x+1 for x in range(pl-1)] + [x+1 for x in range(pl-1)])
-            charges.extend([charge_bufs[pi]]*(2*(pl-1)))
-            pepids.extend([pepid_bufs[pi]]*(2*(pl-1)))
+        for pi, pl in enumerate(peplen_bufs):
+            [ions.extend([ion_type] * (pl - 1)) for ion_type in frag_method_ion_types[fragmethod]]
+            ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
+            charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
+            pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
         all_preds = pd.DataFrame()
         all_preds["spec_id"] = pepids
         all_preds["charge"] = charges
         all_preds["ion-type"] = ions
         all_preds["ion-number"] = ionnumbers
-        all_preds["mz"] = np.hstack(mz_bufs)
-        all_preds["prediction"] = np.hstack(prediction_bufs)
-        
+        all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
+        all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
+
+
         mgf = False  # Set to True to write spectrum as MGF file
         if mgf:
             print("writing MGF file {}_predictions.mgf...".format(output_filename))
@@ -835,7 +881,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
             sys.stdout.write("done!\n")
         else:
-            return all_preds    
+            return all_preds
 
 if __name__ == "__main__":
     print_logo()

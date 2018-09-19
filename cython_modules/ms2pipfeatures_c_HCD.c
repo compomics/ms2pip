@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../models/vectors_train_h5B_c.c"
-#include "../models/vectors_train_h5Y_c.c"
+#include "../models/HCD/hcd_fast_B.c"
+#include "../models/HCD/hcd_fast_Y.c"
 
 float membuffer[10000];
-unsigned int v[30000];
+unsigned int v[300000];
 float ions[1000];
 float predictions[1000];
 
@@ -17,6 +17,22 @@ unsigned short bas[19] = {37,35,59,129,94,0,210,81,191,106,101,117,115,343,49,90
 unsigned short heli[19] = {68,23,33,29,70,58,41,73,32,66,38,0,40,39,44,53,71,51,55};
 unsigned short hydro[19] = {51,75,25,35,100,16,3,94,0,82,12,0,22,22,21,39,80,98,70};
 unsigned short pI[19] = {32,23,0,4,27,32,48,32,69,29,26,35,28,79,29,28,31,31,28};
+unsigned short aG[19] = {1,1,0,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1};
+unsigned short wikiG[19] = {0,0,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,0};
+
+int num_props = 4;
+unsigned int props[4][19] = {
+{37,35,59,129,94,0,210,81,191,106,101,117,115,343,49,90,60,134,104}, //basicity
+{68,23,33,29,70,58,41,73,32,66,38,0,40,39,44,53,71,51,55}, //helicity
+{51,75,25,35,100,16,3,94,0,82,12,0,22,22,21,39,80,98,70}, //hydrophobicity
+{32,23,0,4,27,32,48,32,69,29,26,35,28,79,29,28,31,31,28} //pI
+};
+
+unsigned int props_buffer[100]; //100 is max pep length
+unsigned int shared_features[100]; //100 is max num shared features
+unsigned int count_n[19];
+unsigned int count_c[19];
+
 unsigned short* amino_F;
 
 unsigned short* sptm_mapper;
@@ -106,7 +122,7 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz + 1.007236;
+        membuffer[j++] = mz + 1.007236;  //b-ion
 	}
 
 	mz = 0;
@@ -115,11 +131,12 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	}
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = 18.0105647 + mz + 1.007236;
+        membuffer[j++] = 18.0105647 + mz + 1.007236;  //y-ion
 	}
 
 	return membuffer;
 }
+
 
 //get fragment ion peaks from spectrum
 float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
@@ -130,7 +147,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	int mem_pos;
 	float max, tmp2;
 
-	for (i=0; i < 2*peplen; i++) {
+	for (i=0; i < 2*(peplen-1); i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 	}
 
@@ -231,6 +248,136 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	return ions;
 }
 
+int cmpfunc (const void * a, const void * b) {
+   return ( *(int*)a - *(int*)b );
+}
+
+//compute feature vectors from peptide
+unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
+    {
+    int i,j,k;
+    float mz;
+
+    int fnum = 1; //first value in v is its length
+
+    for (i=0; i < 19; i++) {
+        count_n[i] = 0;
+        count_c[i] = 0;
+    }
+        
+    //I need this for Omega
+    //important for sptms!!
+    for (i=0; i < peplen; i++) {
+        if (peptide[i+1] > 18) {
+            peptide[i+1] = sptm_mapper[peptide[i+1]];
+        }
+        count_c[peptide[i+1]]++;
+    }
+    
+    int num_shared = 0;
+    
+    shared_features[num_shared++] = peplen;
+    shared_features[num_shared++] = charge;
+
+    shared_features[num_shared] = 0;
+    if (charge == 1) {
+        shared_features[num_shared];
+        }
+    num_shared++;
+    shared_features[num_shared] = 0;
+    if (charge == 2) {
+        shared_features[num_shared] ;
+        }
+    num_shared++;
+    shared_features[num_shared] = 0;
+    if (charge == 3) {
+        shared_features[num_shared];    
+        }
+    num_shared++;
+    shared_features[num_shared] = 0;
+    if (charge == 4) {
+        shared_features[num_shared];    
+        }
+    num_shared++;
+    shared_features[num_shared] = 0;
+    if (charge >= 5) {
+        shared_features[num_shared];    
+        }
+    num_shared++;
+
+    for (j=0; j < num_props; j++) {
+        for (i=0; i < peplen; i++) {
+            props_buffer[i] = props[j][peptide[i+1]];
+        }   
+        qsort(props_buffer,peplen,sizeof(unsigned int),cmpfunc);
+        shared_features[num_shared++] = props_buffer[0];
+        shared_features[num_shared++] = props_buffer[(int)(0.25*(peplen-1))];
+        shared_features[num_shared++] = props_buffer[(int)(0.5*(peplen-1))];
+        shared_features[num_shared++] = props_buffer[(int)(0.75*(peplen-1))];
+        shared_features[num_shared++] = props_buffer[peplen-1];
+    }
+
+    for (i=0; i < peplen-1; i++) {
+        for (j=0; j<num_shared; j++) {
+            v[fnum++] = shared_features[j];
+        }
+        v[fnum++] = i+1;
+        v[fnum++] = peplen-i;       
+        count_n[peptide[i+1]]++;
+        count_c[peptide[peplen-i]]--;
+
+        for (j=0; j < 19; j++) {
+            v[fnum++] = count_n[j];
+            v[fnum++] = count_c[j];
+        }
+                
+        for (j=0; j < num_props; j++) {
+            v[fnum++] = props[j][peptide[1]];  
+            v[fnum++] = props[j][peptide[peplen]];  
+            if (i==0) {
+                v[fnum++] = 0;  
+            }
+            else {  
+                v[fnum++] = props[j][peptide[i-1]];  
+            }
+            v[fnum++] = props[j][peptide[i]];  
+            v[fnum++] = props[j][peptide[i+1]];  
+            if (i==(peplen-1)) {
+                v[fnum++] = 0;                          
+            }
+            else {
+                v[fnum++] = props[j][peptide[i+2]];                         
+            }
+            unsigned int s = 0;
+            for (k=0; k <= i; k++) {
+                props_buffer[k] = props[j][peptide[k+1]];
+                s+= props_buffer[k];
+            }   
+            v[fnum++] = s;
+            qsort(props_buffer,i+1,sizeof(unsigned int),cmpfunc);
+            v[fnum++] = props_buffer[0];
+            v[fnum++] = props_buffer[(int)(0.25*i)];
+            v[fnum++] = props_buffer[(int)(0.5*i)];
+            v[fnum++] = props_buffer[(int)(0.75*i)];
+            v[fnum++] = props_buffer[i];
+            s = 0;
+            for (k=i+1; k < peplen; k++) {
+                props_buffer[k-i-1] = props[j][peptide[k+1]];
+                s+= props_buffer[k-i-1];
+            }   
+            v[fnum++] = s;
+            qsort(props_buffer,peplen-i-1,sizeof(unsigned int),cmpfunc);
+            v[fnum++] = props_buffer[0];
+            v[fnum++] = props_buffer[(int)(0.25*(peplen-i-1))];
+            v[fnum++] = props_buffer[(int)(0.5*(peplen-i-1))];
+            v[fnum++] = props_buffer[(int)(0.75*(peplen-i-1))];
+            v[fnum++] = props_buffer[peplen-i-2];
+        }
+    }
+    v[0] = fnum-1;
+    return v;
+}
+
 //compute feature vectors from peptide
 unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	{
@@ -258,6 +405,10 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 
 	unsigned int buf2[19];
 	unsigned int buf3[19];
+    unsigned int sum_aG;
+    unsigned int sum_wikiG;
+    unsigned int sum_aG_tot;
+    unsigned int sum_wikiG_tot;
 
 	for (i=0; i < 19; i++) {
 		buf2[i] = 0;
@@ -271,6 +422,8 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 			peptide[i+1] = sptm_mapper[peptide[i+1]];
 		}
 		buf3[peptide[i+1]]++;
+        sum_aG_tot += aG[peptide[i+1]];
+        sum_wikiG_tot += wikiG[peptide[i+1]];
 	}
 
 	unsigned int total_bas = 0;
@@ -350,18 +503,36 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		min_pI_y = 999;
 
 		buf2[peptide[i+1]]++;
+        sum_aG += aG[peptide[i+1]];
+        sum_wikiG += wikiG[peptide[i+1]];
 		for (j=0; j < 19; j++) {
 			v[fnum++] = (int) 100*(((float) buf2[j])/(i+1));
 		}
+        v[fnum++] = sum_aG;
+        v[fnum++] = sum_wikiG;
+        v[fnum++] = (int) 100*(((float) sum_aG)/(i+1));
+        v[fnum++] = (int) 100*(((float) sum_wikiG)/(i+1));
+
+
 		buf3[peptide[i+1]]--;
 		for (j=0; j < 19; j++) {
 			v[fnum++] = (int) 100*(((float) buf3[j])/(peplen-i-1));
 		}
+        v[fnum++] = sum_aG_tot-sum_aG;
+        v[fnum++] = sum_wikiG_tot-sum_wikiG;
+        v[fnum++] = (int) 100*(((float) (sum_aG_tot-sum_aG)/(peplen-i-1)));
+        v[fnum++] = (int) 100*(((float) (sum_wikiG_tot-sum_wikiG)/(peplen-i-1)));
 
-		v[fnum++] = mz;
+        v[fnum++] = (int) mz;
 		v[fnum++] = peplen;
 		v[fnum++] = i;
 		v[fnum++] = (int) 100*(float)i/peplen;
+        v[fnum++] = sum_aG_tot;
+        v[fnum++] = sum_wikiG_tot;
+        v[fnum++] = total_bas;
+        v[fnum++] = total_heli;
+        v[fnum++] = total_hydro;
+        v[fnum++] = total_pI;
 		v[fnum++] = mean_mz;
 		v[fnum++] = mean_bas;
 		v[fnum++] = mean_heli;
@@ -455,23 +626,27 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		sum_bas += bas[peptide[i+1]];
 		v[fnum++] = sum_bas;
 		v[fnum++] = total_bas-sum_bas;
-		v[fnum++] = (int) ((float)sum_bas/(i+1));
-		v[fnum++] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
-		sum_heli += heli[peptide[i+1]];
-		v[fnum++] = sum_heli;
-		v[fnum++] = total_heli-sum_heli;
-		v[fnum++] = (int) ((float)sum_heli/(i+1));
-		v[fnum++] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
-		sum_hydro += hydro[peptide[i+1]];
-		v[fnum++] = sum_hydro;
-		v[fnum++] = total_hydro-sum_hydro;
-		v[fnum++] = (int) ((float)sum_hydro/(i+1));
-		v[fnum++] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
-		sum_pI += pI[peptide[i+1]];
-		v[fnum++] = sum_pI;
-		v[fnum++] = total_pI-sum_pI;
-		v[fnum++] = (int) ((float)sum_pI/(i+1));
-		v[fnum++] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
+        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        //v[fnum++] = (int) ((float)sum_bas/(i+1));
+        //v[fnum++] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
+        sum_heli += heli[peptide[i+1]];
+        v[fnum++] = sum_heli;
+        v[fnum++] = total_heli-sum_heli;
+        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        //v[fnum++] = (int) ((float)sum_heli/(i+1));
+        //v[fnum++] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
+        sum_hydro += hydro[peptide[i+1]];
+        v[fnum++] = sum_hydro;
+        v[fnum++] = total_hydro-sum_hydro;
+        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        //v[fnum++] = (int) ((float)sum_hydro/(i+1));
+        //v[fnum++] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
+        sum_pI += pI[peptide[i+1]];
+        v[fnum++] = sum_pI;
+        v[fnum++] = total_pI-sum_pI;
+        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        //v[fnum++] = (int) ((float)sum_pI/(i+1));
+        //v[fnum++] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
 
 		v[fnum++] = bas[peptide[i+1]]+bas[peptide[i+2]];
 		v[fnum++] = heli[peptide[i+1]]+heli[peptide[i+2]];
@@ -507,6 +682,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
 		v[fnum++] = pI[peptide[pos]];
+        v[fnum++] = wikiG[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -539,6 +715,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
 		v[fnum++] = pI[peptide[pos]];
+        v[fnum++] = wikiG[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -571,6 +748,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
 		v[fnum++] = pI[peptide[pos]];
+        v[fnum++] = wikiG[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -603,6 +781,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		v[fnum++] = heli[peptide[pos]];
 		v[fnum++] = hydro[peptide[pos]];
 		v[fnum++] = pI[peptide[pos]];
+        v[fnum++] = wikiG[peptide[pos]];
 		v[fnum] = 0;
 		if (peptide[pos] == 11) {
 			v[fnum] = 1;
@@ -629,6 +808,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		}
 		fnum++;
 
+        v[fnum++] = wikiG[peptide[i+1]];
 		v[fnum] = 0;
 		if (peptide[i+1] == 11) {
 			v[fnum] = 1;
@@ -655,6 +835,7 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		}
 		fnum++;
 
+        v[fnum++] = wikiG[peptide[i+2]];
 		v[fnum] = 0;
 		if (peptide[i+2] == 11) {
 			v[fnum] = 1;
@@ -768,12 +949,13 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	{
 	int i;
 
-	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-	int fnum = v[0]/(peplen-1);
+    unsigned int* v = get_v_ms2pip_new(peplen, peptide, modpeptide, charge);
+
+    int fnum = v[0]/(peplen-1);
 
 	for (i=0; i < peplen-1; i++) {
 		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
+        predictions[1*(peplen-1)+i] = score_Y(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }

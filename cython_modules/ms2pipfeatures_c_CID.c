@@ -106,7 +106,7 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	}
 	for (i=1; i < peplen; i++) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = mz + 1.007236;
+		membuffer[j++] = mz + 1.007236;  //b-ion
 	}
 
 	mz = 0;
@@ -115,7 +115,7 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	}
 	for (i=peplen; i > 1; i--) {
 		mz += amino_masses[modpeptide[i]];
-		membuffer[j++] = 18.0105647 + mz + 1.007236;
+		membuffer[j++] = 18.0105647 + mz + 1.007236;  //y-ion
 	}
 
 	return membuffer;
@@ -130,7 +130,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	int mem_pos;
 	float max, tmp2;
 
-	for (i=0; i < 2*peplen; i++) {
+	for (i=0; i < 2*(peplen-1); i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 	}
 
@@ -230,6 +230,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 
 	return ions;
 }
+
 
 //compute feature vectors from peptide
 unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
@@ -773,7 +774,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
 	for (i=0; i < peplen-1; i++) {
 		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[1*(peplen-1)+i] = score_Y(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }

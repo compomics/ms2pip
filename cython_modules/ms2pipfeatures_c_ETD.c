@@ -8,7 +8,7 @@
 #include "../models/ETD/SyntheticEThcD_SCO100_Z.c"
 
 float membuffer[10000];
-unsigned int v[30000];
+unsigned int v[300000];
 float ions[1000];
 float predictions[1000];
 
@@ -141,6 +141,7 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
 	return membuffer;
 }
 
+
 //get fragment ion peaks from spectrum
 float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
 	{
@@ -150,11 +151,11 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 	int mem_pos;
 	float max, tmp2;
 
-	for (i=0; i < 4*peplen; i++) {
+	for (i=0; i < 4*(peplen-1); i++) {
 		ions[i] = -9.96578428466; //HARD CODED!!
 	}
 
-	// b-ions
+	//b-ions
 	mz = 0.;
 	if (modpeptide[0] != 0) {
 		mz += amino_masses[modpeptide[0]];
@@ -883,13 +884,14 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	int i;
 
 	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+	
 	int fnum = v[0]/(peplen-1);
 
 	for (i=0; i < peplen-1; i++) {
 		predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
-		predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
+		predictions[1*(peplen-1)+i] = score_Y(v+1+(i*fnum))+0.5;
 		predictions[2*(peplen-1)+i] = score_C(v+1+(i*fnum))+0.5;
-		predictions[4*(peplen-1)-i-1] = score_Z(v+1+(i*fnum))+0.5;
+		predictions[3*(peplen-1)+i] = score_Z(v+1+(i*fnum))+0.5;
 	}
 	return predictions;
 }
