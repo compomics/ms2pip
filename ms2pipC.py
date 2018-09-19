@@ -78,7 +78,7 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         # because get_predictions follows order from vector file
         # enumerate works for variable number (and all) ion types
         predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
-        prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else p[::-1] for i, p in enumerate(predictions)])
+        prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else np.array(p[::-1], dtype=np.float32) for i, p in enumerate(predictions)])
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -207,8 +207,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
                 # normalize and convert MS2 peaks
                 msms = np.array(msms, dtype=np.float32)
-                #peaks = peaks / np.sum(peaks)
-                #peaks = np.log2(np.array(peaks) + 0.001)
+                peaks = peaks / np.sum(peaks)
+                peaks = np.log2(np.array(peaks) + 0.001)
                 peaks = np.array(peaks)
                 peaks = peaks.astype(np.float32)
 
@@ -222,9 +222,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     psmids.extend([title]*(len(targets[0])))
                     # Temporary: until new features are incorporated into other fragmethods
                     if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
-                        dvectors.extend(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge))
+                        dvectors.append(np.array(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge), dtype=np.uint16))
                     else:
-                        dvectors.extend(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge))
+                        dvectors.append(np.array(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16))
 
                     # Collecting targets to dict; works for variable number of ion types
                     # For C-term ion types (y, y++, z), flip the order of targets,
@@ -257,8 +257,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     target_buf.append([np.array(t, dtype=np.float32) for t in targets])
 
                     predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
-                    prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else p[::-1] for i, p in enumerate(predictions)])
-
+                    prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else np.array(p[::-1], dtype=np.float32) for i, p in enumerate(predictions)])
 
                 pcount += 1
                 if (pcount % 500) == 0:
@@ -268,13 +267,16 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     f.close()
 
     if vector_file:
-    # Temporary: until new features are incorporated into other fragmethods
+        # Temporary: until new features are incorporated into other fragmethods
+        # Concatenating dvectors into a 2D ndarray before making DataFrame saves lots of memory!
         if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
-            df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16)
+            dvectors = np.concatenate(dvectors)
+            df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16, copy=False)            
         else:
-            df = pd.DataFrame(dvectors, dtype=np.uint16)
+            dvectors = np.concatenate(dvectors)
+            df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
         return psmids, df, dtargets
-    
+
     return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
 
 
