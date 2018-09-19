@@ -1,4 +1,4 @@
-frag_method=HCD
+frag_method=HCDTMT
 frag_error=0.02
 
 ptm=PhosphoS,79.966331,opt,S
@@ -12,3 +12,5 @@ ptm=Pyro-carbamidomethyl,39.994915,opt,C
 ptm=Deamidated,0.984016,opt,N
 ptm=iTRAQ,144.102063,opt,N-term
 ptm=Acetyl,42.010565,opt,N-term
+ptm=TMT6plexN,229.162932,opt,N-term
+ptm=TMT6plex,229.162932,opt,K

@@ -221,7 +221,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 if vector_file:
                     psmids.extend([title]*(len(targets[0])))
                     # Temporary: until new features are incorporated into other fragmethods
-                    if fragmethod in ['HCD', 'HCDch2']:
+                    if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
                         dvectors.extend(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge))
                     else:
                         dvectors.extend(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge))
@@ -268,7 +268,13 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
     f.close()
 
     if vector_file:
-        return psmids, dvectors, dtargets, cols_n
+    # Temporary: until new features are incorporated into other fragmethods
+        if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
+            df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16)
+        else:
+            df = pd.DataFrame(dvectors, dtype=np.uint16)
+        return psmids, df, dtargets
+    
     return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
 
 
@@ -738,30 +744,26 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         myPool.close()
         myPool.join()
 
-        sys.stdout.write("merging results...\n")
+        sys.stdout.write("\nmerging results ")
 
         # Create vector file
         if vector_file:
             all_results = []
             for r in results:
-                psmids, dvectors, dtargets, cols_n = r.get()
-
-                # Temporary: until new features are incorporated into other fragmethods
-                if fragmethod in ['HCD', 'HCDch2']:
-                    df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16)
-                else:
-                    df = pd.DataFrame(dvectors, dtype=np.uint16)
-
+                sys.stdout.write(".")
+                psmids, df, dtargets = r.get()
+                
                 # dtargets is a dict, containing targets for every ion type (keys are int)
                 for i, t in dtargets.items():
                     df["targets{}".format(frag_method_ion_types[fragmethod][i])] = np.concatenate(t, axis=None)
                 df["psmid"] = psmids
+                
                 all_results.append(df)
+
             # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
             all_results = pd.concat([df for df in all_results if len(df) != 0])
-            print(all_results)
 
-            sys.stdout.write("writing vector file {}... \n".format(vector_file))
+            sys.stdout.write("\nwriting vector file {}... \n".format(vector_file))
             # write result. write format depends on extension:
             ext = vector_file.split(".")[-1]
             if ext == "pkl":
