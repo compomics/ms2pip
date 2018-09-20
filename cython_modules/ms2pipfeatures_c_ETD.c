@@ -171,7 +171,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 		if (msms_pos >= numpeaks) {
 			break;
 		}
-		if (mem_pos >= peplen) {
+		if (mem_pos >= peplen-1) {
 			break;
 		}
 		mz = membuffer[mem_pos];
@@ -219,7 +219,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 		if (msms_pos >= numpeaks) {
 			break;
 		}
-		if (mem_pos >= peplen) {
+		if (mem_pos >= peplen-1) {
 			break;
 		}
 		mz = membuffer[mem_pos];
@@ -265,7 +265,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 		if (msms_pos >= numpeaks) {
 			break;
 		}
-		if (mem_pos >= peplen) {
+		if (mem_pos >= peplen-1) {
 			break;
 		}
 		mz = membuffer[mem_pos];
@@ -313,7 +313,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 		if (msms_pos >= numpeaks) {
 			break;
 		}
-		if (mem_pos >= peplen) {
+		if (mem_pos >= peplen-1) {
 			break;
 		}
 		mz = membuffer[mem_pos];
