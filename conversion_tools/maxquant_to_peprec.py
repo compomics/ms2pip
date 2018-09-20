@@ -13,11 +13,11 @@ import logging
 import pandas as pd
 
 
-def mascot_to_peprec(evidence_file, msms_file,
-                     ptm_mapping={'(ox)': 'Oxidation', '(ac)': 'Acetyl', '(cm)': 'Carbamidomethyl'},
-                     fixed_modifications=[]):
+def maxquant_to_peprec(evidence_file, msms_file,
+                       ptm_mapping={'(ox)': 'Oxidation', '(ac)': 'Acetyl', '(cm)': 'Carbamidomethyl'},
+                       fixed_modifications=[]):
     """
-    Make an MS2PIP PEPREC file starting from the Mascot Evidence.txt and
+    Make an MS2PIP PEPREC file starting from the MaxQuant Evidence.txt and
     MSMS.txt files.
 
     Positional arguments:
@@ -25,7 +25,7 @@ def mascot_to_peprec(evidence_file, msms_file,
     `msms_file`: str with the file location of the MSMS.txt file
 
     Keyword arguments:
-    `ptm_mapping` (dict) is used to convert the Mascot PTM labels to PSI-MS
+    `ptm_mapping` (dict) is used to convert the MaxQuant PTM labels to PSI-MS
     modification names. For correct parsing, the key should always include the
     two brackets.
     `fixed_modifications` (list of tuples, [(aa, ptm)]) can contain fixed
@@ -41,7 +41,7 @@ def mascot_to_peprec(evidence_file, msms_file,
         if re.fullmatch('[a-z]{2}', mod) is None:
             raise ValueError("Fixed modification label `{}` can only contain two non-capital characters. E.g. `cm`".format(mod))
 
-    logging.debug("Start converting Mascot output to MS2PIP PEPREC")
+    logging.debug("Start converting MaxQuant output to MS2PIP PEPREC")
 
     # Read files and merge into one dataframe
     evidence = pd.read_csv(evidence_file, sep='\t')

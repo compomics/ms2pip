@@ -1,3 +1,9 @@
+"""
+Scan MGF files in a given folder for spectra present in a given PEPREC file and
+write those spectra to a new MGF file.
+"""
+
+
 __author__ = "Ralf Gabriels"
 __credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
 __license__ = "Apache License, Version 2.0"
