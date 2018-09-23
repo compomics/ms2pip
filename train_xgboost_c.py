@@ -15,8 +15,7 @@ def evalerror_pearson(preds, dtrain):
 	return 'pearsonr', pearsonr(preds, labels)[0]
 
 
-def convert_model_to_c(bst, args, numf):
-	filename = "{}_{}".format(args.vectors.split('.')[-2], args.type)
+def convert_model_to_c(bst, args, numf, filename):
 	bst.dump_model("{}_dump.raw.txt".format(filename))
 	num_nodes = []
 	mmax = 0
@@ -184,6 +183,8 @@ if __name__ == "__main__":
 						help='model type')
 	parser.add_argument('-c', metavar='INT', action="store", dest='num_cpu', default=24,
 						help='number of CPUs to use')
+	parser.add_argument('-t', metavar='INT', action="store", dest='num_trees', default=30,
+						help='number of trees in XGBoost model')
 	parser.add_argument('-e', metavar='FILE', action="store", dest='vectorseval',
 						help='additional evaluation file')
 	parser.add_argument("-p", action="store_true", dest='make_plots', default=False,
@@ -194,7 +195,7 @@ if __name__ == "__main__":
 
 	np.random.seed(1)
 
-	filename = "{}_{}".format(args.vectors.split('.')[-2], args.type)
+	filename = "{}_{}_{}".format(args.vectors.split('.')[-2], args.num_trees, args.type)
 	print("Using output filename {}".format(filename))
 
 	print("Loading train and test data...")
@@ -271,7 +272,7 @@ if __name__ == "__main__":
 		print("Using best parameters: {}".format(best_params))
 
 	print("Training XGBoost model...")
-	bst = xgb.train(params, xtrain, 30, evallist, early_stopping_rounds=10, maximize=False)
+	bst = xgb.train(params, xtrain, int(args.num_trees), evallist, early_stopping_rounds=10, maximize=False)
 
 	bst.save_model("{}.xgboost".format(filename))
 
@@ -280,7 +281,7 @@ if __name__ == "__main__":
 	# bst.load_model(filename+'.xgboost') # load data
 
 	print("Writing model to C code...")
-	convert_model_to_c(bst, args, numf)
+	convert_model_to_c(bst, args, numf, filename)
 
 	print("Analyzing newly made model...")
 	# Get feature importances

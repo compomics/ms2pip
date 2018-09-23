@@ -275,6 +275,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
         else:
             dvectors = np.concatenate(dvectors)
             df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
+            df.columns = df.columns.astype(str)
         return psmids, df, dtargets
 
     return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
@@ -598,10 +599,10 @@ def peakcount(x):
 
 
 def calc_correlations(df):
-    correlations = df.groupby(['spec_id', 'peplen', 'charge', 'ion'])[['target', 'prediction']].corr().iloc[::2]['prediction']
-    correlations.index = correlations.index.droplevel(4)
+    correlations = df.groupby(['spec_id', 'charge', 'ion'])[['target', 'prediction']].corr().iloc[::2]['prediction']
+    correlations.index = correlations.index.droplevel(3)
     correlations = correlations.to_frame().reset_index()
-    correlations.columns = ['spec_id', 'peplen', 'charge', 'ion', 'pearsonr']
+    correlations.columns = ['spec_id', 'charge', 'ion', 'pearsonr']
     return correlations
 
 
@@ -664,9 +665,6 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     fragmethod = params["frag_method"]
     fragerror = params["frag_error"]
 
-    if output_filename is None and not return_results:
-        output_filename = '.'.join(pep_file.split('.')[:-1])
-
     # Check if given fragmethod exists:
     frag_method_ion_types = {
         'CID': ['b', 'y'],
@@ -685,6 +683,9 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         print("Should be one of the following methods: {}".format(frag_method_ion_types.keys()))
         exit(1)
 
+    if output_filename is None and not return_results:
+        output_filename = '{}_{}'.format('.'.join(pep_file.split('.')[:-1]), fragmethod)
+
     # Create amino acid masses file
     # to be compatible with Omega
     # that might have fixed modifications
@@ -702,8 +703,14 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
     if type(pep_file) == str:
+        with open(pep_file, 'rt') as f:
+            line = f.readline()
+            if line[:7] != 'spec_id':
+                std.out.write('PEPREC file should start with header column\n')
+                exit(1)
+            sep = line[7]
         data = pd.read_csv(pep_file,
-                           sep=" ",
+                           sep=sep,
                            index_col=False,
                            dtype={"spec_id": str, "modifications": str},
                            nrows=limit)
@@ -815,6 +822,11 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
             sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
             all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
+
+            #sys.stdout.write('computing correlations...\n')
+            #correlations = calc_correlations(all_preds)
+            #correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
+
             sys.stdout.write("done! \n")
 
     # Only get the predictions
