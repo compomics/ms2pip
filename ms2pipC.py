@@ -706,7 +706,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         with open(pep_file, 'rt') as f:
             line = f.readline()
             if line[:7] != 'spec_id':
-                std.out.write('PEPREC file should start with header column\n')
+                sys.stdout.write('PEPREC file should start with header column\n')
                 exit(1)
             sep = line[7]
         data = pd.read_csv(pep_file,
