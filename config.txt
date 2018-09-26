@@ -1,4 +1,4 @@
-frag_method=HCDTMT
+frag_method=HCD
 frag_error=0.02
 
 ptm=PhosphoS,79.966331,opt,S

@@ -876,8 +876,8 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         all_preds = pd.DataFrame()
         all_preds["spec_id"] = pepids
         all_preds["charge"] = charges
-        all_preds["ion-type"] = ions
-        all_preds["ion-number"] = ionnumbers
+        all_preds["ion"] = ions
+        all_preds["ionnumber"] = ionnumbers
         all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
         all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
 
