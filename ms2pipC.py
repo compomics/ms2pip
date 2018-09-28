@@ -55,6 +55,10 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         peptide = peptide.replace("L", "I")
         mods = modifications[pepid]
 
+        # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
+        if len(peptide) > 100:
+            continue
+
         # convert peptide string to integer list to speed up C code
         peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
 
@@ -183,6 +187,10 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 mods = modifications[title]
                 #SD
                 if "mut" in mods:
+                    continue
+
+                # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
+                if len(peptide) > 100:
                     continue
 
                 # convert peptide string to integer list to speed up C code
@@ -839,10 +847,17 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
         for i in range(num_cpu):
             tmp = split_titles[i]
+            """
+            process_peptides(
+                i,
+                data[data.spec_id.isin(tmp)],
+                a_map, afile, modfile, modfile2, PTMmap, fragmethod)
+            """
             results.append(myPool.apply_async(process_peptides, args=(
                 i,
                 data[data.spec_id.isin(tmp)],
                 a_map, afile, modfile, modfile2, PTMmap, fragmethod)))
+            #"""
         myPool.close()
         myPool.join()
 
