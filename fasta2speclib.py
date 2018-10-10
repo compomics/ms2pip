@@ -111,7 +111,24 @@ def add_mods(tup):
     params = get_params()
     mod_versions = [dict()]
 
+    # First add all fixed modifications
     for mod in params['modifications']:
+        if mod['fixed']:
+            if not mod['n_term'] and mod['amino_acid']:
+                mod_versions[0].update({i:mod['name'] for i, aa in enumerate(row['peptide']) if aa == mod['amino_acid']})
+            elif mod['n_term']:
+                if mod['amino_acid']:
+                    if row['peptide'][0] == mod['amino_acid']:
+                        mod_versions[0]['N'] = mod['name']
+                else:
+                    mod_versions[0]['N'] = mod['name']
+
+    # Continue with variable modifications
+    for mod in params['modifications']:
+        if mod['fixed']:
+            continue
+
+        # List all positions with specific amino acid, to avoid combinatorial explotion, limit to 4 positions
         all_pos = [i for i, aa in enumerate(row['peptide']) if aa == mod['amino_acid']]
         if len(all_pos) > 4:
             all_pos = all_pos[:4]
@@ -126,7 +143,7 @@ def add_mods(tup):
                         new_version[pos] = mod['name']
                     mod_versions.append(new_version)
 
-            # For N-term mods and position not yet modified:
+            # For N-term mods and N-term is not yet modified:
             elif mod['n_term'] and 'N' not in version.keys():
                 # N-term with specific first AA:
                 if mod['amino_acid']:
