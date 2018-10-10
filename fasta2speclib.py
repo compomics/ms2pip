@@ -18,6 +18,7 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 
 # Native libraries
+import json
 import logging
 import argparse
 from math import ceil
@@ -38,60 +39,33 @@ from ms2pip_tools.get_elude_predictions import get_elude_predictions
 
 
 def ArgParse():
-    parser = argparse.ArgumentParser(description='Create an MS2PIP PEPREC file by in silico cleaving proteins from a fasta file.')
-    parser.add_argument('fasta_filename', action='store', help='Name of the fasta input file')
+    parser = argparse.ArgumentParser(description='Create an MS2PIP-predicted spectral library, starting from a fasta file.')
+    parser.add_argument('fasta_filename', action='store',
+                        help='Path to the fasta file containing protein sequences')
     parser.add_argument('-o', dest='output_filename', action='store',
-                        help='Name for output file (default: derived from input file)')
-    parser.add_argument('-t', dest='output_filetype', action='store', nargs='+', default=['msp'],
-                        help='Output file formats for spectral library: HDF, MSP and/or MGF (default msp).')
-    parser.add_argument('-c', dest='charges', action='store', nargs='+', default=[2, 3],
-                        help='Precusor charges to include in peprec (default [2, 3]')
-    parser.add_argument('-p', dest='min_peplen', action='store', default=8, type=int,
-                        help='Minimum length of peptides to include in peprec (default: 8)')
-    parser.add_argument('-w', dest='max_pepmass', action='store', default=5000, type=int,
-                        help='Maximum peptide mass to include in Dalton (default: 5000)')
-    parser.add_argument('-m', dest='missed_cleavages', action='store', default=2, type=int,
-                        help='Number of missed cleavages to be allowed (default: 2)')
-    parser.add_argument('-f', dest='frag_method', action='store', default='HCD', type=str,
-                        help='Fragmentation method to use for MS2PIP predictions')
-    parser.add_argument('-d', dest='decoy', action='store_true',
-                        help='Create decoy spectral library by reversing peptide sequences')
-    parser.add_argument('--elude_model', dest='elude_model_file', action='store', default=None,
-                        help='If given, predict retention times with given ELUDE model.\
-                         ELUDE needs to be installed for this functionality.')
-    parser.add_argument('--peprec_filter', dest='peprec_filter', action='store', default=None,
-                        help='Do not predict spectra for peptides present in this peprec.')
-    parser.add_argument('-n', dest='num_cpu', action='store', default=24, type=int,
-                        help='Number of processes for multithreading (default: 24)')
+                        help='Name for output file(s) (if not given, derived from input file)')
+    parser.add_argument('-c', dest='config_filename', action='store',
+                        help='Name of configuration json file (default: fasta2speclib_config.json)')
+
     args = parser.parse_args()
     return args
 
 
 def get_params():
     args = ArgParse()
-    params = {
+
+    if not args.config_filename:
+        config_filename = 'fasta2speclib_config.json'
+    else:
+        config_filename = args.config_filename
+
+    with open(config_filename, 'rt') as config_file:
+        params = json.load(config_file)
+
+    params.update({
         'fasta_filename': args.fasta_filename,
-        'charges': args.charges,
-        'min_peplen': args.min_peplen,
-        'max_pepmass': args.max_pepmass,
-        'missed_cleavages': args.missed_cleavages,
-        'frag_method': args.frag_method,
-        'num_cpu': args.num_cpu,
-        'modifications': [
-            # (name, specific AA, mass-shift, N-term, UniMod accession)
-            # ('Glu->pyro-Glu', 'E', -18.0153, True, 27),
-            # ('Gln->pyro-Glu', 'Q', -17.0305, True, 28),
-            # ('Acetyl', None, 42.0367, True, 1),
-            ('Oxidation', 'M', 15.9994, False, 35),
-            ('Carbamidomethyl', 'C', 57.0513, False, 4),
-        ],
-        'decoy': args.decoy,
-        'elude_model_file': args.elude_model_file,
-        'peprec_filter': args.peprec_filter,
-        'output_filetype': args.output_filetype,
-        'batch_size': 5000,
         'log_level': logging.INFO,
-    }
+    })
 
     if args.output_filename:
         params['output_filename'] = args.output_filename
@@ -131,43 +105,39 @@ def get_protein_list(df):
 
 def add_mods(tup):
     """
-    C-terminal modifications not yet supported!
-    N-terminal modifications WITH specific first AA do not yet prevent other modifications
-    to be added on that first AA. This means that the function will, for instance, combine
-    Glu->pyro-Glu (combination of N-term and normal PTM) with other PTMS for Glu on the first
-    AA, while this is not possible in reality!
+    See fasta2speclib_config.md for more information.
     """
     _, row = tup
     params = get_params()
     mod_versions = [dict()]
 
     for mod in params['modifications']:
-        all_pos = [i for i, aa in enumerate(row['peptide']) if aa == mod[1]]
+        all_pos = [i for i, aa in enumerate(row['peptide']) if aa == mod['amino_acid']]
         if len(all_pos) > 4:
             all_pos = all_pos[:4]
         for version in mod_versions:
             # For non-position-specific mods:
-            if not mod[3]:
+            if not mod['n_term']:
                 pos = [p for p in all_pos if p not in version.keys()]
                 combos = [x for l in range(1, len(pos) + 1) for x in combinations(pos, l)]
                 for combo in combos:
                     new_version = version.copy()
                     for pos in combo:
-                        new_version[pos] = mod[0]
+                        new_version[pos] = mod['name']
                     mod_versions.append(new_version)
 
             # For N-term mods and position not yet modified:
-            elif mod[3] and 'N' not in version.keys():
+            elif mod['n_term'] and 'N' not in version.keys():
                 # N-term with specific first AA:
-                if mod[1]:
-                    if row['peptide'][0] == mod[1]:
+                if mod['amino_acid']:
+                    if row['peptide'][0] == mod['amino_acid']:
                         new_version = version.copy()
-                        new_version['N'] = mod[0]
+                        new_version['N'] = mod['name']
                         mod_versions.append(new_version)
                 # N-term without specific first AA:
                 else:
                     new_version = version.copy()
-                    new_version['N'] = mod[0]
+                    new_version['N'] = mod['name']
                     mod_versions.append(new_version)
 
     df_out = pd.DataFrame(columns=row.index)
@@ -255,11 +225,12 @@ def run_batches(peprec, decoy=False):
         params['output_filename'] += '_decoy'
 
     ms2pip_params = {
-        'frag_method': params['frag_method'],
+        'frag_method': params['ms2pip_model'],
         'frag_error': 0.02,
-        'ptm': ['{},{},opt,{}'.format(mods[0], mods[2], mods[1])
-                if not mods[3]
-                else '{},{},opt,N-term'.format(mods[0], mods[2])
+        # Modify fasta2speclib modifications dict to MS2PIP params PTMs entry
+        'ptm': ['{},{},opt,{}'.format(mods['name'], mods['mass_shift'], mods['amino_acid'])
+                if not mods['n_term']
+                else '{},{},opt,N-term'.format(mods['name'], mods['mass_shift'])
                 for mods in params['modifications']],
         'sptm': [],
         'gptm': [],
@@ -288,7 +259,7 @@ def run_batches(peprec, decoy=False):
             peprec_batch['rt'] = get_elude_predictions(
                 peprec_batch,
                 params['elude_model_file'],
-                unimod_mapping={tup[0]: tup[4] for tup in params['modifications']}
+                unimod_mapping={mod['name']: mod['unimod_accession'] for mod in params['modifications']}
             )
 
         logging.debug("Adding charge states %s", str(params['charges']))
@@ -331,7 +302,6 @@ def run_batches(peprec, decoy=False):
                 peprec_batch[peprec_batch['modifications'] == '-'],
                 output_filename="{}_unmodified".format(params['output_filename']),
                 write_mode=write_mode,
-                num_cpu=params['num_cpu']
             )
 
             logging.info("Writing MSP file with all peptides")
@@ -340,7 +310,6 @@ def run_batches(peprec, decoy=False):
                 peprec_batch,
                 output_filename="{}_withmods".format(params['output_filename']),
                 write_mode=write_mode,
-                num_cpu=params['num_cpu']
             )
 
         if 'mgf' in params['output_filetype']:
