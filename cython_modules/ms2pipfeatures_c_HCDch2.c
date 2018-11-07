@@ -2,18 +2,20 @@
 #include <stdio.h>
 #include <string.h>
 
-// pred_test returns (with current models) feature len_n and len_c
-// so get_prediction functions can be tested
-//#include "../models/HCD/pred_test_B.c"
-//#include "../models/HCD/pred_test_Y.c"
+//#include "models/pkl_B_6deep.c"
+//#include "models/pkl_Y_6deep.c"
 
 #include "../models/HCD/hcd_fast_B.c"
 #include "../models/HCD/hcd_fast_Y.c"
 
-//#include "../models/human_ms2pip_train_B.c"
-//#include "../models/human_ms2pip_train_Y.c"
-//#include "../models/modelB2.c"
-//#include "../models/modelY2.c"
+//#include "models/kuster_massive_B.c"
+//#include "models/kuster_massive_Y.c"
+//#include "models/kuster_massive_Y2.c"
+
+//#include "models/human_ms2pip_train_B.c"
+//#include "models/human_ms2pip_train_Y.c"
+//#include "models/modelB2.c"
+//#include "models/modelY2.c"
 
 float membuffer[10000];
 unsigned int v[300000];
@@ -42,6 +44,8 @@ unsigned int props_buffer[100]; //100 is max pep length
 unsigned int shared_features[100]; //100 is max num shared features
 unsigned int count_n[19];
 unsigned int count_c[19];
+unsigned short peptide_buf[200]; //IONBOT
+
 
 unsigned short* amino_F;
     
@@ -132,7 +136,7 @@ float* ms2pip_get_mz(int peplen, unsigned short* modpeptide)
     }
     for (i=1; i < peplen; i++) {
         mz += amino_masses[modpeptide[i]];
-        membuffer[j++] = mz + 1.007236;  //b-ion
+        membuffer[j++] = mz+1.007236;  //b-ion
     }
 
     mz = 0;
@@ -174,6 +178,10 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
     int msms_pos;
     int mem_pos;
     float max, tmp2;
+
+    //for (i=0; i < numpeaks; i++) {
+    //  fprintf(stderr,"m %f\n",msms[i]);
+    //}
 
     for (i=0; i < 4*(peplen-1); i++) {
         ions[i] = -9.96578428466; //HARD CODED!!
@@ -389,11 +397,15 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
         
     //I need this for Omega
     //important for sptms!!
+    peptide_buf[0] = peptide[0];
     for (i=0; i < peplen; i++) {
         if (peptide[i+1] > 18) {
-            peptide[i+1] = sptm_mapper[peptide[i+1]];
+            peptide_buf[i+1] = sptm_mapper[peptide[i+1]];
         }
-        count_c[peptide[i+1]]++;
+        else {
+            peptide_buf[i+1] = peptide[i+1]; 
+        }
+        count_c[peptide_buf[i+1]]++;
     }
     
     int num_shared = 0;
@@ -429,7 +441,7 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
 
     for (j=0; j < num_props; j++) {
         for (i=0; i < peplen; i++) {
-            props_buffer[i] = props[j][peptide[i+1]];
+            props_buffer[i] = props[j][peptide_buf[i+1]];
         }   
         qsort(props_buffer,peplen,sizeof(unsigned int),cmpfunc);
         shared_features[num_shared++] = props_buffer[0];
@@ -445,8 +457,8 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
         }
         v[fnum++] = i+1;
         v[fnum++] = peplen-i;       
-        count_n[peptide[i+1]]++;
-        count_c[peptide[peplen-i]]--;
+        count_n[peptide_buf[i+1]]++;
+        count_c[peptide_buf[peplen-i]]--;
 
         for (j=0; j < 19; j++) {
             v[fnum++] = count_n[j];
@@ -454,25 +466,25 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
         }
                 
         for (j=0; j < num_props; j++) {
-            v[fnum++] = props[j][peptide[1]];  
-            v[fnum++] = props[j][peptide[peplen]];  
+            v[fnum++] = props[j][peptide_buf[1]];  
+            v[fnum++] = props[j][peptide_buf[peplen]];  
             if (i==0) {
                 v[fnum++] = 0;  
             }
             else {  
-                v[fnum++] = props[j][peptide[i-1]];  
+                v[fnum++] = props[j][peptide_buf[i-1]];  
             }
-            v[fnum++] = props[j][peptide[i]];  
-            v[fnum++] = props[j][peptide[i+1]];  
+            v[fnum++] = props[j][peptide_buf[i]];  
+            v[fnum++] = props[j][peptide_buf[i+1]];  
             if (i==(peplen-1)) {
                 v[fnum++] = 0;                          
             }
             else {
-                v[fnum++] = props[j][peptide[i+2]];                         
+                v[fnum++] = props[j][peptide_buf[i+2]];                         
             }
             unsigned int s = 0;
             for (k=0; k <= i; k++) {
-                props_buffer[k] = props[j][peptide[k+1]];
+                props_buffer[k] = props[j][peptide_buf[k+1]];
                 s+= props_buffer[k];
             }   
             v[fnum++] = s;
@@ -484,7 +496,7 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
             v[fnum++] = props_buffer[i];
             s = 0;
             for (k=i+1; k < peplen; k++) {
-                props_buffer[k-i-1] = props[j][peptide[k+1]];
+                props_buffer[k-i-1] = props[j][peptide_buf[k+1]];
                 s+= props_buffer[k-i-1];
             }   
             v[fnum++] = s;
@@ -1076,10 +1088,16 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
     int fnum = v[0]/(peplen-1);
 
     for (i=0; i < peplen-1; i++) {
+        //IONBOT
+        //predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
+        //predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
+
+		//ms2pip_c
         predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
         predictions[1*(peplen-1)+i] = score_Y(v+1+(i*fnum))+0.5;
         predictions[2*(peplen-1)+i] = 0.5;
         predictions[3*(peplen-1)+i] = 0.5;
+
     }
     return predictions;
 }
