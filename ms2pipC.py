@@ -120,6 +120,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
     # cols contains the names of the computed features
     cols_n = get_feature_names_new()
+    #cols_n = get_feature_names_catboost()
 
     #for ti,tt in enumerate(names):
     #   print("%i %s"%(ti+1,tt))
@@ -231,6 +232,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     # Temporary: until new features are incorporated into other fragmethods
                     if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
                         dvectors.append(np.array(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge), dtype=np.uint16))
+                        #dvectors.append(np.array(ms2pipfeatures_pyx.get_vector_catboost(peptide, modpeptide, charge), dtype=np.uint16))
                     else:
                         dvectors.append(np.array(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16))
 
@@ -348,6 +350,43 @@ def get_feature_names():
     return names
 
 
+def get_feature_names_catboost():
+    num_props = 4
+    names = ["amino_first","amino_last","amino_lcleave","amino_rcleave","peplen", "charge"]
+    for t in range(5):
+        names.append("charge"+str(t))
+    for t in range(num_props):
+        names.append("qmin_%i"%t)
+        names.append("q1_%i"%t)
+        names.append("q2_%i"%t)
+        names.append("q3_%i"%t)
+        names.append("qmax_%i"%t)
+    names.append("len_n")
+    names.append("len_c")
+
+    for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
+              'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
+        names.append("I_n_%s"%a)
+        names.append("I_c_%s"%a)
+
+    for t in range(num_props):
+        for pos in ["p0", "pend", "pi-1", "pi", "pi+1", "pi+2"]:
+            names.append("prop_%i_%s"%(t, pos))
+        names.append("sum_%i_n"%t)
+        names.append("q0_%i_n"%t)
+        names.append("q1_%i_n"%t)
+        names.append("q2_%i_n"%t)
+        names.append("q3_%i_n"%t)
+        names.append("q4_%i_n"%t)
+        names.append("sum_%i_c"%t)
+        names.append("q0_%i_c"%t)
+        names.append("q1_%i_c"%t)
+        names.append("q2_%i_c"%t)
+        names.append("q3_%i_c"%t)
+        names.append("q4_%i_c"%t)
+
+    return names
+
 def get_feature_names_new():
     num_props = 4
     names = ["peplen", "charge"]
@@ -384,6 +423,7 @@ def get_feature_names_new():
         names.append("q4_%i_c"%t)
 
     return names
+
 
 
 def get_feature_names_small(ionnumber):

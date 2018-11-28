@@ -204,7 +204,7 @@ if __name__ == "__main__":
 	print("Splitting up into train and test set...")
 	upeps = psmids.unique()
 	np.random.shuffle(upeps)
-	test_psms = upeps[:int(len(upeps) * 0.1)]
+	test_psms = upeps[:int(len(upeps) * 0.3)]
 
 	train_vectors = vectors[~psmids.isin(test_psms)]
 	train_targets = targets[~psmids.isin(test_psms)]
@@ -247,8 +247,8 @@ if __name__ == "__main__":
 		"objective": "reg:linear",
 		"eval_metric": 'mae',
 		"silent": 1,
-		"eta": 0.5,
-		"max_depth": 4,
+		"eta": 0.7,
+		"max_depth": 7,
 		"min_child_weight": 10,
 		"gamma": 1,
 		"subsample": 1,
