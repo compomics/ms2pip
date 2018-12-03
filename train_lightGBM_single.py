@@ -91,41 +91,19 @@ data = lgb.Dataset(train_vectors, label=train_targets)
 datatest = lgb.Dataset(test_vectors, label=test_targets)
 sys.stderr.write('loading data done\n')
 
-tmp2 = pd.DataFrame()
-tmp2["psmid"] = test_psmids[test_vectors["charge"]==2]
-tmp2["target"] = test_targets[test_vectors["charge"]==2]
-tmp3 = pd.DataFrame()
-tmp3["psmid"] = test_psmids[test_vectors["charge"]==3]
-tmp3["target"] = test_targets[test_vectors["charge"]==3]
-tmp4 = pd.DataFrame()
-tmp4["psmid"] = test_psmids[test_vectors["charge"]==4]
-tmp4["target"] = test_targets[test_vectors["charge"]==4]
-for max_depth in [7,9,11]:
-	for num_leaves in [50,100,200]:
-		params = {}
-		params['objective'] = 'regression'
-		params['metric'] = 'l1'
-		params['learning_rate'] = 0.8
-		#params['sub_feature'] = 1
-		params['num_leaves'] = num_leaves
-		#params['min_data'] = 50
-		params['max_depth'] = max_depth
-		
-		num_round = 20
-		#lgb.cv(param, data, num_round, nfold=5)
-		bst = lgb.train(params, data, num_round, valid_sets=[datatest])
-		
-		tmp2["prediction"] = bst.predict(test_vectors[test_vectors["charge"]==2])		
-		tmpp = tmp2.groupby('psmid')[['target','prediction']].corr().iloc[0::2,-1]
-		print(">>2 %i %i %s"%(max_depth,num_leaves," ".join([str(x) for x in np.nanpercentile(tmpp.values,[10,30,50,70,90])])))
-		tmp3["prediction"] = bst.predict(test_vectors[test_vectors["charge"]==3])		
-		tmpp = tmp3.groupby('psmid')[['target','prediction']].corr().iloc[0::2,-1]
-		print(">>3 %i %i %s"%(max_depth,num_leaves," ".join([str(x) for x in np.nanpercentile(tmpp.values,[10,30,50,70,90])])))
-		tmp4["prediction"] = bst.predict(test_vectors[test_vectors["charge"]==4])		
-		tmpp = tmp4.groupby('psmid')[['target','prediction']].corr().iloc[0::2,-1]
-		print(">>4 %i %i %s"%(max_depth,num_leaves," ".join([str(x) for x in np.nanpercentile(tmpp.values,[10,30,50,70,90])])))
+params = {}
+params['objective'] = 'regression'
+params['metric'] = 'l1'
+params['learning_rate'] = 0.8
+#params['sub_feature'] = 1
+params['num_leaves'] = 10
+#params['min_data'] = 50
+params['max_depth'] = 6
 
-ddd
+num_round = 50
+#lgb.cv(param, data, num_round, nfold=5)
+bst = lgb.train(params, data, num_round, valid_sets=[datatest])
+		
 #bst.save_model('model.txt')
 print(bst.feature_importance())
 model_json = bst.dump_model()
@@ -137,18 +115,18 @@ def parseOneTree(root, index, array_type='double', return_type='double'):
 			return 'return ' + str(node['leaf_value']) + ';'
 		else:
 			condition = 'arr[' + str(node['split_feature']) + ']'
-			if node['decision_type'] == 'no_greater':
+			if node['decision_type'] == '<=':
 				condition += ' <= ' + str(node['threshold'])
 			else:
 				condition += ' == ' + str(node['threshold'])
 			left = ifElse(node['left_child'])
 			right = ifElse(node['right_child'])
 			return 'if ( ' + condition + ' ) { ' + left + ' } else { ' + right + ' }'
-	return return_type + ' predictTree' + str(index) + '(' + array_type + '[] arr) { ' + ifElse(root) + ' }'
+	return return_type + ' predictTree' + str(index) + '(' + array_type + ' arr) { ' + ifElse(root) + ' }'
 
-def parseAllTrees(trees, array_type='double', return_type='double'):
+def parseAllTrees(trees, array_type='unsigend int*', return_type='float'):
 	return '\n\n'.join([parseOneTree(tree['tree_structure'], idx, array_type, return_type) for idx, tree in enumerate(trees)]) \
-		+ '\n\n' + return_type + ' predict(' + array_type + '[] arr) { ' \
+		+ '\n\n' + return_type + ' score_Y(' + array_type + ' arr) { ' \
 		+ 'return ' + ' + '.join(['predictTree' + str(i) + '(arr)' for i in range(len(trees))]) + ';' \
 		+ '}'
 

@@ -2,8 +2,12 @@
 #include <stdio.h>
 #include <string.h>
 
-//#include "models/pkl_B_6deep.c"
-//#include "models/pkl_Y_6deep.c"
+//#include "models/tmt/tmt_human_consensus_train_ms2pip_50trees_y.c"
+//#include "models/tmt/tmt_human_consensus_train_ms2pip_50trees_b.c"
+
+
+//#include "models/pkl_B_9deep.c"
+//#include "models/pkl_Y_9deep.c"
 
 #include "../models/HCD/hcd_fast_B.c"
 #include "../models/HCD/hcd_fast_Y.c"
@@ -386,7 +390,6 @@ int cmpfunc (const void * a, const void * b) {
 unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
     {
     int i,j,k;
-    float mz;
 
     int fnum = 1; //first value in v is its length
 
@@ -415,27 +418,27 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
 
     shared_features[num_shared] = 0;
     if (charge == 1) {
-        shared_features[num_shared];
+        shared_features[num_shared] = 1;
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge == 2) {
-        shared_features[num_shared] ;
+        shared_features[num_shared] =1;
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge == 3) {
-        shared_features[num_shared];    
+        shared_features[num_shared] =1;    
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge == 4) {
-        shared_features[num_shared];    
+        shared_features[num_shared] =1;    
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge >= 5) {
-        shared_features[num_shared];    
+        shared_features[num_shared] =1;    
         }
     num_shared++;
 
@@ -514,8 +517,7 @@ unsigned int* get_v_ms2pip_new(int peplen, unsigned short* peptide, unsigned sho
 
 unsigned int* get_v_ms2pip_catboost(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
     {
-    int i,j,k;
-    float mz;
+    int i,j,k;	
 
     int fnum = 1; //first value in v is its length
 
@@ -544,27 +546,27 @@ unsigned int* get_v_ms2pip_catboost(int peplen, unsigned short* peptide, unsigne
 
     shared_features[num_shared] = 0;
     if (charge == 1) {
-        shared_features[num_shared];
+        shared_features[num_shared] = 1;
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge == 2) {
-        shared_features[num_shared] ;
+        shared_features[num_shared] =1;
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge == 3) {
-        shared_features[num_shared];    
+        shared_features[num_shared] =1;    
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge == 4) {
-        shared_features[num_shared];    
+        shared_features[num_shared] =1;    
         }
     num_shared++;
     shared_features[num_shared] = 0;
     if (charge >= 5) {
-        shared_features[num_shared];    
+        shared_features[num_shared]=1;    
         }
     num_shared++;
 
@@ -674,10 +676,10 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 
     unsigned int buf2[19];
     unsigned int buf3[19];
-    unsigned int sum_aG;
-    unsigned int sum_wikiG;
-    unsigned int sum_aG_tot;
-    unsigned int sum_wikiG_tot;
+    unsigned int sum_aG = 0;
+    unsigned int sum_wikiG = 0;
+    unsigned int sum_aG_tot = 0;
+    unsigned int sum_wikiG_tot = 0;
 
     for (i=0; i < 19; i++) {
         buf2[i] = 0;
@@ -895,25 +897,29 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
         sum_bas += bas[peptide[i+1]];
         v[fnum++] = sum_bas;
         v[fnum++] = total_bas-sum_bas;
-        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        v[fnum] = v[fnum-1] - v[fnum-2] + 100000;
+        fnum++;
         //v[fnum++] = (int) ((float)sum_bas/(i+1));
         //v[fnum++] = (int) ((float)(total_bas-sum_bas)/(peplen-1-i));
         sum_heli += heli[peptide[i+1]];
         v[fnum++] = sum_heli;
         v[fnum++] = total_heli-sum_heli;
-        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        v[fnum] = v[fnum-1] - v[fnum-2] + 100000;
+        fnum++;
         //v[fnum++] = (int) ((float)sum_heli/(i+1));
         //v[fnum++] = (int) ((float)(total_heli-sum_heli)/(peplen-1-i));
         sum_hydro += hydro[peptide[i+1]];
         v[fnum++] = sum_hydro;
         v[fnum++] = total_hydro-sum_hydro;
-        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        v[fnum] = v[fnum-1] - v[fnum-2] + 100000;
+        fnum++;
         //v[fnum++] = (int) ((float)sum_hydro/(i+1));
         //v[fnum++] = (int) ((float)(total_hydro-sum_hydro)/(peplen-1-i));
         sum_pI += pI[peptide[i+1]];
         v[fnum++] = sum_pI;
         v[fnum++] = total_pI-sum_pI;
-        v[fnum++] = v[fnum-1] - v[fnum-2] + 100000;
+        v[fnum] = v[fnum-1] - v[fnum-2] + 100000;
+        fnum++;
         //v[fnum++] = (int) ((float)sum_pI/(i+1));
         //v[fnum++] = (int) ((float)(total_pI-sum_pI)/(peplen-1-i));
 
