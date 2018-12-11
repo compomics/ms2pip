@@ -210,7 +210,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
                 # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
                 if 'TMT' in fragmethod:
-                    for mi, mp in enumerate(msms):
+                    for mi, mp in enumerate(msms):	
                         if (mp >= 125) & (mp <= 132):
                             peaks[mi] = 0
 
