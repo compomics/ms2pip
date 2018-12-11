@@ -695,10 +695,13 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # a_map converts the peptide amino acids to integers, note how "L" is removed
     aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K", "M", "N", "P", "Q",
               "R", "S", "T", "V", "W", "Y"]
-    masses = [71.037114, 103.00919, 115.026943, 129.042593, 147.068414,
-              57.021464, 137.058912, 113.084064, 128.094963, 131.040485,
-              114.042927, 97.052764, 128.058578, 156.101111, 87.032028,
-              101.047679, 99.068414, 186.079313, 163.063329, 147.0354]
+    masses = [
+        71.037114, 103.00919, 115.026943, 129.042593, 147.068414,
+        57.021464, 137.058912, 113.084064, 128.094963, 131.040485,
+        114.042927, 97.052764, 128.058578, 156.101111, 87.032028,
+        101.047679, 99.068414, 186.079313, 163.063329,
+        # 147.0354 iTRAQ fixed N-term modification (gets written to amino acid masses file)
+    ]
     a_map = {a: i for i, a in enumerate(aminos)}
 
     # If not specified, get parameters from config_file
