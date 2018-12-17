@@ -1,4 +1,4 @@
-static float score_B(unsigned int* v){
+static float score_CID_B(unsigned int* v){
 float s = 0.;
 	if (v[185]<3){
 		if (v[41]<9){

@@ -1,4 +1,4 @@
-static float score_Y(unsigned int* v){
+static float score_iTRAQ_Y(unsigned int* v){
 float s = 0.;
 	if (v[72]<553){
 		if (v[76]<377){

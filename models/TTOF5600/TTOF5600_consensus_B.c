@@ -1,4 +1,4 @@
-static float score_B(unsigned int* v){
+static float score_TTOF5600_B(unsigned int* v){
 float s = 0.;
 	if (v[40]<7){
 		if (v[40]<1){

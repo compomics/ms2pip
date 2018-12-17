@@ -1,4 +1,4 @@
-static float score_y(unsigned int* v){
+static float score_TMT_Y(unsigned int* v){
 float s = 0.;
 	if (v[28]<10){
 		if (v[79]<377){

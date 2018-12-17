@@ -107,12 +107,12 @@ def load_data(vector_filename, ion_type):
 
 	# Extract targets for given ion type
 	target_names = list(vectors.columns[vectors.columns.str.contains('targets')])
-	if not 'targets{}'.format(ion_type) in target_names:
+	if not 'targets_{}'.format(ion_type) in target_names:
 		print("Targets for {} could not be found in vector file.".format(ion_type))
 		print("Vector file only contains these targets: {}".format(target_names))
 		exit(1)
-	targets = vectors.pop('targets{}'.format(ion_type))
-	target_names.remove('targets{}'.format(ion_type))
+	targets = vectors.pop('targets_{}'.format(ion_type))
+	target_names.remove('targets_{}'.format(ion_type))
 	vectors.drop(labels=target_names, axis=1, inplace=True)
 
 	# Get psmids

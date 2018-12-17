@@ -1,4 +1,4 @@
-static float score_B2(unsigned int* v){
+static float score_HCD_B2(unsigned int* v){
 float s = 0.;
 	if (v[13]<6){
 		if (v[6]<7){

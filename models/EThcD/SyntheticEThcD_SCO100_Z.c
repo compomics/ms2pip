@@ -1,4 +1,4 @@
-static float score_Z(unsigned int* v){
+static float score_EThcD_Z(unsigned int* v){
 float s = 0.;
 	if (v[40]<7){
 		if (v[76]<1257){
