@@ -81,7 +81,7 @@ def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide, np.nda
         resultY.append(results[1*num_ions+i])
         resultB2.append(results[2*num_ions+i])
         resultY2.append(results[3*num_ions+i])
-    return(resultB,resultY[::-1],resultB2,resultY2[::-1]) #SD: changed to match Ionbot
+    return(resultB,resultY,resultB2,resultY2) #SD: changed to match Ionbot
 
 
 def get_mzs(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide):

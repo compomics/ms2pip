@@ -6,11 +6,11 @@
 //#include "models/tmt/tmt_human_consensus_train_ms2pip_50trees_b.c"
 
 
-//#include "models/pkl_B_9deep.c"
-//#include "models/pkl_Y_9deep.c"
+#include "../models/HCD/pkl_B_9deep.c"
+#include "../models/HCD/pkl_Y_9deep.c"
 
-#include "../models/HCD/hcd_fast_B.c"
-#include "../models/HCD/hcd_fast_Y.c"
+//#include "../models/HCD/hcd_fast_B.c"
+//#include "../models/HCD/hcd_fast_Y.c"
 
 //#include "models/kuster_massive_B.c"
 //#include "models/kuster_massive_Y.c"

@@ -82,7 +82,7 @@ def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, 
         # because get_predictions follows order from vector file
         # enumerate works for variable number (and all) ion types
         predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
-        prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else np.array(p[::-1], dtype=np.float32) for i, p in enumerate(predictions)])
+        prediction_buf.append(np.array(predictions, dtype=np.float32))
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -183,6 +183,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                 if title not in peptides:
                     continue
 
+                #if title != "d.4839.4839.2.dta": continue
+
                 peptide = peptides[title]
                 peptide = peptide.replace("L", "I")
                 mods = modifications[title]
@@ -210,7 +212,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
 
                 # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
                 if 'TMT' in fragmethod:
-                    for mi, mp in enumerate(msms):	
+                    for mi, mp in enumerate(msms):  
                         if (mp >= 125) & (mp <= 132):
                             peaks[mi] = 0
 
@@ -267,7 +269,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modf
                     target_buf.append([np.array(t, dtype=np.float32) for t in targets])
 
                     predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
-                    prediction_buf.append([np.array(p, dtype=np.float32) if i%2 == 0 else np.array(p[::-1], dtype=np.float32) for i, p in enumerate(predictions)])
+                    prediction_buf.append(np.array(predictions, dtype=np.float32))
 
                 pcount += 1
                 if (pcount % 500) == 0:
