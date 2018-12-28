@@ -106,8 +106,11 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
         # Predict the b- and y-ion intensities from the peptide
-        predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, ch, model_id, peaks_version)
-        prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
+        # For C-term ion types (y, y++, z), flip the order of predictions,
+        # because get_predictions follows order from vector file
+        # enumerate works for variable number (and all) ion types
+        predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
+        prediction_buf.append(np.array(predictions, dtype=np.float32))
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -199,6 +202,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 if title not in peptides:
                     continue
 
+                #if title != "d.4839.4839.2.dta": continue
+
                 peptide = peptides[title]
                 peptide = peptide.replace("L", "I")
                 mods = modifications[title]
@@ -280,8 +285,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 
                     target_buf.append([np.array(t, dtype=np.float32) for t in targets])
 
-                    predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version)
-                    prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
+                    predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
+                    prediction_buf.append(np.array(predictions, dtype=np.float32))
 
                 pcount += 1
                 if (pcount % 500) == 0:
