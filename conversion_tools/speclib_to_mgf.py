@@ -28,10 +28,11 @@ def main():
     title_prefix = sys.argv[2]
 
     # Open files
-    fpip = open(speclib_filename + '.PEPREC', 'w')
+    filename = '.'.join(speclib_filename.split('.')[:-1])
+    fpip = open(filename + '.peprec', 'w')
     fpip.write("spec_id modifications peptide charge\n")
-    fmgf = open(speclib_filename + '.mgf', 'w')
-    fmeta = open(speclib_filename + '.meta', 'w')
+    fmgf = open(filename + '.mgf', 'w')
+    fmeta = open(filename + '.meta', 'w')
 
     PTMs = {}
 
@@ -61,7 +62,10 @@ def main():
         for row in f:
             if read_spec:
                 line = row.rstrip().split('\t')
-                if len(line) < 3:
+
+                # Read all peaks, so save to output files and set read_spec to False
+                if not row[0].isdigit():
+                    print(row)
                     if peptide[0] != prev:
                         prev = peptide[0]
                         # sys.stderr.write(prev)
@@ -104,8 +108,9 @@ def main():
                     specid += 1
                     read_spec = False
                     mgf = ""
-                    continue
+
                 else:
+                    # Continue reading spectrum
                     # tt = float(line[1])
                     mgf += ' '.join([line[0], line[1]]) + '\n'
                     continue
@@ -136,15 +141,9 @@ def main():
                         HCDenergy = tmp[1].replace('eV', '')
                 continue
 
-            if speclib_format == 'msp':
-                if row.startswith("Num peaks:"):
-                    read_spec = True
-                    continue
-
-            elif speclib_format == 'sptxt':
-                if row.startswith("NumPeaks:"):
-                    read_spec = True
-                    continue
+            if row.startswith("Num peaks:") or row.startswith("NumPeaks:"):
+                read_spec = True
+                continue
 
     fmgf.close()
     fpip.close()
