@@ -231,7 +231,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 
                 # normalize and convert MS2 peaks
                 msms = np.array(msms, dtype=np.float32)
-                debug = True
+                debug = False
                 if not debug:
                     peaks = peaks / np.sum(peaks)
                     peaks = np.log2(np.array(peaks) + 0.001)
@@ -370,7 +370,7 @@ def get_feature_names():
 
 def get_feature_names_catboost():
     num_props = 4
-    names = ["amino_first","amino_last","amino_lcleave","amino_rcleave","peplen", "charge"]
+    names = ["amino_first", "amino_last", "amino_lcleave", "amino_rcleave", "peplen", "charge"]
     for t in range(5):
         names.append("charge"+str(t))
     for t in range(num_props):
@@ -923,7 +923,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         charges = []
         pepids = []
         for pi, pl in enumerate(peplen_bufs):
-            [ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[model]['ion_types']]
+            _ = [ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[model]['ion_types']]
             ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
             charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
             pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
