@@ -65,7 +65,7 @@ def convert_model_to_c(bst, args, numf, filename):
 		forest.append(tree)
 
 		with open('{}.c'.format(filename), 'w') as fout:
-			fout.write("static float score_{}(unsigned int* v){{\n".format(args.type))
+			fout.write("static float score_{}_{}(unsigned int* v){{\n".format(args.model_name, args.type))
 			fout.write("float s = 0.;\n")
 			for tt in range(len(forest)):
 				fout.write(tree_to_code(forest[tt], 0, 1))
@@ -179,6 +179,8 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='XGBoost training')
 	parser.add_argument('vectors', metavar='<_vectors.pkl>',
 						help='feature vector file')
+	parser.add_argument('model_name', metavar='<model_name>',
+						help='model name (e.g. HCD')
 	parser.add_argument('type', metavar='<type>',
 						help='model type')
 	parser.add_argument('-c', metavar='INT', action="store", dest='num_cpu', default=24,

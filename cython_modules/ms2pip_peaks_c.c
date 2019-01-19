@@ -8,30 +8,30 @@
 #include "ms2pip_features_c_catboost.c"
 
 // Import models
-#include "../models/CID/modelB.c"
-#include "../models/CID/modelY.c"
+#include "../models/CID/model_20190107_CID_train_B.c"
+#include "../models/CID/model_20190107_CID_train_Y.c"
 
-#include "../models/HCD/hcd_fast_B.c"
-#include "../models/HCD/hcd_fast_Y.c"
-#include "../models/HCD/modelB2.c"
-#include "../models/HCD/modelY2.c"
+//#include "../models/HCD/hcd_fast_B.c"
+//#include "../models/HCD/hcd_fast_Y.c"
+#include "../models/HCD/model_20190107_HCD_train_B.c"
+#include "../models/HCD/model_20190107_HCD_train_y.c"
 
-#include "../models/TTOF5600/TTOF5600_consensus_B.c"
-#include "../models/TTOF5600/TTOF5600_consensus_Y.c"
+#include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
+#include "../models/TTOF5600/model_20190107_TTOF5600_train_y.c"
 
-#include "../models/TMT/tmt_human_consensus_train_100trees_b.c"
-#include "../models/TMT/tmt_human_consensus_train_100trees_y.c"
+#include "../models/TMT/model_20190107_TMT_train_B.c"
+#include "../models/TMT/model_20190107_TMT_train_y.c"
 
-#include "../models/iTRAQ/vectors_train_h5B_iTRAQ_c.c"
-#include "../models/iTRAQ/vectors_train_h5Y_iTRAQ_c.c"
+#include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
+#include "../models/iTRAQ/model_20190107_iTRAQ_train_y.c"
 
-#include "../models/iTRAQphospho/vectors_train_h5B_iTRAQphospho_c.c"
-#include "../models/iTRAQphospho/vectors_train_h5Y_iTRAQphospho_c.c"
+#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_B.c"
+#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_y.c"
 
-#include "../models/EThcD/SyntheticEThcD_SCO100_B.c"
-#include "../models/EThcD/SyntheticEThcD_SCO100_Y.c"
-#include "../models/EThcD/SyntheticEThcD_SCO100_C.c"
-#include "../models/EThcD/SyntheticEThcD_SCO100_Z.c"
+//#include "../models/EThcD/model_20190107_EThcD_train_B.c"
+//#include "../models/EThcD/model_20190107_EThcD_train_C.c"
+//#include "../models/EThcD/model_20190107_EThcD_train_Y.c"
+//#include "../models/EThcD/model_20190107_EThcD_train_Z.c"
 
 
 float membuffer[10000];
@@ -55,7 +55,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
     }
 
     // HCD
-    if (model_id == 1) {
+    else if (model_id == 1) {
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
@@ -104,6 +104,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
         }
     }
     
+    /*
     // EThcD
     else if (model_id == 6) {
         unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
@@ -127,6 +128,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
         }
     }
+    */
 
     return predictions;
 }

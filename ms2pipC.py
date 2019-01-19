@@ -718,7 +718,13 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         else:
             params = load_configfile(config_file)
 
-    model = params["model"]
+    if 'model' in params:
+        model = params["model"]
+    elif 'frag_method' in params:
+        model = params['frag_method']
+    else:
+        print("Please specify model in config file or parameters.")
+        exit(1)
     fragerror = params["frag_error"]
 
     if model in MODELS.keys():

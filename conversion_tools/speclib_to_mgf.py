@@ -65,7 +65,6 @@ def main():
 
                 # Read all peaks, so save to output files and set read_spec to False
                 if not row[0].isdigit():
-                    print(row)
                     if peptide[0] != prev:
                         prev = peptide[0]
                         # sys.stderr.write(prev)
