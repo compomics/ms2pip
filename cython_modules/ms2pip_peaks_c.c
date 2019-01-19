@@ -14,19 +14,19 @@
 //#include "../models/HCD/hcd_fast_B.c"
 //#include "../models/HCD/hcd_fast_Y.c"
 #include "../models/HCD/model_20190107_HCD_train_B.c"
-#include "../models/HCD/model_20190107_HCD_train_y.c"
+#include "../models/HCD/model_20190107_HCD_train_Y.c"
 
 #include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
-#include "../models/TTOF5600/model_20190107_TTOF5600_train_y.c"
+#include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
 
 #include "../models/TMT/model_20190107_TMT_train_B.c"
-#include "../models/TMT/model_20190107_TMT_train_y.c"
+#include "../models/TMT/model_20190107_TMT_train_Y.c"
 
 #include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
-#include "../models/iTRAQ/model_20190107_iTRAQ_train_y.c"
+#include "../models/iTRAQ/model_20190107_iTRAQ_train_Y.c"
 
 #include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_B.c"
-#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_y.c"
+#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_Y.c"
 
 //#include "../models/EThcD/model_20190107_EThcD_train_B.c"
 //#include "../models/EThcD/model_20190107_EThcD_train_C.c"
