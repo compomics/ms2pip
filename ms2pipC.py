@@ -2,7 +2,7 @@
 # Native library
 import sys
 import argparse
-import multiprocessing
+from multiprocessing.pool import ThreadPool
 from random import shuffle
 import tempfile
 
@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 
 # From project
-from ms2pip_tools.spectrum_output import write_mgf, write_msp
-import cython_modules.ms2pip_pyx as ms2pip_pyx
+from app.ms2pip_c.ms2pip_tools.spectrum_output import write_mgf, write_msp
+import app.ms2pip_c.cython_modules.ms2pip_pyx as ms2pip_pyx
 
 
 # Models and their properties
@@ -772,7 +772,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     data = data.fillna("-")
 
     sys.stdout.write("starting workers...\n")
-    myPool = multiprocessing.Pool(num_cpu)
+    myPool = ThreadPool(num_cpu)
 
     if spec_file:
         """
