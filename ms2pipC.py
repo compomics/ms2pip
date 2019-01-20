@@ -20,14 +20,14 @@ import cython_modules.ms2pip_pyx as ms2pip_pyx
 # ion_types is required to write the ion types in the headers of the result files
 # features_version is required to select the features version
 MODELS = {
-    'CID': {'id': 0, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
+    'CID': {'id': 0, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
     'HCD': {'id': 1, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
-    'TTOF5600': {'id': 2, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
-    'HCDTMT': {'id': 3, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
-    'HCDiTRAQ4': {'id': 4, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
-    'HCDiTRAQ4phospho': {'id': 5, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
-    'ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'old'},
-    'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
+    'TTOF5600': {'id': 2, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    'TMT': {'id': 3, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    'iTRAQ': {'id': 4, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    'iTRAQphospho': {'id': 5, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    #ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
+    #'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
 }
 
 # Create A_MAP:
