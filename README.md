@@ -18,9 +18,12 @@ https://doi.org/10.1093/nar/gkv542
 prediction. Bioinformatics (Oxford, England), 29(24), 3199–203.
 https://doi.org/10.1093/bioinformatics/btt544
 
+Please also take note of and mention the MS2PIP-version and [model-version](#ms2pip-models) you used.
+
 ## Installation
-MS2PIPc runs on Python 3.5 or greater. The required Python packages are listed
-in `requirements.txt`. MS2PIPc also requires machine specific compilation of the
+Download the [latest release](https://github.com/compomics/ms2pip_c/releases/latest)
+and unzip. MS2PIPc runs on Python 3.5 or greater and the required Python packages are listed
+in `requirements.txt`. MS2PIPc requires machine specific compilation of the
 C-code:
 ```
 sh compile.sh
@@ -53,10 +56,8 @@ optional arguments:
 ### Config file
 Several MS2PIPc options need to be set in this config file.
 
-The models that should be used are set as `model=X` where X is
-either `CID`, `HCD`, `HCDch2`, `ETD`, `HCDiTRAQ4` or
-`HCDiTRAQ4phospho`. If the `model` is set to `HCDch2`, MS2PIP
-will predict intensities for HCD charge +1 and charge 2+ fragment ions.
+The models that should be used are set as `model=X` where X is one of the
+currently supported MS2PIP models (see [MS2PIP Models](#ms2pip-models)).
 
 The fragment ion error tolerance is set as `frag_error=X` where is X is
 the tolerance in Da.
@@ -105,5 +106,20 @@ The predictions are saved in a `.csv` file with the name
 `<peptide_file>_predictions.csv`.
 If you want the output to be in the form of an `.mgf` file, replace the
 variable `mgf` in line 716 of `ms2pipC.py`.
+
+### MS2PIP models
+Currently the following models are supported in MS2PIP:
+`HCD`, `CID`, `TTOF5600`, `TMT`, `iTRAQ` or
+`iTRAQphospho`. If you use MS2PIP for your research, always mention the MS2PIP-version and model-version you used.
+
+Model | Current version | Train-test dataset (unique peptides) | Evaluation dataset (unique peptides) | Median Pearson correlation on evaluation dataset
+-|-|-|-|-
+HCD | v20190107 | [MassIVE-KB](10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](10.1016/j.jprot.2017.12.006) (35 269) | 0.903786
+CID | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947
+iTRAQ | v20190107 | [NIST iTRAQ](https://chemdata.nist.gov/) (704 041) | [PXD001189](10.1182/blood-2016-05-714048) (41 502) | 0.905870
+iTRAQphospho | v20190107 | [NIST iTRAQ phospho](https://chemdata.nist.gov/) (183 383) | [PXD001189](10.1182/blood-2016-05-714048) (9 088) | 0.843898
+TMT | v20190107 | [Peng Lab TMT Spectral Library](10.1021/acs.jproteome.8b00594) (1 185 547) | [PXD009495](10.15252/msb.20188242) (36 137) | 0.950460
+TTOF5600 | v20190107 | [PXD000954](10.1038/sdata.2014.31) (215 713) | [PXD001587](10.1038/nmeth.3255) (15 111) | 0.746823
+
 
 To train custom MS2PIPc models, please refer to [Training new MS2PIP models](https://github.com/compomics/ms2pip_c/wiki/Training_new_MS2PIP_models) on our Wiki pages.
