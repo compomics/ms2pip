@@ -8,49 +8,67 @@
 #include "ms2pip_features_c_catboost.c"
 
 // Import models
-#include "../models/CID/model_20190107_CID_train_B.c"
-#include "../models/CID/model_20190107_CID_train_Y.c"
-#include "../models/CID/model_20190107_CID_train_B2.c"
-#include "../models/CID/model_20190107_CID_train_Y2.c"
+//#include "../models/CID/modelB.c"
+//#include "../models/CID/modelY.c"
 
-//#include "../models/HCD/hcd_fast_B.c"
-//#include "../models/HCD/hcd_fast_Y.c"
-#include "../models/HCD/model_20190107_HCD_train_B.c"
-#include "../models/HCD/model_20190107_HCD_train_Y.c"
-#include "../models/HCD/model_20190107_HCD_train_B2.c"
-#include "../models/HCD/model_20190107_HCD_train_Y2.c"
+//#include "../models/nist_max_norm_40_B_one.c"
+//#include "../models/nist_max_norm_40_B_zero.c"
+//#include "../models/nist_max_norm_40_B_left.c"
+//#include "../models/nist_max_norm_40_Y_one.c"
+//#include "../models/nist_max_norm_40_Y_zero.c"
+//#include "../models/nist_max_norm_40_Y_left.c"
 
-#include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
-#include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
+#include "../models/HCD/pkl_B_4deep.c"
+#include "../models/HCD/pkl_Y_4deep.c"
 
-#include "../models/TMT/model_20190107_TMT_train_B.c"
-#include "../models/TMT/model_20190107_TMT_train_Y.c"
+//#include "../models/proteometools_hcd_25_40_B.c"
+//#include "../models/proteometools_hcd_25_40_Y.c"
 
-#include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
-#include "../models/iTRAQ/model_20190107_iTRAQ_train_Y.c"
+//#include "../models/nist_max_norm_7_B.c"
+//#include "../models/nist_max_norm_10_Y.c"
 
-#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_B.c"
-#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_Y.c"
 
-//#include "../models/EThcD/model_20190107_EThcD_train_B.c"
-//#include "../models/EThcD/model_20190107_EThcD_train_C.c"
-//#include "../models/EThcD/model_20190107_EThcD_train_Y.c"
-//#include "../models/EThcD/model_20190107_EThcD_train_Z.c"
+//#include "../models/HCD/modelB2.c"
+//#include "../models/HCD/modelY2.c"
+
+//#include "../models/TTOF5600/TTOF5600_consensus_B.c"
+//#include "../models/TTOF5600/TTOF5600_consensus_Y.c"
+
+//#include "../models/TMT/tmt_human_consensus_train_100trees_b.c"
+//#include "../models/TMT/tmt_human_consensus_train_100trees_y.c"
+
+//#include "../models/iTRAQ/vectors_train_h5B_iTRAQ_c.c"
+//#include "../models/iTRAQ/vectors_train_h5Y_iTRAQ_c.c"
+
+//#include "../models/iTRAQphospho/vectors_train_h5B_iTRAQphospho_c.c"
+//#include "../models/iTRAQphospho/vectors_train_h5Y_iTRAQphospho_c.c"
+
+//#include "../models/EThcD/SyntheticEThcD_SCO100_B.c"
+//#include "../models/EThcD/SyntheticEThcD_SCO100_Y.c"
+//#include "../models/EThcD/SyntheticEThcD_SCO100_C.c"
+//#include "../models/EThcD/SyntheticEThcD_SCO100_Z.c"
 
 
 float membuffer[10000];
-float ions[1000];
+float ions[2000]; 
+float mzs[2000]; 
 float predictions[1000];
 
-
+struct annotations{
+   float* peaks;
+   float* msms;
+};
+typedef struct annotations annotations;
+ 
 //compute feature vector from peptide + predict intensities
 float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id)
     {
     int i;
+    float pred;
 
     // CID
     if (model_id == 0) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
@@ -59,7 +77,42 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
     }
 
     // HCD
-    else if (model_id == 1) {
+    if (model_id == 1) {
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        int fnum = v[0]/(peplen-1);
+        for (i=0; i < peplen-1; i++) {
+			pred = 1./(1+exp(-1*score_B_zero(v+1+(i*fnum))+0.5));
+			if (pred < 0.2) {
+				predictions[0*(peplen-1)+i] = 0.;
+			}
+			else {
+				pred = 1./(1+exp(-1*score_B_one(v+1+(i*fnum))+0.5));
+				if (pred > 0.9) {
+					predictions[0*(peplen-1)+i] = 1.;
+				}
+				else {
+					predictions[0*(peplen-1)+i] = pow(2,score_B_left(v+1+(i*fnum))+0.5);
+				}
+			}
+			pred = 1./(1+exp(-1*score_Y_zero(v+1+(i*fnum))+0.5));
+			if (pred < 0.2) {
+				predictions[2*(peplen-1)-i-1] = 0.;
+			}
+			else {
+				pred = 1./(1+exp(-1*score_Y_one(v+1+(i*fnum))+0.5));
+				if (pred > 0.9) {
+					predictions[2*(peplen-1)-i-1] = 1.;
+				}
+				else {
+					predictions[2*(peplen-1)-i-1] = pow(2,score_Y_left(v+1+(i*fnum))+0.5);
+				}
+			}			
+            //predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
+            //predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
+        }
+    }
+    // HCD
+    if (model_id == 1) {
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
@@ -67,10 +120,10 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
         }
     }
-    
+
     // TTOF5600
     else if (model_id == 2) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
@@ -90,7 +143,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
     // iTRAQ
     else if (model_id == 4) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
@@ -100,7 +153,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
     // iTRAQphospho
     else if (model_id == 5) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
@@ -108,10 +161,9 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
         }
     }
     
-    /*
     // EThcD
     else if (model_id == 6) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;
@@ -120,7 +172,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
         }
     }
-    */
 
     // HCDch2
     else if (model_id == 7) {
@@ -131,18 +182,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
             predictions[2*(peplen-1)+i] = score_HCD_B2(v+1+(i*fnum))+0.5;
             predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
-        }
-    }
-
-    // CIDch2
-    else if (model_id == 8) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-        int fnum = v[0]/(peplen-1);
-        for (i=0; i < peplen-1; i++) {
-            predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
-            predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
-            predictions[2*(peplen-1)+i] = score_CID_B2(v+1+(i*fnum))+0.5;
-            predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
         }
     }
 
@@ -290,8 +329,250 @@ float* get_mz_ms2pip_ch2(int peplen, unsigned short* modpeptide)
     return membuffer;
 }
 
+//get all fragment ion peaks from spectrum
+annotations get_t_ms2pip_all(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
+    {
+    int i,j,tmp;
+    float mz;
+    int msms_pos;
+    int mem_pos;
+    float max, maxmz, tmp2;
 
-//get fragment ion peaks from spectrum (b, y)
+    //for (i=0; i < numpeaks; i++) {
+    //  fprintf(stderr,"m %f\n",msms[i]);
+    //}
+
+    for (i=0; i < 18*(peplen-1); i++) { // 2*9 iontypes: b: a -H2O -NH3 b c y: -H2O z y x 
+        ions[i] = -9.96578428466; //HARD CODED!!
+        mzs[i] = 0; //HARD CODED!!
+    }
+
+    //b-ions
+    mz = ntermmod;
+    if (modpeptide[0] != 0) {
+        mz += amino_masses[modpeptide[0]];
+    }
+    int pos = 0;
+    for (i=1; i < peplen; i++) {
+        mz += amino_masses[modpeptide[i]];
+        membuffer[pos++] = mz+1.007236-27.99492; // a
+        membuffer[pos++] = mz+1.007236-18.010565; // -H2O
+        membuffer[pos++] = mz+1.007236-17.026001; // -NH3
+        membuffer[pos++] = mz+1.007236; // b
+        membuffer[pos++] = mz+1.007236+17.02654; // c
+    }
+
+    msms_pos = 0;
+    mem_pos = 0;
+    while (1) {
+        if (msms_pos >= numpeaks) {
+            break;
+        }
+        if (mem_pos >= 5*(peplen-1)) {
+            break;
+        }
+        mz = membuffer[mem_pos];
+        if (msms[msms_pos] > (mz+tolmz)) {
+            mem_pos += 1;
+        }
+        else if (msms[msms_pos] < (mz-tolmz)) {
+            msms_pos += 1;
+        }
+        else {
+            max = peaks[msms_pos];
+            maxmz = msms[msms_pos];
+            tmp = msms_pos + 1;
+            if (tmp < numpeaks) {
+                while (msms[tmp] <= (mz+tolmz)) {
+                    tmp2 = peaks[tmp];
+                    if (max < tmp2) {
+                        max = tmp2;
+                        maxmz = msms[tmp];
+                    }
+                    tmp += 1;
+                    if (tmp == numpeaks) {
+                        break;
+                    }
+                }
+            }
+            ions[mem_pos] = max;
+            mzs[mem_pos] = maxmz;
+            mem_pos += 1;
+        }
+    }
+
+	//b2-ions
+    mz = ntermmod;
+    if (modpeptide[0] != 0) {
+        mz += amino_masses[modpeptide[0]];
+    }
+    pos = 0;
+    for (i=1; i < peplen; i++) {
+        mz += amino_masses[modpeptide[i]];
+        membuffer[pos++] = (mz+1.007236+1.007236-27.99492)/2.; // a
+        membuffer[pos++] = (mz+1.007236+1.007236-18.010565)/2.; // -H2O
+        membuffer[pos++] = (mz+1.007236+1.007236-17.026001)/2.; // -NH3
+        membuffer[pos++] = (mz+1.007236+1.007236)/2.; // b
+        membuffer[pos++] = (mz+1.007236+1.007236+17.02654)/2.; // c
+    }
+
+    msms_pos = 0;
+    mem_pos=0;
+    while (1) {
+        if (msms_pos >= numpeaks) {
+            break;
+        }
+        if (mem_pos >= 5*(peplen-1)) {
+            break;
+        }
+        mz = membuffer[mem_pos];
+        if (msms[msms_pos] > (mz+tolmz)) {
+            mem_pos += 1;
+        }
+        else if (msms[msms_pos] < (mz-tolmz)) {
+            msms_pos += 1;
+        }
+        else {
+            max = peaks[msms_pos];
+            maxmz = msms[msms_pos];
+            tmp = msms_pos + 1;
+            if (tmp < numpeaks) {
+                while (msms[tmp] <= (mz+tolmz)) {
+                    tmp2 = peaks[tmp];
+                    if (max < tmp2) {
+                        max = tmp2;
+                        maxmz = msms[tmp];
+                    }
+                    tmp += 1;
+                    if (tmp == numpeaks) {
+                        break;
+                    }
+                }
+            }
+            ions[5*(peplen-1)+mem_pos] = max;
+            mzs[5*(peplen-1)+mem_pos] = maxmz;
+            mem_pos += 1;
+        }
+    }
+
+
+    // y-ions
+    mz = 0.;
+    if (modpeptide[peplen+1] != 0) {
+        mz += modpeptide[peplen+1];
+    }
+    pos = 0;
+    for (i=peplen; i >= 2; i--) {
+        mz += amino_masses[modpeptide[i]];
+        membuffer[pos++] = 18.0105647+mz+1.007236-18.010565; //-H2O
+        membuffer[pos++] = 18.0105647+mz+1.007236-17.02545; // z
+        membuffer[pos++] = 18.0105647+mz+1.007236; // y
+        membuffer[pos++] = 18.0105647+mz+1.007236+25.97926; // x
+    }
+
+    msms_pos = 0;
+    mem_pos = 0;
+    while (1) {
+        if (msms_pos >= numpeaks) {
+            break;
+        }
+        if (mem_pos >= 4*(peplen-1)) {
+            break;
+        }
+        mz = membuffer[mem_pos];
+        if (msms[msms_pos] > (mz+tolmz)) {
+            mem_pos += 1;
+        }
+        else if (msms[msms_pos] < (mz-tolmz)) {
+            msms_pos += 1;
+        }
+        else {
+            max = peaks[msms_pos];
+            maxmz = msms[msms_pos];
+            tmp = msms_pos + 1;
+            if (tmp < numpeaks) {
+                while (msms[tmp] <= (mz+tolmz)) {
+                    tmp2 = peaks[tmp];
+                    if (max < tmp2) {
+                        max = tmp2;
+                        maxmz = msms[tmp];
+                    }
+                    tmp += 1;
+                    if (tmp == numpeaks) {
+                        break;
+                    }
+                }
+            }
+            ions[10*(peplen-1)+mem_pos] = max;
+            mzs[10*(peplen-1)+mem_pos] = maxmz;
+            mem_pos += 1;
+        }
+    }
+
+	// y2-ions
+    mz = 0.;
+    if (modpeptide[peplen+1] != 0) {
+        mz += modpeptide[peplen+1];
+    }
+    pos = 0;
+    for (i=peplen; i >= 2; i--) {
+        mz += amino_masses[modpeptide[i]];
+        membuffer[pos++] = (18.0105647+mz+1.007236+1.007236-18.010565)/2.; //-H2O
+        membuffer[pos++] = (18.0105647+mz+1.007236+1.007236-17.02545)/2.; // z
+        membuffer[pos++] = (18.0105647+mz+1.007236+1.007236)/2.; // y
+        membuffer[pos++] = (18.0105647+mz+1.007236+1.007236+25.97926)/2.; // x
+    }
+
+    msms_pos = 0;
+    mem_pos = 0;
+    while (1) {
+        if (msms_pos >= numpeaks) {
+            break;
+        }
+        if (mem_pos >= 4*(peplen-1)) {
+            break;
+        }
+        mz = membuffer[mem_pos];
+        if (msms[msms_pos] > (mz+tolmz)) {
+            mem_pos += 1;
+        }
+        else if (msms[msms_pos] < (mz-tolmz)) {
+            msms_pos += 1;
+        }
+        else {
+            max = peaks[msms_pos];
+            maxmz = msms[msms_pos];
+            tmp = msms_pos + 1;
+            if (tmp < numpeaks) {
+                while (msms[tmp] <= (mz+tolmz)) {
+                    tmp2 = peaks[tmp];
+                    if (max < tmp2) {
+                        max = tmp2;
+                        maxmz = msms[tmp];
+                    }
+                    tmp += 1;
+                    if (tmp == numpeaks) {
+                        break;
+                    }
+                }
+            }
+            ions[14*(peplen-1)+mem_pos] = max;
+            mzs[14*(peplen-1)+mem_pos] = maxmz;
+            mem_pos += 1;
+        }
+    }
+    
+    //for (i=0; i < 18*(peplen-1); i++) { // 2*9 iontypes: b: a -H2O -NH3 b c y: -H2O z y x 
+    //    fprintf(stderr,"%f ",ions[i]); //HARD CODED!!
+   // }
+    //fprintf(stderr,"\n");
+
+	struct annotations r = {ions,mzs};
+    
+    return r;
+}
+
+//get fragment ion peaks from spectrum
 float* get_t_ms2pip_general(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
     {
     int i,j,tmp;
@@ -402,8 +683,10 @@ float* get_t_ms2pip_general(int peplen, unsigned short* modpeptide, int numpeaks
         }
     }
 
+
     return ions;
 }
+
 
 
 //get fragment ion peaks from spectrum (b, y, c, z)
