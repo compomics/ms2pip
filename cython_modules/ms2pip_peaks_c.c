@@ -67,7 +67,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
     float pred;
 
     // CID
-/*
     if (model_id == 0) {
         unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
@@ -76,9 +75,8 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
         }
     }
-*/
+
     // HCD
-	/* 3M
     if (model_id == 1) {
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
@@ -113,7 +111,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             //predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
         }
     }
-    */
     // HCD
     if (model_id == 1) {
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
@@ -124,7 +121,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
         }
     }
 
-  /*  
     // TTOF5600
     else if (model_id == 2) {
         unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
@@ -188,7 +184,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
         }
     }
-*/
+
     return predictions;
 }
 
