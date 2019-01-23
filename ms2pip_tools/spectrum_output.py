@@ -100,8 +100,8 @@ def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
             numpeaks = len(preds)
 
             # Calculate mass from fragment ions
-            mass_b = [row[mz_index] for row in preds if row[ion_index] == 'b' and row[ionnumber_index] == 1][0]
-            mass_y = [row[mz_index] for row in preds if row[ion_index] == 'y' and row[ionnumber_index] == numpeaks / 2][0]
+            mass_b = [row[mz_index] for row in preds if row[ion_index] == 'B' and row[ionnumber_index] == 1][0]
+            mass_y = [row[mz_index] for row in preds if row[ion_index] == 'Y' and row[ionnumber_index] == numpeaks / 2][0]
             pepmass = mass_b + mass_y - 2 * 1.007236
 
             out.append('Name: {}/{}\n'.format(sequence, charge))
@@ -198,7 +198,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
         for spec_id in spec_id_list:
             out.append('BEGIN IONS')
             charge = preds_dict[spec_id]['charge']
-            pepmass = preds_dict[spec_id]['peaks']['b'][0][0] + preds_dict[spec_id]['peaks']['y'][-1][0] - 2 * 1.007236
+            pepmass = preds_dict[spec_id]['peaks']['B'][0][0] + preds_dict[spec_id]['peaks']['Y'][-1][0] - 2 * 1.007236
             peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
             peaks = sorted(peaks, key=itemgetter(0))
 

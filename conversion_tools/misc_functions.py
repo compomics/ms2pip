@@ -4,9 +4,10 @@ Miscellaneous functions regarding MS2PIP file conversions.
 
 
 import re
+import pandas as pd
 
 
-def add_fixed_mods(peprec, fixed_mods=[], n_term=None, c_term=None):
+def add_fixed_mods(peprec, fixed_mods=None, n_term=None, c_term=None):
     """
     Add 'fixed' modifications to all peptides in an MS2PIP PEPREC file.
     Return list with MS2PIP modifications with fixed mods added.
@@ -20,6 +21,9 @@ def add_fixed_mods(peprec, fixed_mods=[], n_term=None, c_term=None):
     n_term - Name of fixed N-terminal modification to add
     c_term - Name of fixed C-terminal modification to add
     """
+
+    if not fixed_mods:
+        fixed_mods = []
 
     result = []
 
@@ -45,3 +49,37 @@ def add_fixed_mods(peprec, fixed_mods=[], n_term=None, c_term=None):
         result.append(current_mods)
 
     return result
+
+
+def peprec_add_charges(peprec_filename, mgf_filename, overwrite=False):
+    """
+    Get precursor charges from MGF file and add them to a PEPREC
+    """
+    peprec = pd.read_csv(peprec_filename, sep=' ', index_col=None)
+
+    if not overwrite and 'charge' in peprec.columns:
+        print('Charges already in PEPREC')
+        return None
+
+    spec_count = 0
+    charges = {}
+    with open(mgf_filename, 'rt') as f:
+        for line in f:
+            if line.startswith('TITLE='):
+                title = line[6:].strip()
+                spec_count += 1
+            if line.startswith('CHARGE='):
+                charge = line[7:].strip()
+                charges[title] = charge
+
+    if not spec_count == len(charges):
+        print('Something went wrong')
+        return None
+
+    peprec['charge'] = peprec['spec_id'].map(charges)
+    
+    new_peprec_filename = re.sub('\.peprec$|\.PEPREC$', '', peprec_filename) + '_withcharges.peprec'
+    peprec.to_csv(new_peprec_filename, sep=' ', index=False)
+
+    print('PEPREC with charges written to ' + new_peprec_filename)
+    return peprec

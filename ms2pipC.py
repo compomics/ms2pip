@@ -21,14 +21,14 @@ import cython_modules.ms2pip_pyx as ms2pip_pyx
 # ion_types is required to write the ion types in the headers of the result files
 # features_version is required to select the features version
 MODELS = {
-    'CID': {'id': 0, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
+    'CID': {'id': 0, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
     'HCD': {'id': 1, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
-    'TTOF5600': {'id': 2, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
-    'HCDTMT': {'id': 3, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
-    'HCDiTRAQ4': {'id': 4, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
-    'HCDiTRAQ4phospho': {'id': 5, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
-    'ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'old'},
-    'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
+    'TTOF5600': {'id': 2, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    'TMT': {'id': 3, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    'iTRAQ': {'id': 4, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    'iTRAQphospho': {'id': 5, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+    #ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
+    #'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
 }
 
 # Create A_MAP:
@@ -248,8 +248,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 
                 # normalize and convert MS2 peaks
                 msms = np.array(msms, dtype=np.float32)
-                debug = False #SD: had to change this...
-                #3M
+
+                debug = False
                 tic = np.sum(peaks)
                 if not debug:
                     peaks = peaks / tic
@@ -478,7 +478,7 @@ def get_feature_names():
 
 def get_feature_names_catboost():
     num_props = 4
-    names = ["amino_first","amino_last","amino_lcleave","amino_rcleave","peplen", "charge"]
+    names = ["amino_first", "amino_last", "amino_lcleave", "amino_rcleave", "peplen", "charge"]
     for t in range(5):
         names.append("charge"+str(t))
     for t in range(num_props):
@@ -831,7 +831,13 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         else:
             params = load_configfile(config_file)
 
-    model = params["model"]
+    if 'model' in params:
+        model = params["model"]
+    elif 'frag_method' in params:
+        model = params['frag_method']
+    else:
+        print("Please specify model in config file or parameters.")
+        exit(1)
     fragerror = params["frag_error"]
 
     if model in MODELS.keys():
@@ -1038,7 +1044,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         charges = []
         pepids = []
         for pi, pl in enumerate(peplen_bufs):
-            [ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[model]['ion_types']]
+            _ = [ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[model]['ion_types']]
             ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
             charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
             pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
