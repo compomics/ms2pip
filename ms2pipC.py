@@ -5,6 +5,7 @@ import argparse
 import multiprocessing
 from random import shuffle
 import tempfile
+from scipy.stats import pearsonr
 
 # Third party
 import numpy as np
@@ -12,955 +13,1068 @@ import pandas as pd
 
 # From project
 from ms2pip_tools.spectrum_output import write_mgf, write_msp
+import cython_modules.ms2pip_pyx as ms2pip_pyx
 
 
-def process_peptides(worker_num, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod):
-    """
-    Function for each worker to process a list of peptides. The models are
-    chosen based on fragmethod, PTMmap, Ntermmap and Ctermmap determine the
-    modifications applied to each peptide sequence. Returns the predicted
-    spectra for all the peptides.
-    """
+# Models and their properties
+# id is passed to get_predictions to select model
+# ion_types is required to write the ion types in the headers of the result files
+# features_version is required to select the features version
+MODELS = {
+	'CID': {'id': 0, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
+	'HCD': {'id': 1, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+	'TTOF5600': {'id': 2, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
+	'HCDTMT': {'id': 3, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
+	'HCDiTRAQ4': {'id': 4, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
+	'HCDiTRAQ4phospho': {'id': 5, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'old'},
+	'ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'old'},
+	'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
+}
 
-    # Import ms2pipfeatures_pyx
-    # Import is variable, depending on the frag_method defined by the user.
-    # This needs to be done inside process_peptides and inside process_spectra,
-    # as ms2pipfeatures_pyx cannot be passed as an argument through multiprocessing.
-    # Also, in order to be compatible with MS2PIP Server (which calls the
-    # function Run), this can not be done globally.
-    cython_module_name = 'ms2pipfeatures_pyx_{}'.format(fragmethod)
-    ms2pipfeatures_pyx = getattr(__import__('cython_modules', fromlist=[cython_module_name]), cython_module_name)
-
-    ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
-
-    pcount = 0
-
-    # Prepare output variables
-    mz_buf = []
-    prediction_buf = []
-    peplen_buf = []
-    charge_buf = []
-    pepid_buf = []
-
-    # transform pandas dataframe into dictionary for easy access
-    specdict = data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
-    pepids = data['spec_id'].tolist()
-    peptides = specdict["peptide"]
-    modifications = specdict["modifications"]
-    charges = specdict["charge"]
-    del specdict
-
-    for pepid in pepids:
-        peptide = peptides[pepid]
-        peptide = peptide.replace("L", "I")
-        mods = modifications[pepid]
-
-        # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
-        if len(peptide) > 100:
-            continue
-
-        # convert peptide string to integer list to speed up C code
-        peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
-
-        modpeptide = apply_mods(peptide, mods, PTMmap)
-        if type(modpeptide) == str:
-            if modpeptide == "Unknown modification":
-                continue
-
-        pepid_buf.append(pepid)
-        peplen_buf.append(len(peptide) - 2)
-
-        ch = charges[pepid]
-        charge_buf.append(ch)
-
-        # get ion mzs
-        mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
-        mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
-
-        # Predict the b- and y-ion intensities from the peptide
-        # For C-term ion types (y, y++, z), flip the order of predictions,
-        # because get_predictions follows order from vector file
-        # enumerate works for variable number (and all) ion types
-        predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
-        prediction_buf.append(np.array(predictions, dtype=np.float32))
-
-        pcount += 1
-        if (pcount % 500) == 0:
-            sys.stdout.write("(%i)%i "%(worker_num, pcount))
-            sys.stdout.flush()
-
-    return mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf
+# Create A_MAP:
+# A_MAP converts the peptide amino acids to integers, note how "L" is removed
+AMINOS = [
+	"A", "C", "D", "E", "F", "G", "H", "I", "K", "M",
+	"N", "P", "Q", "R", "S", "T", "V", "W", "Y"
+]
+MASSES = [
+	71.037114, 103.00919, 115.026943, 129.042593, 147.068414,
+	57.021464, 137.058912, 113.084064, 128.094963, 131.040485,
+	114.042927, 97.052764, 128.058578, 156.101111, 87.032028,
+	101.047679, 99.068414, 186.079313, 163.063329,
+	# 147.0354  # iTRAQ fixed N-term modification (gets written to amino acid masses file)
+]
+A_MAP = {a: i for i, a in enumerate(AMINOS)}
 
 
-def process_spectra(worker_num, spec_file, vector_file, data, a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror):
-    """
-    Function for each worker to process a list of spectra. Each peptide's
-    sequence is extracted from the mgf file. Then models are chosen based on
-    fragmethod, PTMmap, Ntermmap and Ctermmap determine the modifications
-    applied to each peptide sequence and the spectrum is predicted. Then either
-    the feature vectors are returned, or a DataFrame with the predicted and
-    empirical intensities.
-    """
+def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
+	"""
+	Function for each worker to process a list of peptides. The models are
+	chosen based on model. PTMmap, Ntermmap and Ctermmap determine the
+	modifications applied to each peptide sequence. Returns the predicted
+	spectra for all the peptides.
+	"""
 
-    # Import ms2pipfeatures_pyx
-    # Import is variable, depending on the frag_method defined by the user.
-    # This needs to be done inside process_peptides and inside process_spectra,
-    # as ms2pipfeatures_pyx cannot be passed as an argument through multiprocessing.
-    # Also, in order to be compatible with MS2PIP Server (which calls the
-    # function Run), this can not be done globally.
-    cython_module_name = 'ms2pipfeatures_pyx_{}'.format(fragmethod)
-    ms2pipfeatures_pyx = getattr(__import__('cython_modules', fromlist=[cython_module_name]), cython_module_name)
+	ms2pip_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
-    ms2pipfeatures_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
+	pcount = 0
 
-    # transform pandas datastructure into dictionary for easy access
-    specdict = data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
-    peptides = specdict["peptide"]
-    modifications = specdict["modifications"]
+	# Prepare output variables
+	mz_buf = []
+	prediction_buf = []
+	peplen_buf = []
+	charge_buf = []
+	pepid_buf = []
 
-    # cols contains the names of the computed features
-    cols_n = get_feature_names_new()
-    #cols_n = get_feature_names_catboost()
+	# transform pandas dataframe into dictionary for easy access
+	specdict = data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
+	pepids = data['spec_id'].tolist()
+	peptides = specdict["peptide"]
+	modifications = specdict["modifications"]
+	charges = specdict["charge"]
+	del specdict
 
-    #for ti,tt in enumerate(names):
-    #   print("%i %s"%(ti+1,tt))
+	for pepid in pepids:
+		peptide = peptides[pepid]
+		peptide = peptide.replace("L", "I")
+		mods = modifications[pepid]
 
-    #SD
-    # dresults = []
-    dvectors = []
-    dtargets = dict()
-    psmids = []
+		# Peptides longer then 101 lead to "Segmentation fault (core dumped)"
+		if len(peptide) > 100:
+			continue
 
-    mz_buf = []
-    target_buf = []
-    prediction_buf = []
-    peplen_buf = []
-    charge_buf = []
-    pepid_buf = []
+		# convert peptide string to integer list to speed up C code
+		peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
 
-    title = ""
-    charge = 0
-    msms = []
-    peaks = []
-    f = open(spec_file)
-    skip = False
-    pcount = 0
-    while 1:
-        rows = f.readlines(50000)
-        if not rows:
-            break
-        for row in rows:
-            row = row.rstrip()
-            if row == "":
-                continue
-            if skip:
-                if row[0] == "B":
-                    if row[:10] == "BEGIN IONS":
-                        skip = False
-                else:
-                    continue
-            if row == "":
-                continue
-            if row[0] == "T":
-                if row[:5] == "TITLE":
-                    title = row[6:]
-                    if title not in peptides:
-                        skip = True
-                        continue
-            elif row[0].isdigit():
-                tmp = row.split()
-                msms.append(float(tmp[0]))
-                peaks.append(float(tmp[1]))
-            elif row[0] == "B":
-                if row[:10] == "BEGIN IONS":
-                    msms = []
-                    peaks = []
-            elif row[0] == "C":
-                if row[:6] == "CHARGE":
-                    charge = int(row[7:9].replace("+", ""))
-            elif row[:8] == "END IONS":
-                # process current spectrum
-                if title not in peptides:
-                    continue
+		modpeptide = apply_mods(peptide, mods, PTMmap)
+		if type(modpeptide) == str:
+			if modpeptide == "Unknown modification":
+				continue
 
-                #if title != "d.4839.4839.2.dta": continue
+		pepid_buf.append(pepid)
+		peplen = len(peptide) -2
+		peplen_buf.append(peplen)
 
-                peptide = peptides[title]
-                peptide = peptide.replace("L", "I")
-                mods = modifications[title]
-                #SD
-                if "mut" in mods:
-                    continue
+		ch = charges[pepid]
+		charge_buf.append(ch)
 
-                # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
-                if len(peptide) > 100:
-                    continue
+		model_id = MODELS[model]['id']
+		peaks_version = MODELS[model]['peaks_version']
 
-                # convert peptide string to integer list to speed up C code
-                peptide = np.array([0] + [a_map[x] for x in peptide] + [0], dtype=np.uint16)
+		# get ion mzs
+		mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+		mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
-                modpeptide = apply_mods(peptide, mods, PTMmap)
-                if type(modpeptide) == str:
-                    if modpeptide == "Unknown modification":
-                        continue
+		# Predict the b- and y-ion intensities from the peptide
+		predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, ch, model_id, peaks_version)
+		prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
-                # remove reporter ions
-                if 'iTRAQ' in fragmethod:
-                    for mi, mp in enumerate(msms):
-                        if (mp >= 113) & (mp <= 118):
-                            peaks[mi] = 0
+		pcount += 1
+		if (pcount % 500) == 0:
+			sys.stdout.write("(%i)%i "%(worker_num, pcount))
+			sys.stdout.flush()
 
-                # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
-                if 'TMT' in fragmethod:
-                    for mi, mp in enumerate(msms):  
-                        if (mp >= 125) & (mp <= 132):
-                            peaks[mi] = 0
+	return mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf
 
-                # normalize and convert MS2 peaks
-                msms = np.array(msms, dtype=np.float32)
-                peaks = peaks / np.sum(peaks)
-                peaks = np.log2(np.array(peaks) + 0.001)
-                peaks = np.array(peaks)
-                peaks = peaks.astype(np.float32)
 
-                # get ion mzs
-                mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
+def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, modfile2, PTMmap, model, fragerror, tableau):
+	"""
+	Function for each worker to process a list of spectra. Each peptide's
+	sequence is extracted from the mgf file. Then models are chosen based on
+	model. PTMmap, Ntermmap and Ctermmap determine the modifications
+	applied to each peptide sequence and the spectrum is predicted. Then either
+	the feature vectors are returned, or a DataFrame with the predicted and
+	empirical intensities.
+	"""
 
-                # get targets
-                targets = ms2pipfeatures_pyx.get_targets(modpeptide, msms, peaks, float(fragerror))
+	ms2pip_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
-                if vector_file:
-                    psmids.extend([title]*(len(targets[0])))
-                    # Temporary: until new features are incorporated into other fragmethods
-                    if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
-                        dvectors.append(np.array(ms2pipfeatures_pyx.get_vector_new(peptide, modpeptide, charge), dtype=np.uint16))
-                        #dvectors.append(np.array(ms2pipfeatures_pyx.get_vector_catboost(peptide, modpeptide, charge), dtype=np.uint16))
-                    else:
-                        dvectors.append(np.array(ms2pipfeatures_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16))
+	# transform pandas datastructure into dictionary for easy access
+	specdict = data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
+	peptides = specdict["peptide"]
+	modifications = specdict["modifications"]
 
-                    # Collecting targets to dict; works for variable number of ion types
-                    # For C-term ion types (y, y++, z), flip the order of targets,
-                    # for correct order in vectors DataFrame
-                    for i, t in enumerate(targets):
-                        if i in dtargets.keys():
-                            if i % 2 == 0:
-                                dtargets[i].extend(t)
-                            else:
-                                dtargets[i].extend(t[::-1])
-                        else:
-                            if i % 2 == 0:
-                                dtargets[i] = [t]
-                            else:
-                                dtargets[i] = [t[::-1]]
+	# cols contains the names of the computed features
+	cols_n = get_feature_names_new()
+	#cols_n = get_feature_names_catboost()
 
-                else:
-                    # Predict the b- and y-ion intensities from the peptide
-                    # For C-term ion types (y, y++, z), flip the order of predictions,
-                    # because get_predictions follows order from vector file
-                    # enumerate works for variable number (and all) ion types
-                    pepid_buf.append(title)
-                    peplen_buf.append(len(peptide) - 2)
-                    charge_buf.append(charge)
+	#for ti,tt in enumerate(names):
+	#   print("%i %s"%(ti+1,tt))
 
-                    # get/append ion mzs, targets and predictions
-                    mzs = ms2pipfeatures_pyx.get_mzs(modpeptide)
-                    mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+	#SD
+	# dresults = []
+	dvectors = []
+	dtargets = dict()
+	psmids = []
 
-                    target_buf.append([np.array(t, dtype=np.float32) for t in targets])
+	mz_buf = []
+	target_buf = []
+	prediction_buf = []
+	peplen_buf = []
+	charge_buf = []
+	pepid_buf = []
 
-                    predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, charge)
-                    prediction_buf.append(np.array(predictions, dtype=np.float32))
+	if tableau == True:
+		ft = open("ms2pip_tableau.%i"%worker_num,"w")
+		ft2 = open("stats_tableau.%i"%worker_num,"w")
 
-                pcount += 1
-                if (pcount % 500) == 0:
-                    sys.stdout.write("(%i)%i "%(worker_num, pcount))
-                    sys.stdout.flush()
+	title = ""
+	charge = 0
+	msms = []
+	peaks = []
+	pepmass = 0
+	f = open(spec_file)
+	skip = False
+	pcount = 0
+	while 1:
+		rows = f.readlines(50000)
+		if not rows:
+			break
+		for row in rows:
+			row = row.rstrip()
+			if row == "":
+				continue
+			if skip:
+				if row[0] == "B":
+					if row[:10] == "BEGIN IONS":
+						skip = False
+				else:
+					continue
+			if row == "":
+				continue
+			if row[0] == "T":
+				if row[:5] == "TITLE":
+					title = row[6:]
+					if title not in peptides:
+						skip = True
+						continue
+			elif row[0].isdigit():
+				tmp = row.split()
+				msms.append(float(tmp[0]))
+				peaks.append(float(tmp[1]))
+			elif row[0] == "B":
+				if row[:10] == "BEGIN IONS":
+					msms = []
+					peaks = []
+			elif row[0] == "C":
+				if row[:6] == "CHARGE":
+					charge = int(row[7:9].replace("+", ""))
+			elif row[0] == "P":
+				if row[:7] == "PEPMASS":
+					pepmass = float(row.split("=")[1].split(" ")[0])
+			elif row[:8] == "END IONS":
+				# process current spectrum
+				if title not in peptides:
+					continue
 
-    f.close()
+				#if title != "d.26625.26625.2.dta": continue
 
-    if vector_file:
-        # Temporary: until new features are incorporated into other fragmethods
-        # Concatenating dvectors into a 2D ndarray before making DataFrame saves lots of memory!
-        if fragmethod in ['HCD', 'HCDch2', 'HCDTMT']:
-            dvectors = np.concatenate(dvectors)
-            df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16, copy=False)            
-        else:
-            dvectors = np.concatenate(dvectors)
-            df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
-            df.columns = df.columns.astype(str)
-        return psmids, df, dtargets
+				peptide = peptides[title]
+				peptide = peptide.replace("L", "I")
+				mods = modifications[title]
+				#SD
+				if "mut" in mods:
+					continue
 
-    return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
+				# Peptides longer then 101 lead to "Segmentation fault (core dumped)"
+				if len(peptide) > 100:
+					continue
+
+				# convert peptide string to integer list to speed up C code
+				peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
+
+				modpeptide = apply_mods(peptide, mods, PTMmap)
+				#print(modpeptide)
+				if type(modpeptide) == str:
+					if modpeptide == "Unknown modification":
+						continue
+
+				# remove reporter ions
+				if 'iTRAQ' in model:
+					for mi, mp in enumerate(msms):
+						if (mp >= 113) & (mp <= 118):
+							peaks[mi] = 0
+
+				# TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
+				if 'TMT' in model:
+					for mi, mp in enumerate(msms):
+						if (mp >= 125) & (mp <= 132):
+							peaks[mi] = 0
+			
+				#remove percursor peak
+				#for mi, mp in enumerate(msms):
+				#	if (mp >= pepmass-0.02) & (mp <= pepmass+0.02):
+				#		peaks[mi] = 0
+				
+				# normalize and convert MS2 peaks
+				msms = np.array(msms, dtype=np.float32)
+				debug = False #SD: had to change this...
+				#3M
+				tic = np.sum(peaks)
+				if not debug:
+					peaks = peaks / tic
+					peaks = np.log2(np.array(peaks) + 0.001)
+				peaks = np.array(peaks)
+				peaks = peaks.astype(np.float32)
+
+				model_id = MODELS[model]['id']
+				peaks_version = MODELS[model]['peaks_version']
+
+
+				if vector_file:
+					# get targets
+					targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
+					#print(targets[:2])
+					#print(targets)
+					#ss = 0
+					#for v in targets[0]:
+					#	if v != 0:
+					#		ss +=1
+					#for v in targets[1]:
+					#	if v != 0:
+					#		ss +=1
+					#if ss == 0:
+					#	print("%s %i %i"%(title,ss,2*len(targets[0])))
+					#	dd
+							
+					#3M
+					#targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
+					psmids.extend([title]*(len(targets[0])))
+					dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16))
+					#dvectors.append(np.array(ms2pip_pyx.get_vector_catboost(peptide, modpeptide, charge), dtype=np.uint16))
+
+					# Collecting targets to dict; works for variable number of ion types
+					# For C-term ion types (y, y++, z), flip the order of targets,
+					# for correct order in vectors DataFrame
+					for i, t in enumerate(targets):
+						if i in dtargets.keys():
+							if i % 2 == 0:
+								dtargets[i].extend(t)
+							else:
+								dtargets[i].extend(t[::-1])
+						else:
+							if i % 2 == 0:
+								dtargets[i] = [t]
+							else:
+								dtargets[i] = [t[::-1]]
+				elif tableau == True:     
+					numby = 0
+					numall = 0
+					explainedby = 0
+					explainedall = 0      
+					ts = []
+					ps = []
+					predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version)
+					for m,p in zip(msms,peaks):
+						ft.write("%s;%f;%f;;;0\n"%(title,m,2**p))
+					# get targets
+					mzs,targets = ms2pip_pyx.get_targets_all(modpeptide, msms, peaks, float(fragerror), "all")
+					#get mean by intensity values to normalize!; WRONG !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+					maxt = 0.
+					maxp = 0.
+					it = 0
+					for cion in [1,2]:
+						for ionnumber in range(len(modpeptide)-3):
+							for lion in ['a','b-h2o','b-nh3','b','c']:
+								if (lion == "b") & (cion == 1):
+									if maxt < (2**targets[it])-0.001:
+										maxt = (2**targets[it])-0.001
+									if maxp < (2**predictions[0][ionnumber])-0.001:
+										maxp = (2**predictions[0][ionnumber])-0.001
+								it += 1
+					for cion in [1,2]:
+						for ionnumber in range(len(modpeptide)-3):
+							for lion in ['y-h2o','z','y','x']:
+								if (lion == "y") & (cion == 1):
+									if maxt < (2**targets[it])-0.001:
+										maxt = (2**targets[it])-0.001
+									if maxp < (2**predictions[1][ionnumber])-0.001:
+										maxp = (2**predictions[1][ionnumber])-0.001
+								it += 1
+					#b
+					it = 0
+					for cion in [1,2]:
+						for ionnumber in range(len(modpeptide)-3):
+							for lion in ['a','b-h2o','b-nh3','b','c']:
+								if mzs[it] > 0:
+									numall+=1
+									explainedall += (2**targets[it])-0.001
+								ft.write("%s;%f;%f;%s;%i;%i;1\n"%(title,mzs[it],(2**targets[it])/maxt,lion,cion,ionnumber))    
+								if (lion == "b") & (cion == 1):
+									ts.append(targets[it])
+									ps.append(predictions[0][ionnumber])
+									if mzs[it] > 0:
+										numby+=1
+										explainedby += (2**targets[it])-0.001
+									ft.write("%s;%f;%f;%s;%i;%i;2\n"%(title,mzs[it],(2**(predictions[0][ionnumber]))/maxp,lion,cion,ionnumber))    
+								it+=1                			
+					#y
+					for cion in [1,2]:
+						for ionnumber in range(len(modpeptide)-3):
+							for lion in ['y-h2o','z','y','x']:
+								if mzs[it] > 0:
+									numall+=1
+									explainedall += (2**targets[it])-0.001
+								ft.write("%s;%f;%f;%s;%i;%i;1\n"%(title,mzs[it],(2**targets[it])/maxt,lion,cion,ionnumber))    
+								if (lion == "y") & (cion == 1):
+									ts.append(targets[it])
+									ps.append(predictions[1][ionnumber])
+									if mzs[it] > 0:
+										numby+=1
+										explainedby += (2**targets[it])-0.001
+									ft.write("%s;%f;%f;%s;%i;%i;2\n"%(title,mzs[it],(2**(predictions[1][ionnumber]))/maxp,lion,cion,ionnumber))   
+								it+=1        
+					ft2.write("%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"%(title,len(modpeptide)-2,len(msms),tic,pearsonr(ts,ps)[0],numby,numall,explainedby,explainedall,float(numby)/(2*(len(peptide)-3)),float(numall)/(18*(len(peptide)-3))))					
+				else:
+					# get targets
+					targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
+										
+					#3M
+					#targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
+
+					# Predict the b- and y-ion intensities from the peptide
+					pepid_buf.append(title)
+					peplen_buf.append(len(peptide) - 2)
+					charge_buf.append(charge)
+
+					# get/append ion mzs, targets and predictions
+					mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+					mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+
+					target_buf.append([np.array(t, dtype=np.float32) for t in targets])
+
+					predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version)
+					#print(predictions)
+					prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
+
+				pcount += 1
+				if (pcount % 500) == 0:
+					sys.stdout.write("(%i)%i "%(worker_num, pcount))
+					sys.stdout.flush()
+
+	f.close()
+	if tableau == True:
+		ft.close()
+		ft2.close()
+
+	if vector_file:
+		# If num_cpu > number of spectra, dvectors can be empty
+		if dvectors:
+			# Temporary: until new features are incorporated into other models
+			# Concatenating dvectors into a 2D ndarray before making DataFrame saves lots of memory!
+			if model in ['HCD', 'HCDch2', 'HCDTMT']:
+				dvectors = np.concatenate(dvectors)
+				df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16, copy=False)
+			else:
+				if len(dvectors) > 1:
+					dvectors = np.concatenate(dvectors)
+				df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
+				df.columns = df.columns.astype(str)
+		else:
+			df = pd.DataFrame()
+		return psmids, df, dtargets
+
+	return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
 
 
 def get_feature_names():
-    """
-    feature names for the fixed peptide length feature vectors
-    """
-    aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K",
-              "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
-    names = []
-    for a in aminos:
-        names.append("Ib_" + a)
-    names.append("sumIbaG")
-    names.append("meanIbwikiG")
-    names.append("sumIywaG")
-    names.append("meanIywikiG")
+	"""
+	feature names for the fixed peptide length feature vectors
+	"""
+	aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K",
+			  "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"]
+	names = []
+	for a in aminos:
+		names.append("Ib_" + a)
+	names.append("sumIbaG")
+	names.append("meanIbwikiG")
+	names.append("sumIywaG")
+	names.append("meanIywikiG")
 
-    names += ["pmz", "peplen", "ionnumber", "ionnumber_rel"]
+	names += ["pmz", "peplen", "ionnumber", "ionnumber_rel"]
 
-    for c in ["aG", "wikiG", "mz", "bas", "heli", "hydro", "pI"]:
-        names.append("sum_" + c)
+	for c in ["aG", "wikiG", "mz", "bas", "heli", "hydro", "pI"]:
+		names.append("sum_" + c)
 
-    for c in ["mz", "bas", "heli", "hydro", "pI"]:
-        names.append("mean_" + c)
+	for c in ["mz", "bas", "heli", "hydro", "pI"]:
+		names.append("mean_" + c)
 
-    for c in ["max_{}", "min_{}", "max{}_b", "min{}_b", "max{}_y", "min{}_y"]:
-        for b in ["bas", "heli", "hydro", "pI"]:
-            names.append(c.format(b))
+	for c in ["max_{}", "min_{}", "max{}_b", "min{}_b", "max{}_y", "min{}_y"]:
+		for b in ["bas", "heli", "hydro", "pI"]:
+			names.append(c.format(b))
 
-    names.append("mz_ion")
-    names.append("mz_ion_other")
-    names.append("mean_mz_ion")
-    names.append("mean_mz_ion_other")
+	names.append("mz_ion")
+	names.append("mz_ion_other")
+	names.append("mean_mz_ion")
+	names.append("mean_mz_ion_other")
 
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("{}_ion".format(c))
-        names.append("{}_ion_other".format(c))
-        names.append("{}_ion_minus_ion_other".format(c))
-        #names.append("mean_{}_ion".format(c))
-        #names.append("mean_{}_ion_other".format(c))
+	for c in ["bas", "heli", "hydro", "pI"]:
+		names.append("{}_ion".format(c))
+		names.append("{}_ion_other".format(c))
+		names.append("{}_ion_minus_ion_other".format(c))
+		#names.append("mean_{}_ion".format(c))
+		#names.append("mean_{}_ion_other".format(c))
 
-    for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
-        for b in ["bas", "heli", "hydro", "pI"]:
-            names.append(c.format(b))
+	for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
+		for b in ["bas", "heli", "hydro", "pI"]:
+			names.append(c.format(b))
 
-    for pos in ["0", "1", "-2", "-1"]:
-        for c in ["mz", "bas", "heli", "hydro", "pI", "wikiG", "P", "D", "E", "K", "R"]:
-            names.append("loc_" + pos + "_" + c)
+	for pos in ["0", "1", "-2", "-1"]:
+		for c in ["mz", "bas", "heli", "hydro", "pI", "wikiG", "P", "D", "E", "K", "R"]:
+			names.append("loc_" + pos + "_" + c)
 
-    for pos in ["i", "i+1"]:
-        for c in ["wikiG", "P", "D", "E", "K", "R"]:
-            names.append("loc_" + pos + "_" + c)
+	for pos in ["i", "i+1"]:
+		for c in ["wikiG", "P", "D", "E", "K", "R"]:
+			names.append("loc_" + pos + "_" + c)
 
-    for c in ["bas", "heli", "hydro", "pI", "mz"]:
-        for pos in ["i", "i-1", "i+1", "i+2"]:
-            names.append("loc_" + pos + "_" + c)
+	for c in ["bas", "heli", "hydro", "pI", "mz"]:
+		for pos in ["i", "i-1", "i+1", "i+2"]:
+			names.append("loc_" + pos + "_" + c)
 
-    names.append("charge")
+	names.append("charge")
 
-    return names
+	return names
 
 
 def get_feature_names_catboost():
-    num_props = 4
-    names = ["amino_first","amino_last","amino_lcleave","amino_rcleave","peplen", "charge"]
-    for t in range(5):
-        names.append("charge"+str(t))
-    for t in range(num_props):
-        names.append("qmin_%i"%t)
-        names.append("q1_%i"%t)
-        names.append("q2_%i"%t)
-        names.append("q3_%i"%t)
-        names.append("qmax_%i"%t)
-    names.append("len_n")
-    names.append("len_c")
+	num_props = 4
+	names = ["amino_first","amino_last","amino_lcleave","amino_rcleave","peplen", "charge"]
+	for t in range(5):
+		names.append("charge"+str(t))
+	for t in range(num_props):
+		names.append("qmin_%i"%t)
+		names.append("q1_%i"%t)
+		names.append("q2_%i"%t)
+		names.append("q3_%i"%t)
+		names.append("qmax_%i"%t)
+	names.append("len_n")
+	names.append("len_c")
 
-    for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
-              'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
-        names.append("I_n_%s"%a)
-        names.append("I_c_%s"%a)
+	for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
+			  'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
+		names.append("I_n_%s"%a)
+		names.append("I_c_%s"%a)
 
-    for t in range(num_props):
-        for pos in ["p0", "pend", "pi-1", "pi", "pi+1", "pi+2"]:
-            names.append("prop_%i_%s"%(t, pos))
-        names.append("sum_%i_n"%t)
-        names.append("q0_%i_n"%t)
-        names.append("q1_%i_n"%t)
-        names.append("q2_%i_n"%t)
-        names.append("q3_%i_n"%t)
-        names.append("q4_%i_n"%t)
-        names.append("sum_%i_c"%t)
-        names.append("q0_%i_c"%t)
-        names.append("q1_%i_c"%t)
-        names.append("q2_%i_c"%t)
-        names.append("q3_%i_c"%t)
-        names.append("q4_%i_c"%t)
+	for t in range(num_props):
+		for pos in ["p0", "pend", "pi-1", "pi", "pi+1", "pi+2"]:
+			names.append("prop_%i_%s"%(t, pos))
+		names.append("sum_%i_n"%t)
+		names.append("q0_%i_n"%t)
+		names.append("q1_%i_n"%t)
+		names.append("q2_%i_n"%t)
+		names.append("q3_%i_n"%t)
+		names.append("q4_%i_n"%t)
+		names.append("sum_%i_c"%t)
+		names.append("q0_%i_c"%t)
+		names.append("q1_%i_c"%t)
+		names.append("q2_%i_c"%t)
+		names.append("q3_%i_c"%t)
+		names.append("q4_%i_c"%t)
 
-    return names
+	return names
 
 def get_feature_names_new():
-    num_props = 4
-    names = ["peplen", "charge"]
-    for t in range(5):
-        names.append("charge"+str(t))
-    for t in range(num_props):
-        names.append("qmin_%i"%t)
-        names.append("q1_%i"%t)
-        names.append("q2_%i"%t)
-        names.append("q3_%i"%t)
-        names.append("qmax_%i"%t)
-    names.append("len_n")
-    names.append("len_c")
+	num_props = 5
+	names = ["peplen", "charge"]
+	for t in range(5):
+		names.append("charge"+str(t))
+	for t in range(num_props):
+		names.append("qmin_%i"%t)
+		names.append("q1_%i"%t)
+		names.append("q2_%i"%t)
+		names.append("q3_%i"%t)
+		names.append("qmax_%i"%t)
+	names.append("len_n")
+	names.append("len_c")
 
-    for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
-              'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
-        names.append("I_n_%s"%a)
-        names.append("I_c_%s"%a)
+	for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
+			  'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
+		names.append("I_n_%s"%a)
+		names.append("I_c_%s"%a)
 
-    for t in range(num_props):
-        for pos in ["p0", "pend", "pi-1", "pi", "pi+1", "pi+2"]:
-            names.append("prop_%i_%s"%(t, pos))
-        names.append("sum_%i_n"%t)
-        names.append("q0_%i_n"%t)
-        names.append("q1_%i_n"%t)
-        names.append("q2_%i_n"%t)
-        names.append("q3_%i_n"%t)
-        names.append("q4_%i_n"%t)
-        names.append("sum_%i_c"%t)
-        names.append("q0_%i_c"%t)
-        names.append("q1_%i_c"%t)
-        names.append("q2_%i_c"%t)
-        names.append("q3_%i_c"%t)
-        names.append("q4_%i_c"%t)
+	for t in range(num_props):
+		for pos in ["p0", "pend", "pi-1", "pi", "pi+1", "pi+2"]:
+			names.append("prop_%i_%s"%(t, pos))
+		names.append("sum_%i_n"%t)
+		names.append("q0_%i_n"%t)
+		names.append("q1_%i_n"%t)
+		names.append("q2_%i_n"%t)
+		names.append("q3_%i_n"%t)
+		names.append("q4_%i_n"%t)
+		names.append("sum_%i_c"%t)
+		names.append("q0_%i_c"%t)
+		names.append("q1_%i_c"%t)
+		names.append("q2_%i_c"%t)
+		names.append("q3_%i_c"%t)
+		names.append("q4_%i_c"%t)
 
-    return names
+	return names
 
 
 
 def get_feature_names_small(ionnumber):
-    """
-    feature names for the fixed peptide length feature vectors
-    """
-    names = []
-    names += ["pmz", "peplen"]
+	"""
+	feature names for the fixed peptide length feature vectors
+	"""
+	names = []
+	names += ["pmz", "peplen"]
 
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("sum_" + c)
+	for c in ["bas", "heli", "hydro", "pI"]:
+		names.append("sum_" + c)
 
-    for c in ["mz", "bas", "heli", "hydro", "pI"]:
-        names.append("mean_" + c)
+	for c in ["mz", "bas", "heli", "hydro", "pI"]:
+		names.append("mean_" + c)
 
-    names.append("mz_ion")
-    names.append("mz_ion_other")
-    names.append("mean_mz_ion")
-    names.append("mean_mz_ion_other")
+	names.append("mz_ion")
+	names.append("mz_ion_other")
+	names.append("mean_mz_ion")
+	names.append("mean_mz_ion_other")
 
-    for c in ["bas", "heli", "hydro", "pI"]:
-        names.append("{}_ion".format(c))
-        names.append("{}_ion_other".format(c))
+	for c in ["bas", "heli", "hydro", "pI"]:
+		names.append("{}_ion".format(c))
+		names.append("{}_ion_other".format(c))
 
-    names.append("endK")
-    names.append("endR")
-    names.append("nextP")
-    names.append("nextK")
-    names.append("nextR")
+	names.append("endK")
+	names.append("endR")
+	names.append("nextP")
+	names.append("nextK")
+	names.append("nextR")
 
-    for c in ["bas", "heli", "hydro", "pI", "mz"]:
-        for pos in ["i", "i-1", "i+1", "i+2"]:
-            names.append("loc_" + pos + "_" + c)
+	for c in ["bas", "heli", "hydro", "pI", "mz"]:
+		for pos in ["i", "i-1", "i+1", "i+2"]:
+			names.append("loc_" + pos + "_" + c)
 
-    names.append("charge")
+	names.append("charge")
 
-    for i in range(ionnumber):
-        for c in ["bas", "heli", "hydro", "pI", "mz"]:
-            names.append("P_%i_%s"%(i, c))
-        names.append("P_%i_P"%i)
-        names.append("P_%i_K"%i)
-        names.append("P_%i_R"%i)
+	for i in range(ionnumber):
+		for c in ["bas", "heli", "hydro", "pI", "mz"]:
+			names.append("P_%i_%s"%(i, c))
+		names.append("P_%i_P"%i)
+		names.append("P_%i_K"%i)
+		names.append("P_%i_R"%i)
 
-    return names
+	return names
 
 
 def get_feature_names_chem(peplen):
-    """
-    feature names for the fixed peptide length feature vectors
-    """
+	"""
+	feature names for the fixed peptide length feature vectors
+	"""
 
-    names = []
-    names += ["pmz", "peplen", "ionnumber", "ionnumber_rel", "mean_mz"]
+	names = []
+	names += ["pmz", "peplen", "ionnumber", "ionnumber_rel", "mean_mz"]
 
-    for c in ["mean_{}", "max_{}", "min_{}", "max{}_b", "min{}_b", "max{}_y", "min{}_y"]:
-        for b in ["bas", "heli", "hydro", "pI"]:
-            names.append(c.format(b))
+	for c in ["mean_{}", "max_{}", "min_{}", "max{}_b", "min{}_b", "max{}_y", "min{}_y"]:
+		for b in ["bas", "heli", "hydro", "pI"]:
+			names.append(c.format(b))
 
-    for c in ["mz", "bas", "heli", "hydro", "pI"]:
-        names.append("{}_ion".format(c))
-        names.append("{}_ion_other".format(c))
-        names.append("mean_{}_ion".format(c))
-        names.append("mean_{}_ion_other".format(c))
+	for c in ["mz", "bas", "heli", "hydro", "pI"]:
+		names.append("{}_ion".format(c))
+		names.append("{}_ion_other".format(c))
+		names.append("mean_{}_ion".format(c))
+		names.append("mean_{}_ion_other".format(c))
 
-    for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
-        for b in ["bas", "heli", "hydro", "pI"]:
-            names.append(c.format(b))
+	for c in ["plus_cleave{}", "times_cleave{}", "minus1_cleave{}", "minus2_cleave{}", "bsum{}", "ysum{}"]:
+		for b in ["bas", "heli", "hydro", "pI"]:
+			names.append(c.format(b))
 
-    for i in range(peplen):
-        for c in ["mz", "bas", "heli", "hydro", "pI"]:
-            names.append("fix_" + c + "_" + str(i))
+	for i in range(peplen):
+		for c in ["mz", "bas", "heli", "hydro", "pI"]:
+			names.append("fix_" + c + "_" + str(i))
 
-    names.append("charge")
+	names.append("charge")
 
-    return names
+	return names
 
 
 def scan_spectrum_file(filename):
-    """
-    go over mgf file and return list with all spectrum titles
-    """
-    titles = []
-    f = open(filename)
-    while 1:
-        rows = f.readlines(10000)
-        if not rows:
-            break
-        for row in rows:
-            if row[0] == "T":
-                if row[:5] == "TITLE":
-                    titles.append(row.rstrip()[6:])#.replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
-    f.close()
-    return titles
+	"""
+	go over mgf file and return list with all spectrum titles
+	"""
+	titles = []
+	f = open(filename)
+	while 1:
+		rows = f.readlines(10000)
+		if not rows:
+			break
+		for row in rows:
+			if row[0] == "T":
+				if row[:5] == "TITLE":
+					titles.append(row.rstrip()[6:])#.replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
+	f.close()
+	return titles
 
 
 def prepare_titles(titles, num_cpu):
-    """
-    Take a list and return a list containing num_cpu smaller lists with the
-    spectrum titles/peptides that will be split across the workers
-    """
-    # titles might be ordered from small to large peptides,
-    # shuffling improves parallel speeds
-    shuffle(titles)
+	"""
+	Take a list and return a list containing num_cpu smaller lists with the
+	spectrum titles/peptides that will be split across the workers
+	"""
+	# titles might be ordered from small to large peptides,
+	# shuffling improves parallel speeds
+	shuffle(titles)
 
-    split_titles = [titles[i * len(titles) // num_cpu: (i + 1) * len(titles) // num_cpu] for i in range(num_cpu)]
-    sys.stdout.write("{} spectra (~{:.0f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
+	split_titles = [titles[i * len(titles) // num_cpu: (i + 1) * len(titles) // num_cpu] for i in range(num_cpu)]
+	sys.stdout.write("{} spectra (~{:.0f} per cpu)\n".format(len(titles), np.mean([len(a) for a in split_titles])))
 
-    return split_titles
+	return split_titles
 
 
 def apply_mods(peptide, mods, PTMmap):
-    """
-    Takes a peptide sequence and a set of modifications. Returns the modified
-    version of the peptide sequence, c- and n-term modifications. This modified
-    version are hard coded in ms2pipfeatures_c.c for now.
-    """
-    modpeptide = np.array(peptide[:], dtype=np.uint16)
+	"""
+	Takes a peptide sequence and a set of modifications. Returns the modified
+	version of the peptide sequence, c- and n-term modifications. This modified
+	version are hard coded in ms2pipfeatures_c.c for now.
+	"""
+	modpeptide = np.array(peptide[:], dtype=np.uint16)
 
+	if mods != "-":
+		l = mods.split("|")
+		for i in range(0, len(l), 2):
+			tl = l[i + 1]
+			if tl in PTMmap:
+				modpeptide[int(l[i])] = PTMmap[tl]
+			else:
+				sys.stderr.write("Unknown modification: {}\n".format(tl))
+				return "Unknown modification"
 
-    if mods != "-":
-        l = mods.split("|")
-        for i in range(0, len(l), 2):
-            tl = l[i + 1]
-            if tl in PTMmap:
-                modpeptide[int(l[i])] = PTMmap[tl]
-            else:
-                sys.stderr.write("Unknown modification: {}\n".format(tl))
-                return "Unknown modification"
-
-    return modpeptide
+	return modpeptide
 
 
 def load_configfile(filepath):
-    params = {}
-    params['ptm'] = []
-    params['sptm'] = []
-    params['gptm'] = []
-    with open(filepath) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line[0] == '#':
-                continue
-            (par, val) = line.split('=')
-            if par == "ptm":
-                params["ptm"].append(val)
-            elif par == "sptm":
-                params["sptm"].append(val)
-            elif par == "gptm":
-                params["gptm"].append(val)
-            else:
-                params[par] = val
-    return params
+	params = {}
+	params['ptm'] = []
+	params['sptm'] = []
+	params['gptm'] = []
+	with open(filepath) as f:
+		for line in f:
+			line = line.strip()
+			if not line or line[0] == '#':
+				continue
+			(par, val) = line.split('=')
+			if par == "ptm":
+				params["ptm"].append(val)
+			elif par == "sptm":
+				params["sptm"].append(val)
+			elif par == "gptm":
+				params["gptm"].append(val)
+			else:
+				params[par] = val
+	return params
 
 
-def generate_modifications_file(params, masses, a_map):
-    PTMmap = {}
+def generate_modifications_file(params, MASSES, A_MAP):
+	PTMmap = {}
 
-    ptmnum = 38  # Omega compatibility (mutations)
-    spbuffer = []
-    for v in params["sptm"]:
-        l = v.split(',')
-        tmpf = float(l[1])
-        if l[2] == 'opt':
-            if l[3] == "N-term":
-                spbuffer.append([tmpf, -1, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if l[3] == "C-term":
-                spbuffer.append([tmpf, -2, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if not l[3] in a_map:
-                continue
-            spbuffer.append([tmpf, a_map[l[3]], ptmnum])
-            PTMmap[l[0]] = ptmnum
-            ptmnum += 1
-    pbuffer = []
-    for v in params["ptm"]:
-        l = v.split(',')
-        tmpf = float(l[1])
-        if l[2] == 'opt':
-            if l[3] == "N-term":
-                pbuffer.append([tmpf, -1, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if l[3] == "C-term":
-                pbuffer.append([tmpf, -2, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if not l[3] in a_map:
-                continue
-            pbuffer.append([tmpf, a_map[l[3]], ptmnum])
-            PTMmap[l[0]] = ptmnum
-            ptmnum += 1
+	ptmnum = 38  # Omega compatibility (mutations)
+	spbuffer = []
+	for v in params["sptm"]:
+		l = v.split(',')
+		tmpf = float(l[1])
+		if l[2] == 'opt':
+			if l[3] == "N-term":
+				spbuffer.append([tmpf, -1, ptmnum])
+				PTMmap[l[0]] = ptmnum
+				ptmnum += 1
+				continue
+			if l[3] == "C-term":
+				spbuffer.append([tmpf, -2, ptmnum])
+				PTMmap[l[0]] = ptmnum
+				ptmnum += 1
+				continue
+			if not l[3] in A_MAP:
+				continue
+			spbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
+			PTMmap[l[0]] = ptmnum
+			ptmnum += 1
+	pbuffer = []
+	for v in params["ptm"]:
+		l = v.split(',')
+		tmpf = float(l[1])
+		if l[2] == 'opt':
+			if l[3] == "N-term":
+				pbuffer.append([tmpf, -1, ptmnum])
+				PTMmap[l[0].lower()] = ptmnum
+				#PTMmap[l[0]] = ptmnum
+				ptmnum += 1
+				continue
+			if l[3] == "C-term":
+				pbuffer.append([tmpf, -2, ptmnum])
+				PTMmap[l[0].lower()] = ptmnum
+				#PTMmap[l[0]] = ptmnum
+				ptmnum += 1
+				continue
+			if not l[3] in A_MAP:
+				continue
+			pbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
+			PTMmap[l[0].lower()] = ptmnum
+			#print("%i %s"%(ptmnum,l[0]))
+			#PTMmap[l[0]] = ptmnum
+			ptmnum += 1
 
-    f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
-    f.write(str.encode("{}\n".format(len(pbuffer))))
-    for i, _ in enumerate(pbuffer):
-        f.write(str.encode("{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2])))
-    f.close()
+	f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
+	f.write(str.encode("{}\n".format(len(pbuffer))))
+	for i, _ in enumerate(pbuffer):
+		f.write(str.encode("{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2])))
+	f.close()
 
-    f2 = tempfile.NamedTemporaryFile(delete=False, mode='wb')
-    f2.write(str.encode("{}\n".format(len(spbuffer))))
-    for i, _ in enumerate(spbuffer):
-        f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])))
-    f2.close()
+	f2 = tempfile.NamedTemporaryFile(delete=False, mode='wb')
+	f2.write(str.encode("{}\n".format(len(spbuffer))))
+	for i, _ in enumerate(spbuffer):
+		f2.write(str.encode("{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])))
+	f2.close()
 
-    return f.name, f2.name, PTMmap
+	return f.name, f2.name, PTMmap
 
 
 def peakcount(x):
-    c = 0.
-    for i in x:
-        if i > -9.95:
-            c += 1.
-    return c / len(x)
+	c = 0.
+	for i in x:
+		if i > -9.95:
+			c += 1.
+	return c / len(x)
 
 
 def calc_correlations(df):
-    correlations = df.groupby(['spec_id', 'charge', 'ion'])[['target', 'prediction']].corr().iloc[::2]['prediction']
-    correlations.index = correlations.index.droplevel(3)
-    correlations = correlations.to_frame().reset_index()
-    correlations.columns = ['spec_id', 'charge', 'ion', 'pearsonr']
-    return correlations
+	correlations = df.groupby(['spec_id'])[['target', 'prediction']].corr().iloc[::2]['prediction']
+	correlations.index = correlations.index.droplevel(3)
+	correlations = correlations.to_frame().reset_index()
+	correlations.columns = ['spec_id', 'pearsonr']
+	return correlations
 
 
 def argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pep_file", metavar="<peptide file>",
-                        help="list of peptides")
-    parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.txt",
-                        help="config file (by default config.txt)")
-    parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
-                        help=".mgf MS2 spectrum file (optional)")
-    parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
-                        help="write feature vectors to FILE.{pkl,h5} (optional)")
-    parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
-                        default="23", help="number of cpu's to use")
-    args = parser.parse_args()
+	parser = argparse.ArgumentParser()
+	parser.add_argument("pep_file", metavar="<peptide file>",
+						help="list of peptides")
+	parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.txt",
+						help="config file (by default config.txt)")
+	parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
+						help=".mgf MS2 spectrum file (optional)")
+	parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
+						help="write feature vectors to FILE.{pkl,h5} (optional)")
+	parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
+						default="23", help="number of cpu's to use")
+	parser.add_argument('-t', action='store_true', default=False, dest='tableau',
+					help='create Tableau Reader file')
+	args = parser.parse_args()
 
-    if not args.config_file:
-        print("Please provide a configfile (-c)!")
-        exit(1)
+	if not args.config_file:
+		print("Please provide a configfile (-c)!")
+		exit(1)
 
-    return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu))
+	return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu), args.tableau)
 
 
 def print_logo():
-    logo = """
+	logo = """
  _____ _____ ___ _____ _____ _____
 |     |   __|_  |  _  |     |  _  |
 | | | |__   |  _|   __|-   -|   __|
 |_|_|_|_____|___|__|  |_____|__|
 
-           """
-    print(logo)
-    print("by sven.degroeve@ugent.be\n")
+		   """
+	print(logo)
+	print("by sven.degroeve@ugent.be\n")
 
 
 def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None,
-        output_filename=None, datasetname=None, return_results=False, limit=None):
-    # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
+		output_filename=None, datasetname=None, return_results=False, limit=None, tableau=False):
+	# datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
-    # Create a_map:
-    # a_map converts the peptide amino acids to integers, note how "L" is removed
-    aminos = ["A", "C", "D", "E", "F", "G", "H", "I", "K", "M", "N", "P", "Q",
-              "R", "S", "T", "V", "W", "Y"]
-    masses = [
-        71.037114, 103.00919, 115.026943, 129.042593, 147.068414,
-        57.021464, 137.058912, 113.084064, 128.094963, 131.040485,
-        114.042927, 97.052764, 128.058578, 156.101111, 87.032028,
-        101.047679, 99.068414, 186.079313, 163.063329,
-        # 147.0354 iTRAQ fixed N-term modification (gets written to amino acid masses file)
-    ]
-    a_map = {a: i for i, a in enumerate(aminos)}
+	# If not specified, get parameters from config_file
+	if params is None:
+		if config_file is None:
+			if datasetname is None:
+				print("No config file specified")
+				exit(1)
+		else:
+			params = load_configfile(config_file)
 
-    # If not specified, get parameters from config_file
-    if params is None:
-        if config_file is None:
-            if datasetname is None:
-                print("No config file specified")
-                exit(1)
-        else:
-            params = load_configfile(config_file)
+	model = params["model"]
+	fragerror = params["frag_error"]
 
-    fragmethod = params["frag_method"]
-    fragerror = params["frag_error"]
+	if model in MODELS.keys():
+		print("using {} models".format(model))
+	else:
+		print("Unknown fragmentation method: {}".format(model))
+		print("Should be one of the following methods: {}".format(MODELS.keys()))
+		exit(1)
 
-    # Check if given fragmethod exists:
-    frag_method_ion_types = {
-        'CID': ['b', 'y'],
-        'HCD': ['b', 'y'],
-        'HCDiTRAQ4phospho': ['b', 'y'],
-        'HCDiTRAQ4': ['b', 'y'],
-        'HCDTMT': ['b', 'y'],
-        'ETD': ['b', 'y', 'c', 'z'],
-        'HCDch2': ['b', 'y', 'b2', 'y2'],
-        'TTOF5600': ['b', 'y'],
-    }
-    if fragmethod in frag_method_ion_types.keys():
-        print("using {} models".format(fragmethod))
-    else:
-        print("Unknown fragmentation method: {}".format(fragmethod))
-        print("Should be one of the following methods: {}".format(frag_method_ion_types.keys()))
-        exit(1)
+	if output_filename is None and not return_results:
+		output_filename = '{}_{}'.format('.'.join(pep_file.split('.')[:-1]), model)
 
-    if output_filename is None and not return_results:
-        output_filename = '{}_{}'.format('.'.join(pep_file.split('.')[:-1]), fragmethod)
+	# Create amino acid MASSES file
+	# to be compatible with Omega
+	# that might have fixed modifications
+	f = tempfile.NamedTemporaryFile(delete=False)
+	for m in MASSES:
+		f.write(str.encode("{}\n".format(m)))
+	f.write(str.encode("0\n"))
+	f.close()
+	afile = f.name
 
-    # Create amino acid masses file
-    # to be compatible with Omega
-    # that might have fixed modifications
-    f = tempfile.NamedTemporaryFile(delete=False)
-    for m in masses:
-        f.write(str.encode("{}\n".format(m)))
-    f.write(str.encode("0\n"))
-    f.close()
-    afile = f.name
+	# PTMs are loaded the same as in Omega
+	# This allows me to use the same C init() function in bot ms2ip and Omega
+	(modfile, modfile2, PTMmap) = generate_modifications_file(params, MASSES, A_MAP)
+	print(modfile)
+	print(modfile2)
 
-    # PTMs are loaded the same as in Omega
-    # This allows me to use the same C init() function in bot ms2ip and Omega
-    (modfile, modfile2, PTMmap) = generate_modifications_file(params, masses, a_map)
+	# read peptide information
+	# the file contains the columns: spec_id, modifications, peptide and charge
+	if type(pep_file) == str:
+		with open(pep_file, 'rt') as f:
+			line = f.readline()
+			if line[:7] != 'spec_id':
+				sys.stdout.write('PEPREC file should start with header column\n')
+				exit(1)
+			sep = line[7]
+		data = pd.read_csv(pep_file,
+						   sep=sep,
+						   index_col=False,
+						   dtype={"spec_id": str, "modifications": str},
+						   nrows=limit)
+	else:
+		data = pep_file
+	# for some reason the missing values are converted to float otherwise
+	data = data.fillna("-")
 
-    # read peptide information
-    # the file contains the columns: spec_id, modifications, peptide and charge
-    if type(pep_file) == str:
-        with open(pep_file, 'rt') as f:
-            line = f.readline()
-            if line[:7] != 'spec_id':
-                sys.stdout.write('PEPREC file should start with header column\n')
-                exit(1)
-            sep = line[7]
-        data = pd.read_csv(pep_file,
-                           sep=sep,
-                           index_col=False,
-                           dtype={"spec_id": str, "modifications": str},
-                           nrows=limit)
-    else:
-        data = pep_file
-    # for some reason the missing values are converted to float otherwise
-    data = data.fillna("-")
+	sys.stdout.write("starting workers...\n")
+	myPool = multiprocessing.Pool(num_cpu)
 
-    sys.stdout.write("starting workers...\n")
-    myPool = multiprocessing.Pool(num_cpu)
+	if spec_file:
+		"""
+		When an mgf file is provided, MS2PIP either saves the feature vectors to
+		train models with or writes a file with the predicted spectra next to
+		the empirical one.
+		"""
+		sys.stdout.write("scanning spectrum file... \n")
+		titles = scan_spectrum_file(spec_file)
+		split_titles = prepare_titles(titles, num_cpu)
+		results = []
 
-    if spec_file:
-        """
-        When an mgf file is provided, MS2PIP either saves the feature vectors to
-        train models with or writes a file with the predicted spectra next to
-        the empirical one.
-        """
-        sys.stdout.write("scanning spectrum file... \n")
-        titles = scan_spectrum_file(spec_file)
-        split_titles = prepare_titles(titles, num_cpu)
-        results = []
+		for i in range(num_cpu):
+			tmp = split_titles[i]
+			"""
+			process_spectra(
+				i,
+				spec_file,
+				vector_file,
+				data[data["spec_id"].isin(tmp)],
+				afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
+			"""
+			results.append(myPool.apply_async(process_spectra, args=(
+				i,
+				spec_file,
+				vector_file,
+				data[data["spec_id"].isin(tmp)],
+				afile, modfile, modfile2, PTMmap, model, fragerror, tableau)))
+			#"""
+		myPool.close()
+		myPool.join()
 
-        for i in range(num_cpu):
-            tmp = split_titles[i]
-            """
-            process_spectra(
-                i,
-                spec_file,
-                vector_file,
-                data[data["spec_id"].isin(tmp)],
-                a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror)
-            """
-            results.append(myPool.apply_async(process_spectra, args=(
-                i,
-                spec_file,
-                vector_file,
-                data[data["spec_id"].isin(tmp)],
-                a_map, afile, modfile, modfile2, PTMmap, fragmethod, fragerror)))
-            #"""
-        myPool.close()
-        myPool.join()
+		sys.stdout.write("\nmerging results ")
 
-        sys.stdout.write("\nmerging results ")
+		# Create vector file
+		if vector_file:
+			all_results = []
+			for r in results:
+				sys.stdout.write(".")
+				psmids, df, dtargets = r.get()
 
-        # Create vector file
-        if vector_file:
-            all_results = []
-            for r in results:
-                sys.stdout.write(".")
-                psmids, df, dtargets = r.get()
-                
-                # dtargets is a dict, containing targets for every ion type (keys are int)
-                for i, t in dtargets.items():
-                    df["targets{}".format(frag_method_ion_types[fragmethod][i])] = np.concatenate(t, axis=None)
-                df["psmid"] = psmids
-                
-                all_results.append(df)
+				# dtargets is a dict, containing targets for every ion type (keys are int)
+				for i, t in dtargets.items():
+					df["targets_{}".format(MODELS[model]['ion_types'][i])] = np.concatenate(t, axis=None)
+				df["psmid"] = psmids
 
-            # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
-            all_results = pd.concat([df for df in all_results if len(df) != 0])
+				all_results.append(df)
 
-            sys.stdout.write("\nwriting vector file {}... \n".format(vector_file))
-            # write result. write format depends on extension:
-            ext = vector_file.split(".")[-1]
-            if ext == "pkl":
-                all_results.to_pickle(vector_file + ".pkl")
-            elif ext == "csv":
-                all_results.to_csv(vector_file)
-            else:
-                # "table" is a tag used to read back the .h5
-                all_results.to_hdf(vector_file, "table")
+			# Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
+			all_results = pd.concat([df for df in all_results if len(df) != 0])
 
-        # Predict and compare with MGF file
-        else:
-            mz_bufs = []
-            prediction_bufs = []
-            target_bufs = []
-            peplen_bufs = []
-            charge_bufs = []
-            pepid_bufs = []
-            for r in results:
-                mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf = r.get()
-                mz_bufs.extend(mz_buf)
-                prediction_bufs.extend(prediction_buf)
-                target_bufs.extend(target_buf)
-                peplen_bufs.extend(peplen_buf)
-                charge_bufs.extend(charge_buf)
-                pepid_bufs.extend(pepid_buf)
+			sys.stdout.write("\nwriting vector file {}... \n".format(vector_file))
+			# write result. write format depends on extension:
+			ext = vector_file.split(".")[-1]
+			if ext == "pkl":
+				all_results.to_pickle(vector_file + ".pkl")
+			elif ext == "csv":
+				all_results.to_csv(vector_file)
+			else:
+				# "table" is a tag used to read back the .h5
+				all_results.to_hdf(vector_file, "table")
 
-            # Reconstruct DataFrame
-            num_ion_types = len(mz_bufs[0])
-            ions = []
-            ionnumbers = []
-            charges = []
-            pepids = []
-            for pi, pl in enumerate(peplen_bufs):
-                [ions.extend([ion_type] * (pl - 1)) for ion_type in frag_method_ion_types[fragmethod]]
-                ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
-                charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
-                pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
-            all_preds = pd.DataFrame()
-            all_preds["spec_id"] = pepids
-            all_preds["charge"] = charges
-            all_preds["ion"] = ions
-            all_preds["ionnumber"] = ionnumbers
-            all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
-            all_preds["target"] = np.hstack(np.concatenate(target_bufs, axis=None))
-            all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
+		# Predict and compare with MGF file
+		else:
+			mz_bufs = []
+			prediction_bufs = []
+			target_bufs = []
+			peplen_bufs = []
+			charge_bufs = []
+			pepid_bufs = []
+			for r in results:
+				mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf = r.get()
+				mz_bufs.extend(mz_buf)
+				prediction_bufs.extend(prediction_buf)
+				target_bufs.extend(target_buf)
+				peplen_bufs.extend(peplen_buf)
+				charge_bufs.extend(charge_buf)
+				pepid_bufs.extend(pepid_buf)
 
-            sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
-            all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
+			# Reconstruct DataFrame
+			num_ion_types = len(mz_bufs[0])
+			ions = []
+			ionnumbers = []
+			charges = []
+			pepids = []
+			for pi, pl in enumerate(peplen_bufs):
+				[ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[model]['ion_types']]
+				ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
+				charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
+				pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
+			all_preds = pd.DataFrame()
+			all_preds["spec_id"] = pepids
+			all_preds["charge"] = charges
+			all_preds["ion"] = ions
+			all_preds["ionnumber"] = ionnumbers
+			all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
+			all_preds["target"] = np.hstack(np.concatenate(target_bufs, axis=None))
+			all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
 
-            #sys.stdout.write('computing correlations...\n')
-            #correlations = calc_correlations(all_preds)
-            #correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
+			sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
+			all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
 
-            sys.stdout.write("done! \n")
+			sys.stdout.write('computing correlations...\n')
+			correlations = calc_correlations(all_preds)
+			correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
+			#sys.stdout.write("median correlations: \n")
+			#sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
 
-    # Only get the predictions
-    else:
-        sys.stdout.write("scanning peptide file... ")
+			sys.stdout.write("done! \n")
 
-        titles = data.spec_id.tolist()
-        split_titles = prepare_titles(titles, num_cpu)
-        results = []
+	# Only get the predictions
+	else:
+		sys.stdout.write("scanning peptide file... ")
 
-        for i in range(num_cpu):
-            tmp = split_titles[i]
-            """
-            process_peptides(
-                i,
-                data[data.spec_id.isin(tmp)],
-                a_map, afile, modfile, modfile2, PTMmap, fragmethod)
-            """
-            results.append(myPool.apply_async(process_peptides, args=(
-                i,
-                data[data.spec_id.isin(tmp)],
-                a_map, afile, modfile, modfile2, PTMmap, fragmethod)))
-            #"""
-        myPool.close()
-        myPool.join()
+		titles = data.spec_id.tolist()
+		split_titles = prepare_titles(titles, num_cpu)
+		results = []
 
-        sys.stdout.write("merging results...\n")
+		for i in range(num_cpu):
+			tmp = split_titles[i]
+			"""
+			process_peptides(
+				i,
+				data[data.spec_id.isin(tmp)],
+				afile, modfile, modfile2, PTMmap, model)
+			"""
+			results.append(myPool.apply_async(process_peptides, args=(
+				i,
+				data[data.spec_id.isin(tmp)],
+				afile, modfile, modfile2, PTMmap, model)))
+			#"""
+		myPool.close()
+		myPool.join()
 
-        mz_bufs = []
-        prediction_bufs = []
-        peplen_bufs = []
-        charge_bufs = []
-        pepid_bufs = []
-        for r in results:
-            mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf = r.get()
-            mz_bufs.extend(mz_buf)
-            prediction_bufs.extend(prediction_buf)
-            peplen_bufs.extend(peplen_buf)
-            charge_bufs.extend(charge_buf)
-            pepid_bufs.extend(pepid_buf)
+		sys.stdout.write("merging results...\n")
 
-        # Reconstruct DataFrame
-        num_ion_types = len(mz_bufs[0])
+		mz_bufs = []
+		prediction_bufs = []
+		peplen_bufs = []
+		charge_bufs = []
+		pepid_bufs = []
+		for r in results:
+			mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf = r.get()
+			mz_bufs.extend(mz_buf)
+			prediction_bufs.extend(prediction_buf)
+			peplen_bufs.extend(peplen_buf)
+			charge_bufs.extend(charge_buf)
+			pepid_bufs.extend(pepid_buf)
 
-        ions = []
-        ionnumbers = []
-        charges = []
-        pepids = []
-        for pi, pl in enumerate(peplen_bufs):
-            [ions.extend([ion_type] * (pl - 1)) for ion_type in frag_method_ion_types[fragmethod]]
-            ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
-            charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
-            pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
-        all_preds = pd.DataFrame()
-        all_preds["spec_id"] = pepids
-        all_preds["charge"] = charges
-        all_preds["ion"] = ions
-        all_preds["ionnumber"] = ionnumbers
-        all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
-        all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
+		# Reconstruct DataFrame
+		num_ion_types = len(MODELS[model]['ion_types'])
+
+		ions = []
+		ionnumbers = []
+		charges = []
+		pepids = []
+		for pi, pl in enumerate(peplen_bufs):
+			[ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[model]['ion_types']]
+			ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
+			charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
+			pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
+		all_preds = pd.DataFrame()
+		all_preds["spec_id"] = pepids
+		all_preds["charge"] = charges
+		all_preds["ion"] = ions
+		all_preds["ionnumber"] = ionnumbers
+		all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
+		all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
 
 
-        mgf = False  # Set to True to write spectrum as MGF file
-        if mgf:
-            print("writing MGF file {}_predictions.mgf...".format(output_filename))
-            write_mgf(all_preds, peprec=data, output_filename=output_filename)
+		mgf = False  # Set to True to write spectrum as MGF file
+		if mgf:
+			print("writing MGF file {}_predictions.mgf...".format(output_filename))
+			write_mgf(all_preds, peprec=data, output_filename=output_filename)
 
-        msp = False  # Set to True to write spectra as MSP file
-        if msp:
-            print("writing MSP file {}_predictions.msp...".format(output_filename))
-            write_msp(all_preds, data, output_filename=output_filename)
+		msp = False  # Set to True to write spectra as MSP file
+		if msp:
+			print("writing MSP file {}_predictions.msp...".format(output_filename))
+			write_msp(all_preds, data, output_filename=output_filename)
 
-        if not return_results:
-            sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
-            all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
-            sys.stdout.write("done!\n")
-        else:
-            return all_preds
+		if not return_results:
+			sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
+			all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
+			sys.stdout.write("done!\n")
+		else:
+			return all_preds
+
+
+def main():
+	print_logo()
+	pep_file, spec_file, vector_file, config_file, num_cpu, tableau = argument_parser()
+	params = load_configfile(config_file)
+	run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu, tableau=tableau)
+
 
 if __name__ == "__main__":
-    print_logo()
-    pep_file, spec_file, vector_file, config_file, num_cpu = argument_parser()
-    params = load_configfile(config_file)
-    run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu)
+	main()

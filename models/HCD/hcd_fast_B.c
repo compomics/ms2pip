@@ -1,4 +1,4 @@
-static float score_B(unsigned int* v){
+static float score_HCD_B(unsigned int* v){
 float s = 0.;
 	if (v[109]<269){
 		if (v[87]<27){

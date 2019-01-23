@@ -1,4 +1,4 @@
-static float score_Y(unsigned int* v){
+static float score_iTRAQphospho_Y(unsigned int* v){
 float s = 0.;
 	if (v[72]<518){
 		if (v[175]<2){

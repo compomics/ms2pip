@@ -1,4 +1,4 @@
-static float score_Y(unsigned int* v){
+static float score_TTOF5600_Y(unsigned int* v){
 float s = 0.;
 	if (v[76]<1062){
 		if (v[173]<22){

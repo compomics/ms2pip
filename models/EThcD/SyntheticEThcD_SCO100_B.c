@@ -1,4 +1,4 @@
-static float score_B(unsigned int* v){
+static float score_EThcD_B(unsigned int* v){
 float s = 0.;
 	if (v[40]<6){
 		if (v[41]<3){

@@ -53,9 +53,9 @@ optional arguments:
 ### Config file
 Several MS2PIPc options need to be set in this config file.
 
-The models that should be used are set as `frag_method=X` where X is
+The models that should be used are set as `model=X` where X is
 either `CID`, `HCD`, `HCDch2`, `ETD`, `HCDiTRAQ4` or
-`HCDiTRAQ4phospho`. If the `frag_method` is set to `HCDch2`, MS2PIP
+`HCDiTRAQ4phospho`. If the `model` is set to `HCDch2`, MS2PIP
 will predict intensities for HCD charge +1 and charge 2+ fragment ions.
 
 The fragment ion error tolerance is set as `frag_error=X` where is X is

@@ -1,16 +1,15 @@
-from sys import argv
+from subprocess import call
 from distutils.core import setup
 from distutils.extension import Extension
+
 from Cython.Distutils import build_ext
 import numpy
 
+call('rm -f cython_modules/ms2pip_pyx.c* cython_modules/ms2pip_pyx.so', shell=True)
 
-model = argv[-1]
-argv.remove(model)
-
-setup(name='ms2pipfeatures_pyx_{}'.format(model),
-      ext_modules=[Extension('cython_modules.ms2pipfeatures_pyx_{}'.format(model),
-                             sources=['cython_modules/ms2pipfeatures_pyx_{}.pyx'.format(model)],
+setup(name='ms2pip_pyx',
+      ext_modules=[Extension('cython_modules.ms2pip_pyx',
+                             sources=['cython_modules/ms2pip_pyx.pyx'],
                              extra_compile_args=['-fno-var-tracking-assignments',
                                                  '-fno-var-tracking',
                                                  '-O3',

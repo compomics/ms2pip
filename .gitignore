@@ -1,5 +1,6 @@
 # Custom MS2PIP stuff
 data/
+*_pyx.c
 *_pyx_*.c
 
 # Remote Sync for Atom
@@ -99,3 +100,4 @@ ENV/
 
 # vscode
 .vscode/
+.vs/

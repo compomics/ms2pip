@@ -242,7 +242,7 @@ def run_batches(peprec, decoy=False):
         params['output_filename'] += '_decoy'
 
     ms2pip_params = {
-        'frag_method': params['ms2pip_model'],
+        'model': params['ms2pip_model'],
         'frag_error': 0.02,
         # Modify fasta2speclib modifications dict to MS2PIP params PTMs entry
         'ptm': ['{},{},opt,{}'.format(mods['name'], mods['mass_shift'], mods['amino_acid'])

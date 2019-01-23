@@ -1,4 +1,4 @@
-static float score_Y2(unsigned int* v){
+static float score_HCD_Y2(unsigned int* v){
 float s = 0.;
 	s = s -1.0;
 	s = s -1.0;

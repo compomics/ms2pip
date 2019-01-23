@@ -1,4 +1,4 @@
-static float score_Y(unsigned int* v){
+static float score_HCD_Y(unsigned int* v){
 float s = 0.;
 	if (v[28]<12){
 		if (v[1]<3){
