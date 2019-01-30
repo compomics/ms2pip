@@ -46,7 +46,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
     // CID
     if (model_id == 0) {
-        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
@@ -66,7 +66,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
     
     // TTOF5600
     else if (model_id == 2) {
-        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
@@ -86,7 +86,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
     // iTRAQ
     else if (model_id == 4) {
-        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
@@ -96,7 +96,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
     // iTRAQphospho
     else if (model_id == 5) {
-        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
@@ -107,7 +107,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
     /*
     // EThcD
     else if (model_id == 6) {
-        unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;

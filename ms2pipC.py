@@ -871,7 +871,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             all_preds["target"] = np.hstack(np.concatenate(target_bufs, axis=None))
             all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
 
-            sys.stdout.write("writing file {}_pred_and_emp.csv...\n".format(output_filename))
+            sys.stdout.write("\nwriting file {}_pred_and_emp.csv...\n".format(output_filename))
             all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
 
             sys.stdout.write('computing correlations...\n')
