@@ -21,7 +21,7 @@ optional arguments:
 ## fasta2speclib_config.json
 Name | Description | Possible values | Default value | Data type
 --- | --- | --- | --- | ---
-`output_filetype` | Output file formats for spectral library | `msp`, `mgf` and/or `hdf` | `["msp"]` | array of strings
+`output_filetype` | Output file formats for spectral library | `msp`, `mgf`, `bibliospec` and/or `hdf` | `["msp"]` | array of strings
 `charges` | Precusor charges to include | positive integer | `[2, 3]` | array of numbers
 `min_peplen` | Minimum length of peptides to include | positive integer | `8` | number
 `max_pepmass` | Maximum peptide mass (in Dalton) to include | positive integer | `5000` | number

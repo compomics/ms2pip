@@ -1,5 +1,5 @@
 {
-    "output_filetype":["msp", "mgf", "hdf"],
+    "output_filetype":["msp", "mgf", "bibliospec", "hdf"],
     "charges":[2, 3],
     "min_peplen":8,
     "max_pepmass":5000,
