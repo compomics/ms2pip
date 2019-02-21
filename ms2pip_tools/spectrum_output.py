@@ -6,11 +6,12 @@ Write spectrum files from MS2PIP predictions.
 __author__ = "Ralf Gabriels"
 __credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
 __license__ = "Apache License, Version 2.0"
-__version__ = "0.1"
+__version__ = "0.2"
 __email__ = "Ralf.Gabriels@ugent.be"
 
 
 # Native libraries
+from time import localtime, strftime
 from ast import literal_eval
 from operator import itemgetter
 from io import StringIO
@@ -19,7 +20,7 @@ from io import StringIO
 import pandas as pd
 try:
     from tqdm import tqdm
-except:
+except ImportError:
     use_tqdm = False
 else:
     use_tqdm = True
@@ -147,6 +148,43 @@ def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
             f.write(out_string)
 
 
+def dfs_to_dicts(all_preds, peprec=None, rt_to_seconds=True):
+    """
+    Create easy to access dict from all_preds and peprec dataframes
+    """
+    if type(peprec) == pd.DataFrame:
+        peprec_to_dict = peprec.copy()
+
+        rt_present = 'rt' in peprec_to_dict.columns
+        if rt_present and rt_to_seconds:
+            peprec_to_dict['rt'] = peprec_to_dict['rt'] * 60
+
+        peprec_to_dict.index = peprec_to_dict['spec_id']
+        peprec_to_dict.drop('spec_id', axis=1, inplace=True)
+        peprec_dict = peprec_to_dict.to_dict(orient='index')
+        del peprec_to_dict
+    else:
+        rt_present = False
+        peprec_dict = None
+
+    preds_dict = {}
+    preds_list = all_preds[['spec_id', 'charge', 'ion', 'mz', 'prediction']].values.tolist()
+
+    for row in preds_list:
+        spec_id = row[0]
+        if spec_id in preds_dict.keys():
+            if row[2] in preds_dict[spec_id]['peaks']:
+                preds_dict[spec_id]['peaks'][row[2]].append(tuple(row[3:]))
+            else:
+                preds_dict[spec_id]['peaks'][row[2]] = [tuple(row[3:])]
+        else:
+            preds_dict[spec_id] = {
+                'charge': row[1],
+                'peaks': {row[2]: [tuple(row[3:])]}
+            }
+    return peprec_dict, preds_dict, rt_present
+
+
 def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False, peprec=None):
     """
     Write MS2PIP predictions to MGF spectrum file.
@@ -160,49 +198,22 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
     def write(all_preds, mgf_output, peprec=None):
         out = []
 
-        # Create easy to access dict from all_preds and peprec dataframe
-        if type(peprec) == pd.DataFrame:
-            peprec_to_dict = peprec.copy()
-
-            rt_present = 'rt' in peprec_to_dict.columns
-            if rt_present:
-                peprec_to_dict['rt'] = peprec_to_dict['rt'] * 60
-
-            peprec_to_dict.index = peprec_to_dict['spec_id']
-            peprec_to_dict.drop('spec_id', axis=1, inplace=True)
-            peprec_dict = peprec_to_dict.to_dict(orient='index')
-            del peprec_to_dict
-            spec_id_list = list(peprec['spec_id'])
-
-        else:
-            rt_present = False
-            spec_id_list = list(all_preds['spec_id'].unique())
-
-        preds_dict = {}
-        preds_list = all_preds[['spec_id', 'charge', 'ion', 'mz', 'prediction']].values.tolist()
-
-        for row in preds_list:
-            spec_id = row[0]
-            if spec_id in preds_dict.keys():
-                if row[2] in preds_dict[spec_id]['peaks']:
-                    preds_dict[spec_id]['peaks'][row[2]].append(tuple(row[3:]))
-                else:
-                    preds_dict[spec_id]['peaks'][row[2]] = [tuple(row[3:])]
-            else:
-                preds_dict[spec_id] = {
-                    'charge': row[1],
-                    'peaks': {row[2]: [tuple(row[3:])]}
-                }
+        peprec_dict, preds_dict, rt_present = dfs_to_dicts(all_preds, peprec=peprec, rt_to_seconds=True)
 
         # Write MGF
-        for spec_id in spec_id_list:
+        if peprec_dict:
+            spec_id_list = peprec_dict.keys()
+        else:
+            spec_id_list = list(all_preds['spec_id'].unique())
+
+        for spec_id in sorted(spec_id_list):
             out.append('BEGIN IONS')
             charge = preds_dict[spec_id]['charge']
             pepmass = preds_dict[spec_id]['peaks']['B'][0][0] + preds_dict[spec_id]['peaks']['Y'][-1][0] - 2 * 1.007236
             peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
             peaks = sorted(peaks, key=itemgetter(0))
 
-            if type(peprec) == pd.DataFrame:
+            if peprec_dict:
                 seq = peprec_dict[spec_id]['peptide']
                 mods = peprec_dict[spec_id]['modifications']
                 if rt_present:
@@ -239,3 +250,101 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
             write(all_preds, mgf_output, peprec=peprec)
 
     del all_preds
+
+
+def write_bibliospec(all_preds_in, peprec, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False):
+    """
+    Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
+    (For example for use in Skyline).
+
+    Note:
+    - In contrast to write_mgf and write_msp, here a peprec is required.
+    - Modifications are not yet supported!
+    - Peaks are normalized the same way as in MSP files: base-peak normalized and max peak equals 10 000
+
+    write_mode: start new file ('w+') or append to existing ('a+)
+    """
+
+    def get_last_scannr(ssl_filename):
+        """
+        Return scan number of last line in a Bibliospec SSL file.
+        """
+        with open(ssl_filename, 'rt') as ssl:
+            for line in ssl:
+                last_line = line
+            last_scannr = int(last_line.split('\t')[1])
+        return last_scannr
+
+
+    def write(all_preds, peprec, ssl_output, ms2_output, start_scannr=0, output_filename="MS2PIP"):
+        ms2_out = []
+        ssl_out = []
+
+        # Replace spec_id with integer, starting from last scan in existing SSL file
+        peprec.index = range(start_scannr, start_scannr + len(peprec))
+        scannum_dict = {v: k for k, v in peprec['spec_id'].to_dict().items()}
+        peprec['spec_id'] = peprec.index
+        all_preds['spec_id'] = all_preds['spec_id'].map(scannum_dict)
+
+        peprec_dict, preds_dict, rt_present = dfs_to_dicts(all_preds, peprec=peprec, rt_to_seconds=True)
+
+        for spec_id in sorted(peprec_dict.keys()):
+            charge = preds_dict[spec_id]['charge']
+            prec_mass = preds_dict[spec_id]['peaks']['B'][0][0] + preds_dict[spec_id]['peaks']['Y'][-1][0] - 2 * 1.007236
+            prec_mz = (prec_mass + (charge * 1.007825032)) / charge
+            peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
+            peaks = sorted(peaks, key=itemgetter(0))
+            seq = peprec_dict[spec_id]['peptide']
+            mods = peprec_dict[spec_id]['modifications']
+
+            # Modifications are not yet supported!
+            if mods != '-' and mods != '':
+                print("Modifications are not yet supported in `write_bibliospec` function!")
+                exit(1)
+
+            rt = peprec_dict[spec_id]['rt'] if rt_present else ''
+
+            ssl_out.append('\t'.join([output_filename.split('/')[-1] + '_predictions.ms2', str(spec_id), str(charge), seq, '', '', str(rt)]))
+            ms2_out.append("S\t{}\t{}".format(spec_id, prec_mz))
+            ms2_out.append("Z\t{}\t{}".format(int(charge), prec_mass))
+            ms2_out.append("D\tseq\t{}".format(seq))
+
+            # Modifications are not yet supported!
+            #ms2_out.append("D\tmodified seq\t{}\n".format(XXX))
+            ms2_out.append('\n'.join(['\t'.join(['{:.8f}'.format(p) for p in peak]) for peak in peaks]))
+
+        ssl_output.write('\n'.join(ssl_out))
+        ms2_output.write('\n'.join(ms2_out))
+
+
+    all_preds = all_preds_in.copy()
+    if unlog:
+        all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
+        all_preds.reset_index(inplace=True)
+        all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: (x / x.max()) * 10000)
+
+    if return_stringbuffer:
+        ssl_output = StringIO()
+        ms2_output = StringIO()
+    else:
+        ssl_output = open("{}_predictions.ssl".format(output_filename), write_mode)
+        ms2_output = open("{}_predictions.ms2".format(output_filename), write_mode)
+
+    # If a new line is written, write headers
+    if 'w' in write_mode:
+        start_scannr = 0
+        ssl_header = ['file', 'scan', 'charge', 'sequence', 'score-type', 'score', 'retention-time' '\n']
+        ssl_output.write('\t'.join(ssl_header))
+        ms2_output.write("H\tCreationDate\t{}\n".format(strftime("%Y-%m-%d %H:%M:%S", localtime())))
+        ms2_output.write("H\tExtractor\tMS2PIP Predictions\n")
+    else:
+        # Get last scan number of ssl file, to continue indexing from there
+        # because Bibliospec speclib scan numbers can only be integers
+        start_scannr = get_last_scannr("{}_predictions.ssl".format(output_filename)) + 1
+        ssl_output.write('\n')
+        ms2_output.write('\n')
+
+    write(all_preds, peprec, ssl_output, ms2_output, start_scannr=start_scannr, output_filename=output_filename)
+
+    if return_stringbuffer:
+        return ssl_output, ms2_output
