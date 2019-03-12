@@ -10,11 +10,15 @@
 // Import models
 #include "../models/CID/model_20190107_CID_train_B.c"
 #include "../models/CID/model_20190107_CID_train_Y.c"
+#include "../models/CID/model_20190107_CID_train_B2.c"
+#include "../models/CID/model_20190107_CID_train_Y2.c"
 
 //#include "../models/HCD/hcd_fast_B.c"
 //#include "../models/HCD/hcd_fast_Y.c"
 #include "../models/HCD/model_20190107_HCD_train_B.c"
 #include "../models/HCD/model_20190107_HCD_train_Y.c"
+#include "../models/HCD/model_20190107_HCD_train_B2.c"
+#include "../models/HCD/model_20190107_HCD_train_Y2.c"
 
 #include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
 #include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
@@ -116,6 +120,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
         }
     }
+    */
 
     // HCDch2
     else if (model_id == 7) {
@@ -128,7 +133,18 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
         }
     }
-    */
+
+    // CIDch2
+    else if (model_id == 8) {
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        int fnum = v[0]/(peplen-1);
+        for (i=0; i < peplen-1; i++) {
+            predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
+            predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
+            predictions[2*(peplen-1)+i] = score_CID_B2(v+1+(i*fnum))+0.5;
+            predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
+        }
+    }
 
     return predictions;
 }

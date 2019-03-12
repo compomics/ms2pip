@@ -27,7 +27,8 @@ MODELS = {
     'iTRAQ': {'id': 4, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
     'iTRAQphospho': {'id': 5, 'ion_types': ['B', 'Y'], 'peaks_version': 'general', 'features_version': 'normal'},
     #ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
-    #'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
+    'HCDch2': {'id': 7, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
+    'CIDch2': {'id': 8, 'ion_types': ['B', 'Y', 'B2', 'Y2'], 'peaks_version': 'ch2', 'features_version': 'normal'},
 }
 
 # Create A_MAP:

@@ -109,8 +109,10 @@ variable `mgf` in line 716 of `ms2pipC.py`.
 
 ### MS2PIP models
 Currently the following models are supported in MS2PIP:
-`HCD`, `CID`, `TTOF5600`, `TMT`, `iTRAQ` or
-`iTRAQphospho`. If you use MS2PIP for your research, always mention the MS2PIP-version and model-version you used.
+`HCD`, `CID`, `TTOF5600`, `TMT`, `iTRAQ`,
+`iTRAQphospho`, `HCDch2` and `CIDch2`. The last two "ch2" models also include predictions for doubly charged fragment ions (b++ and y++), next to the predictions for singly charged b- and y-ions. 
+
+If you use MS2PIP for your research, always mention the MS2PIP-version (see releases page) and model-version (see table below) you used.
 
 Model | Current version | Train-test dataset (unique peptides) | Evaluation dataset (unique peptides) | Median Pearson correlation on evaluation dataset
 -|-|-|-|-
@@ -120,6 +122,7 @@ iTRAQ | v20190107 | [NIST iTRAQ](https://chemdata.nist.gov/) (704 041) | [PXD001
 iTRAQphospho | v20190107 | [NIST iTRAQ phospho](https://chemdata.nist.gov/) (183 383) | [PXD001189](https://doi.org/10.1182/blood-2016-05-714048) (9 088) | 0.843898
 TMT | v20190107 | [Peng Lab TMT Spectral Library](https://doi.org/10.1021/acs.jproteome.8b00594) (1 185 547) | [PXD009495](https://doi.org/10.15252/msb.20188242) (36 137) | 0.950460
 TTOF5600 | v20190107 | [PXD000954](https://doi.org/10.1038/sdata.2014.31) (215 713) | [PXD001587](https://doi.org/10.1038/nmeth.3255) (15 111) | 0.746823
-
+HCDch2 | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786 (+) and 0.644162 (++)
+CIDch2 | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947 (+) and 0.813342 (++)
 
 To train custom MS2PIPc models, please refer to [Training new MS2PIP models](https://github.com/compomics/ms2pip_c/wiki/Training_new_MS2PIP_models) on our Wiki pages.
