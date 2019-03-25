@@ -1,4 +1,4 @@
-model=HCDch2
+model=HCD
 frag_error=0.02
 ptm=[1]Acetyl,42.010565,opt,T,Post-translational
 ptm=[1]Acetyl,42.010565,opt,N-term,Post-translational

@@ -5,6 +5,7 @@ import argparse
 import multiprocessing
 from random import shuffle
 import tempfile
+from scipy.stats import pearsonr
 
 # Third party
 import numpy as np
@@ -244,7 +245,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                     for mi, mp in enumerate(msms):
                         if (mp >= 125) & (mp <= 132):
                             peaks[mi] = 0
-
                 #remove percursor peak
                 #for mi, mp in enumerate(msms):
                 #   if (mp >= pepmass-0.02) & (mp <= pepmass+0.02):
@@ -280,7 +280,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                     #if ss == 0:
                     #   print("%s %i %i"%(title,ss,2*len(targets[0])))
                     #   dd
-
                     #3M
                     #targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
                     psmids.extend([title]*(len(targets[0])))
@@ -867,6 +866,8 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # PTMs are loaded the same as in Omega
     # This allows me to use the same C init() function in bot ms2ip and Omega
     (modfile, modfile2, PTMmap) = generate_modifications_file(params, MASSES, A_MAP)
+    print(modfile)
+    print(modfile2)
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
@@ -994,9 +995,8 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             sys.stdout.write('computing correlations...\n')
             correlations = calc_correlations(all_preds)
             correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
-            sys.stdout.write("median correlations: \n")
-            sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
-
+            #sys.stdout.write("median correlations: \n")
+            #sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
             sys.stdout.write("done! \n")
 
     # Only get the predictions
