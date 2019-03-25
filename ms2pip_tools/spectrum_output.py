@@ -101,8 +101,9 @@ def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
             numpeaks = len(preds)
 
             # Calculate mass from fragment ions
+            max_ionnumber = max([row[ionnumber_index] for row in preds])
             mass_b = [row[mz_index] for row in preds if row[ion_index] == 'B' and row[ionnumber_index] == 1][0]
-            mass_y = [row[mz_index] for row in preds if row[ion_index] == 'Y' and row[ionnumber_index] == numpeaks / 2][0]
+            mass_y = [row[mz_index] for row in preds if row[ion_index] == 'Y' and row[ionnumber_index] == max_ionnumber][0]
             pepmass = mass_b + mass_y - 2 * 1.007236
 
             out.append('Name: {}/{}\n'.format(sequence, charge))
