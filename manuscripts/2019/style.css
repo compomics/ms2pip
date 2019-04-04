@@ -1,0 +1,33 @@
+<link href="https://fonts.googleapis.com/css?family=Montserrat|Open+Sans|Raleway:700" rel="stylesheet">
+
+<style>
+	.rendered_html *:not(pre code) {
+      font-family: 'Open Sans', sans-serif;
+      color: #212121;
+	  /* margin-top: 0;
+	  margin-bottom: 1rem; */
+	}
+
+	.rendered_html h1, .rendered_html h2, .rendered_html h3, .rendered_html h4, .rendered_html h5, .rendered_html h6 {
+      font-family: 'Open Sans', sans-serif;
+      color: #212935;
+	  /* margin-top: 0;
+	  margin-bottom: 0.5rem; */
+	}
+
+	.rendered_html ul, .rendered_html ol{
+		margin-top: 0;
+	}
+
+	.rendered_html table * {
+		font-family: 'Calibri', sans-serif;
+ 		font-size: 14px;
+	}
+    .rendered_html table {
+        display: block;
+    }
+
+    .code_cell .run_this_cell {
+        display: none;
+    }
+</style>
