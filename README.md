@@ -102,6 +102,9 @@ which means that the second and fifth amino acid is modified with `Cam`,
 that there is an N-terminal modification `Ace`, and that there is a
 C-terminal modification `Glyloss`.
 
+In the `conversion_tools` folder, we provide a host of Python scripts
+to convert common search engine output files to a PEPREC file.
+
 The predictions are saved in a `.csv` file with the name
 `<peptide_file>_predictions.csv`.
 If you want the output to be in the form of an `.mgf` file, replace the
