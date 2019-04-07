@@ -5,9 +5,9 @@ It employs the XGBoost machine learning algorithm and is written in Python.
 You can install MS²PIP on your machine by following the [instructions below](https://github.com/compomics/ms2pip_c#installation) or the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended_install_instructions).
 For a more user friendly experience, we created a [web server](https://iomics.ugent.be/ms2pip)
 . There, you can easily upload a list of peptide sequences, after which the
-corresponding predicted MS² spectra can be downloaded in a CSV or MGF file
-format. The web server can also be contacted through the
-[REST API](https://iomics.ugent.be/ms2pip/api/).
+corresponding predicted MS² spectra can be downloaded in multiple file
+formats. The web server can also be contacted through the
+[RESTful API](https://iomics.ugent.be/ms2pip/api/).
 
 If you use MS²PIP for your research, please cite the following papers:
 - Degroeve, S., Maddelein, D., & Martens, L. (2015). MS²PIP prediction server:
