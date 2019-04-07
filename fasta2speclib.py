@@ -341,7 +341,7 @@ def run_batches(peprec, decoy=False):
                 write_mode=write_mode
             )
             """
-            
+
             logging.info("Writing MGF file with all peptides")
             write_mgf(
                 all_preds,
@@ -365,6 +365,7 @@ def run_batches(peprec, decoy=False):
             write_bibliospec(
                 all_preds,
                 peprec_batch,
+                params,
                 output_filename="{}".format(params['output_filename']),
                 write_mode=write_mode
             )
