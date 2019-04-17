@@ -30,7 +30,7 @@ def ms2pip_init(amino_masses_fname, modifications_fname, modifications_fname_spt
 
 def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
                np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
-               charge):
+               charge, ce):
 
     cdef unsigned int* results = get_v_ms2pip(len(peptide)-2, &peptide[0], &modpeptide[0], charge)
 
@@ -42,6 +42,7 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
         for j in range(fnum):
             v.append(results[j+1+offset])
         offset+=fnum
+        v.append(ce)
         r.append(np.array(v,dtype=np.uint16))
 
     return r

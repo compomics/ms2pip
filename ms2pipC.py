@@ -130,7 +130,11 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
     ms2pip_pyx.ms2pip_init(bytearray(afile.encode()), bytearray(modfile.encode()), bytearray(modfile2.encode()))
 
     # transform pandas datastructure into dictionary for easy access
-    specdict = data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
+    if "ce" in data.columns:
+        specdict = data[["spec_id", "peptide", "modifications","ce"]].set_index("spec_id").to_dict()
+        ces = specdict["ce"]
+    else:
+        specdict = data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
 
@@ -249,9 +253,16 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
 
                 if vector_file:
+                    colen = 0
+                    if "ce" in data.columns:                        
+                        try:
+                            colen = int(float(ces[title]))
+                        except:
+                            continue
+                        #if ces[title]==30.0: colen = 1
+                        #if ces[title]==35.0: colen = 2
                     psmids.extend([title]*(len(targets[0])))
-                    dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16))
-                    #dvectors.append(np.array(ms2pip_pyx.get_vector_catboost(peptide, modpeptide, charge), dtype=np.uint16))
+                    dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge, colen), dtype=np.uint16)) #SD: added collision energy
 
                     # Collecting targets to dict; works for variable number of ion types
                     # For C-term ion types (y, y++, z), flip the order of targets,
@@ -440,6 +451,8 @@ def get_feature_names_new():
         names.append("q2_%i_c"%t)
         names.append("q3_%i_c"%t)
         names.append("q4_%i_c"%t)
+        
+    names.append("ce")  
 
     return names
 

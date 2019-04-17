@@ -105,6 +105,8 @@ def load_data(vector_filename, ion_type):
 		exit(1)
 	print("{} contains {} feature vectors".format(args.vectors, len(vectors)))
 
+	#vectors = vectors[vectors["ce"]==2]
+
 	# Extract targets for given ion type
 	target_names = list(vectors.columns[vectors.columns.str.contains('targets')])
 	if not 'targets_{}'.format(ion_type) in target_names:
@@ -218,7 +220,9 @@ if __name__ == "__main__":
 
 	numf = len(train_vectors.columns.values)
 
+	print(train_vectors.head())
 	print(train_vectors.columns)
+	print(train_vectors["ce"].value_counts())
 
 	# Rename features to understand decision tree dump
 	train_vectors.columns = ['Feature' + str(i) for i in range(len(train_vectors.columns))]
@@ -249,10 +253,11 @@ if __name__ == "__main__":
 		"objective": "reg:linear",
 		"eval_metric": 'mae',
 		"silent": 1,
-		"eta": 0.7,
-		"max_depth": 7,
+		"eta": 0.5,
+		"max_depth": 9,
+		"grow_policy":"lossguide",
 		"min_child_weight": 10,
-		"gamma": 1,
+		"gamma": 0,
 		"subsample": 1,
 		# "colsample_bytree": 1,
 		# "max_delta_step": 0,

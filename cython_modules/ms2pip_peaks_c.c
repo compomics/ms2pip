@@ -17,6 +17,7 @@
 //#include "../models/HCD/hcd_fast_Y.c"
 #include "../models/HCD/model_20190107_HCD_train_B.c"
 #include "../models/HCD/model_20190107_HCD_train_Y.c"
+
 #include "../models/HCD/model_20190107_HCD_train_B2.c"
 #include "../models/HCD/model_20190107_HCD_train_Y2.c"
 
@@ -108,7 +109,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
         }
     }
     
-    /*
+    
     // EThcD
     else if (model_id == 6) {
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
@@ -120,7 +121,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
         }
     }
-    */
 
     // HCDch2
     else if (model_id == 7) {

@@ -25,13 +25,13 @@ def load_data(vector_filename, ion_type):
 
 	# Extract targets for given ion type
 	target_names = list(vectors.columns[vectors.columns.str.contains('targets')])
-	if not 'targets{}'.format(ion_type) in target_names:
+	if not 'targets_{}'.format(ion_type) in target_names:
 		print("Targets for {} could not be found in vector file.".format(ion_type))
 		print("Vector file only contains these targets: {}".format(target_names))
 		exit(1)
 
-	targets = vectors.pop('targets{}'.format(ion_type))
-	target_names.remove('targets{}'.format(ion_type))
+	targets = vectors.pop('targets_{}'.format(ion_type))
+	target_names.remove('targets_{}'.format(ion_type))
 	for n in target_names:
 		vectors.pop(n)
 
@@ -98,7 +98,7 @@ params['learning_rate'] = 0.8
 #params['sub_feature'] = 1
 params['num_leaves'] = 10
 #params['min_data'] = 50
-params['max_depth'] = 6
+params['max_depth'] = 3
 
 num_round = 50
 #lgb.cv(param, data, num_round, nfold=5)
