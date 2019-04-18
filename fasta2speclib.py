@@ -34,7 +34,7 @@ from Bio import SeqIO
 
 # MS2PIP
 from ms2pipC import run
-from ms2pip_tools.spectrum_output import write_mgf, write_msp
+from ms2pip_tools.spectrum_output import write_mgf, write_msp, write_bibliospec
 from ms2pip_tools.get_elude_predictions import get_elude_predictions
 
 
@@ -313,6 +313,7 @@ def run_batches(peprec, decoy=False):
             )
 
         if 'msp' in params['output_filetype']:
+            """
             logging.info("Writing MSP file with unmodified peptides")
             write_msp(
                 all_preds,
@@ -320,16 +321,18 @@ def run_batches(peprec, decoy=False):
                 output_filename="{}_unmodified".format(params['output_filename']),
                 write_mode=write_mode,
             )
+            """
 
             logging.info("Writing MSP file with all peptides")
             write_msp(
                 all_preds,
                 peprec_batch,
-                output_filename="{}_withmods".format(params['output_filename']),
+                output_filename="{}".format(params['output_filename']),
                 write_mode=write_mode,
             )
 
         if 'mgf' in params['output_filetype']:
+            """
             logging.info("Writing MGF file with unmodified peptides")
             write_mgf(
                 all_preds,
@@ -337,12 +340,33 @@ def run_batches(peprec, decoy=False):
                 output_filename="{}_unmodified".format(params['output_filename']),
                 write_mode=write_mode
             )
+            """
 
             logging.info("Writing MGF file with all peptides")
             write_mgf(
                 all_preds,
                 peprec=peprec_batch,
-                output_filename="{}_withmods".format(params['output_filename']),
+                output_filename="{}".format(params['output_filename']),
+                write_mode=write_mode
+            )
+
+        if 'bibliospec' in params['output_filetype']:
+            logging.info("Writing BiblioSpec SSL and MS2 files with unmodified peptides")
+            """
+            write_bibliospec(
+                all_preds,
+                peprec_batch[peprec_batch['modifications'] == '-'],
+                output_filename="{}_unmodified".format(params['output_filename']),
+                write_mode=write_mode
+            )
+            """
+
+            logging.info("Writing BiblioSpec SSL and MS2 files file with all peptides")
+            write_bibliospec(
+                all_preds,
+                peprec_batch,
+                params,
+                output_filename="{}".format(params['output_filename']),
                 write_mode=write_mode
             )
 

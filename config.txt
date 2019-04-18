@@ -1,14 +1,14 @@
 model=HCD
 frag_error=0.02
-
 ptm=PhosphoS,79.966331,opt,S
 ptm=PhosphoT,79.966331,opt,T
 ptm=PhosphoY,79.966331,opt,Y
 ptm=Oxidation,15.994915,opt,M
 ptm=Carbamidomethyl,57.021464,opt,C
+ptm=CAM,57.021464,opt,C
 ptm=Glu->pyro-Glu,-18.010565,opt,E
 ptm=Gln->pyro-Glu,-17.026549,opt,Q
-ptm=Pyro-carbamidomethyl,39.994915,opt,C
+ptm=Pyro-cmC,39.994915,opt,C
 ptm=Deamidated,0.984016,opt,N
 ptm=iTRAQ,144.102063,opt,N-term
 ptm=Acetyl,42.010565,opt,N-term

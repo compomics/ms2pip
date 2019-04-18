@@ -5,14 +5,16 @@ import argparse
 import multiprocessing
 from random import shuffle
 import tempfile
+from scipy.stats import pearsonr
 
 # Third party
 import numpy as np
 import pandas as pd
+from scipy.stats import pearsonr
 
 # From project
-from ms2pip_tools.spectrum_output import write_mgf, write_msp
-import cython_modules.ms2pip_pyx as ms2pip_pyx
+from app.ms2pip_c.ms2pip_tools.spectrum_output import write_mgf, write_msp
+import app.ms2pip_c.cython_modules.ms2pip_pyx as ms2pip_pyx
 
 
 # Models and their properties
@@ -106,8 +108,11 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
         # Predict the b- and y-ion intensities from the peptide
-        predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, ch, model_id, peaks_version)
-        prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
+        # For C-term ion types (y, y++, z), flip the order of predictions,
+        # because get_predictions follows order from vector file
+        # enumerate works for variable number (and all) ion types
+        predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
+        prediction_buf.append(np.array(predictions, dtype=np.float32))
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -117,7 +122,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     return mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf
 
 
-def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, modfile2, PTMmap, model, fragerror):
+def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, modfile2, PTMmap, model, fragerror, tableau):
     """
     Function for each worker to process a list of spectra. Each peptide's
     sequence is extracted from the mgf file. Then models are chosen based on
@@ -158,10 +163,15 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
     charge_buf = []
     pepid_buf = []
 
+    if tableau == True:
+        ft = open("ms2pip_tableau.%i"%worker_num,"w")
+        ft2 = open("stats_tableau.%i"%worker_num,"w")
+
     title = ""
     charge = 0
     msms = []
     peaks = []
+    pepmass = 0
     f = open(spec_file)
     skip = False
     pcount = 0
@@ -198,10 +208,15 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
             elif row[0] == "C":
                 if row[:6] == "CHARGE":
                     charge = int(row[7:9].replace("+", ""))
+            elif row[0] == "P":
+                if row[:7] == "PEPMASS":
+                    pepmass = float(row.split("=")[1].split(" ")[0])
             elif row[:8] == "END IONS":
                 # process current spectrum
                 if title not in peptides:
                     continue
+
+                #if title != "d.26625.26625.2.dta": continue
 
                 peptide = peptides[title]
                 peptide = peptide.replace("L", "I")
@@ -218,6 +233,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
 
                 modpeptide = apply_mods(peptide, mods, PTMmap)
+                #print(modpeptide)
                 if type(modpeptide) == str:
                     if modpeptide == "Unknown modification":
                         continue
@@ -233,12 +249,18 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                     for mi, mp in enumerate(msms):
                         if (mp >= 125) & (mp <= 132):
                             peaks[mi] = 0
+                #remove percursor peak
+                #for mi, mp in enumerate(msms):
+                #   if (mp >= pepmass-0.02) & (mp <= pepmass+0.02):
+                #       peaks[mi] = 0
 
                 # normalize and convert MS2 peaks
                 msms = np.array(msms, dtype=np.float32)
-                debug = False
+                debug = False #SD: had to change this...
+                #3M
+                tic = np.sum(peaks)
                 if not debug:
-                    peaks = peaks / np.sum(peaks)
+                    peaks = peaks / tic
                     peaks = np.log2(np.array(peaks) + 0.001)
                 peaks = np.array(peaks)
                 peaks = peaks.astype(np.float32)
@@ -246,11 +268,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 model_id = MODELS[model]['id']
                 peaks_version = MODELS[model]['peaks_version']
 
-                # get ion mzs
-                mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
-
-                # get targets
-                targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
 
                 if vector_file:
                     colen = 0
@@ -261,6 +278,22 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                             continue
                         #if ces[title]==30.0: colen = 1
                         #if ces[title]==35.0: colen = 2
+                    # get targets
+                    targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
+                    #print(targets[:2])
+                    #print(targets)
+                    #ss = 0
+                    #for v in targets[0]:
+                    #   if v != 0:
+                    #       ss +=1
+                    #for v in targets[1]:
+                    #   if v != 0:
+                    #       ss +=1
+                    #if ss == 0:
+                    #   print("%s %i %i"%(title,ss,2*len(targets[0])))
+                    #   dd
+                    #3M
+                    #targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
                     psmids.extend([title]*(len(targets[0])))
                     dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge, colen), dtype=np.uint16)) #SD: added collision energy
 
@@ -278,8 +311,81 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                                 dtargets[i] = [t]
                             else:
                                 dtargets[i] = [t[::-1]]
-
+                elif tableau:
+                    numby = 0
+                    numall = 0
+                    explainedby = 0
+                    explainedall = 0
+                    ts = []
+                    ps = []
+                    predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version)
+                    for m, p in zip(msms,peaks):
+                        ft.write("%s;%f;%f;;;0\n"%(title, m, 2**p))
+                    # get targets
+                    mzs, targets = ms2pip_pyx.get_targets_all(modpeptide, msms, peaks, float(fragerror), "all")
+                    # get mean by intensity values to normalize!; WRONG !!!
+                    maxt = 0.
+                    maxp = 0.
+                    it = 0
+                    for cion in [1, 2]:
+                        for ionnumber in range(len(modpeptide) - 3):
+                            for lion in ['a', 'b-h2o', 'b-nh3', 'b', 'c']:
+                                if (lion == "b") & (cion == 1):
+                                    if maxt < (2 ** targets[it]) - 0.001:
+                                        maxt = (2 ** targets[it]) - 0.001
+                                    if maxp < (2 ** predictions[0][ionnumber]) - 0.001:
+                                        maxp = (2 ** predictions[0][ionnumber]) - 0.001
+                                it += 1
+                    for cion in [1, 2]:
+                        for ionnumber in range(len(modpeptide) - 3):
+                            for lion in ['y-h2o', 'z', 'y', 'x']:
+                                if (lion == "y") & (cion == 1):
+                                    if maxt < (2 ** targets[it]) - 0.001:
+                                        maxt = (2 ** targets[it]) - 0.001
+                                    if maxp < (2 ** predictions[1][ionnumber]) - 0.001:
+                                        maxp = (2 ** predictions[1][ionnumber]) - 0.001
+                                it += 1
+                    #b
+                    it = 0
+                    for cion in [1, 2]:
+                        for ionnumber in range(len(modpeptide)-3):
+                            for lion in ['a', 'b-h2o', 'b-nh3', 'b', 'c']:
+                                if mzs[it] > 0:
+                                    numall += 1
+                                    explainedall += (2 ** targets[it]) - 0.001
+                                ft.write("%s;%f;%f;%s;%i;%i;1\n"%(title, mzs[it], (2 ** targets[it]) / maxt, lion, cion, ionnumber))
+                                if (lion == "b") & (cion == 1):
+                                    ts.append(targets[it])
+                                    ps.append(predictions[0][ionnumber])
+                                    if mzs[it] > 0:
+                                        numby += 1
+                                        explainedby += (2 ** targets[it]) - 0.001
+                                    ft.write("%s;%f;%f;%s;%i;%i;2\n"%(title, mzs[it], (2 ** (predictions[0][ionnumber])) / maxp, lion, cion, ionnumber))
+                                it += 1
+                    #y
+                    for cion in [1, 2]:
+                        for ionnumber in range(len(modpeptide) - 3):
+                            for lion in ['y-h2o', 'z', 'y', 'x']:
+                                if mzs[it] > 0:
+                                    numall += 1
+                                    explainedall += (2 ** targets[it]) - 0.001
+                                ft.write("%s;%f;%f;%s;%i;%i;1\n"%(title, mzs[it], (2 ** targets[it]) / maxt, lion, cion, ionnumber))
+                                if (lion == "y") & (cion == 1):
+                                    ts.append(targets[it])
+                                    ps.append(predictions[1][ionnumber])
+                                    if mzs[it] > 0:
+                                        numby += 1
+                                        explainedby += (2 ** targets[it]) - 0.001
+                                    ft.write("%s;%f;%f;%s;%i;%i;2\n"%(title, mzs[it], (2 ** (predictions[1][ionnumber])) / maxp, lion, cion, ionnumber))
+                                it+=1
+                    ft2.write("%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"%(title, len(modpeptide) - 2, len(msms), tic, pearsonr(ts,ps)[0], numby, numall, explainedby, explainedall, float(numby) / (2 * (len(peptide) - 3)), float(numall)/(18 * (len(peptide) - 3))))
                 else:
+                    # get targets
+                    targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
+
+                    #3M
+                    #targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
+
                     # Predict the b- and y-ion intensities from the peptide
                     pepid_buf.append(title)
                     peplen_buf.append(len(peptide) - 2)
@@ -292,6 +398,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                     target_buf.append([np.array(t, dtype=np.float32) for t in targets])
 
                     predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version)
+                    #print(predictions)
                     prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
                 pcount += 1
@@ -300,6 +407,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                     sys.stdout.flush()
 
     f.close()
+    if tableau == True:
+        ft.close()
+        ft2.close()
 
     if vector_file:
         # If num_cpu > number of spectra, dvectors can be empty
@@ -418,7 +528,7 @@ def get_feature_names_catboost():
     return names
 
 def get_feature_names_new():
-    num_props = 4
+    num_props = 5
     names = ["peplen", "charge"]
     for t in range(5):
         names.append("charge"+str(t))
@@ -574,7 +684,6 @@ def apply_mods(peptide, mods, PTMmap):
     """
     modpeptide = np.array(peptide[:], dtype=np.uint16)
 
-
     if mods != "-":
         l = mods.split("|")
         for i in range(0, len(l), 2):
@@ -641,18 +750,22 @@ def generate_modifications_file(params, MASSES, A_MAP):
         if l[2] == 'opt':
             if l[3] == "N-term":
                 pbuffer.append([tmpf, -1, ptmnum])
-                PTMmap[l[0]] = ptmnum
+                PTMmap[l[0].lower()] = ptmnum
+                #PTMmap[l[0]] = ptmnum
                 ptmnum += 1
                 continue
             if l[3] == "C-term":
                 pbuffer.append([tmpf, -2, ptmnum])
-                PTMmap[l[0]] = ptmnum
+                PTMmap[l[0].lower()] = ptmnum
+                #PTMmap[l[0]] = ptmnum
                 ptmnum += 1
                 continue
             if not l[3] in A_MAP:
                 continue
             pbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
-            PTMmap[l[0]] = ptmnum
+            PTMmap[l[0].lower()] = ptmnum
+            #print("%i %s"%(ptmnum,l[0]))
+            #PTMmap[l[0]] = ptmnum
             ptmnum += 1
 
     f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
@@ -679,10 +792,10 @@ def peakcount(x):
 
 
 def calc_correlations(df):
-    correlations = df.groupby(['spec_id', 'charge', 'ion'])[['target', 'prediction']].corr().iloc[::2]['prediction']
+    correlations = df.groupby(['spec_id'])[['target', 'prediction']].corr().iloc[::2]['prediction']
     correlations.index = correlations.index.droplevel(3)
     correlations = correlations.to_frame().reset_index()
-    correlations.columns = ['spec_id', 'charge', 'ion', 'pearsonr']
+    correlations.columns = ['spec_id', 'pearsonr']
     return correlations
 
 
@@ -698,13 +811,15 @@ def argument_parser():
                         help="write feature vectors to FILE.{pkl,h5} (optional)")
     parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
                         default="23", help="number of cpu's to use")
+    parser.add_argument('-t', action='store_true', default=False, dest='tableau',
+                    help='create Tableau Reader file')
     args = parser.parse_args()
 
     if not args.config_file:
         print("Please provide a configfile (-c)!")
         exit(1)
 
-    return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu))
+    return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu), args.tableau)
 
 
 def print_logo():
@@ -720,7 +835,7 @@ def print_logo():
 
 
 def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None,
-        output_filename=None, datasetname=None, return_results=False, limit=None):
+        output_filename=None, datasetname=None, return_results=False, limit=None, tableau=False):
     # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
     # If not specified, get parameters from config_file
@@ -764,6 +879,8 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # PTMs are loaded the same as in Omega
     # This allows me to use the same C init() function in bot ms2ip and Omega
     (modfile, modfile2, PTMmap) = generate_modifications_file(params, MASSES, A_MAP)
+    print(modfile)
+    print(modfile2)
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge
@@ -806,14 +923,14 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
                 spec_file,
                 vector_file,
                 data[data["spec_id"].isin(tmp)],
-                afile, modfile, modfile2, PTMmap, model, fragerror)
+                afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
             """
             results.append(myPool.apply_async(process_spectra, args=(
                 i,
                 spec_file,
                 vector_file,
                 data[data["spec_id"].isin(tmp)],
-                afile, modfile, modfile2, PTMmap, model, fragerror)))
+                afile, modfile, modfile2, PTMmap, model, fragerror, tableau)))
             #"""
         myPool.close()
         myPool.join()
@@ -891,9 +1008,8 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             sys.stdout.write('computing correlations...\n')
             correlations = calc_correlations(all_preds)
             correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
-            sys.stdout.write("median correlations: \n")
-            sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
-
+            #sys.stdout.write("median correlations: \n")
+            #sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
             sys.stdout.write("done! \n")
 
     # Only get the predictions
@@ -976,9 +1092,9 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
 def main():
     print_logo()
-    pep_file, spec_file, vector_file, config_file, num_cpu = argument_parser()
+    pep_file, spec_file, vector_file, config_file, num_cpu, tableau = argument_parser()
     params = load_configfile(config_file)
-    run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu)
+    run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu, tableau=tableau)
 
 
 if __name__ == "__main__":

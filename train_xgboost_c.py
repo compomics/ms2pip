@@ -204,7 +204,8 @@ if __name__ == "__main__":
 
 	print("Loading train and test data...")
 	vectors, targets, psmids = load_data(args.vectors, args.type)
-
+	
+	
 	print("Splitting up into train and test set...")
 	upeps = psmids.unique()
 	np.random.shuffle(upeps)
@@ -213,11 +214,24 @@ if __name__ == "__main__":
 	train_vectors = vectors[~psmids.isin(test_psms)]
 	train_targets = targets[~psmids.isin(test_psms)]
 	train_psmids = psmids[~psmids.isin(test_psms)]
+	
+	#train_targets.hist(bins=50)
+	#plt.show()
 
 	test_vectors = vectors[psmids.isin(test_psms)]
 	test_targets = targets[psmids.isin(test_psms)]
 	test_psmids = psmids[psmids.isin(test_psms)]
 
+	"""
+	train_vectors = train_vectors[train_targets > 0]
+	train_psmids = train_psmids[train_targets > 0]
+	train_targets = np.log2(train_targets[train_targets > 0])
+	test_vectors = test_vectors[test_targets > 0]
+	test_psmids = test_psmids[test_targets > 0]
+	test_targets = np.log2(test_targets[test_targets > 0])
+	train_targets = [1 if x==0 else 0 for x in train_targets]
+	test_targets = [1 if x==0 else 0 for x in test_targets]
+	"""
 	numf = len(train_vectors.columns.values)
 
 	print(train_vectors.head())
@@ -251,7 +265,9 @@ if __name__ == "__main__":
 	params = {
 		"nthread": int(args.num_cpu),
 		"objective": "reg:linear",
+		#"objective": "binary:logistic",
 		"eval_metric": 'mae',
+		#"eval_metric": 'aucpr',
 		"silent": 1,
 		"eta": 0.5,
 		"max_depth": 9,
@@ -259,6 +275,7 @@ if __name__ == "__main__":
 		"min_child_weight": 10,
 		"gamma": 0,
 		"subsample": 1,
+		#"lambda" : 2,
 		# "colsample_bytree": 1,
 		# "max_delta_step": 0,
 	}
@@ -280,6 +297,7 @@ if __name__ == "__main__":
 
 	print("Training XGBoost model...")
 	bst = xgb.train(params, xtrain, int(args.num_trees), evallist, early_stopping_rounds=10, maximize=False)
+	#bst = xgb.train(params, xtrain, int(args.num_trees), evallist, num_rounds=10, maximize=False)
 
 	bst.save_model("{}.xgboost".format(filename))
 
