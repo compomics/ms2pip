@@ -13,8 +13,8 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 # From project
-from app.ms2pip_c.ms2pip_tools.spectrum_output import write_mgf, write_msp
-import app.ms2pip_c.cython_modules.ms2pip_pyx as ms2pip_pyx
+from ms2pip_tools.spectrum_output import write_mgf, write_msp
+import cython_modules.ms2pip_pyx as ms2pip_pyx
 
 
 # Models and their properties
