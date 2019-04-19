@@ -562,7 +562,7 @@ def get_feature_names_new():
         names.append("q3_%i_c"%t)
         names.append("q4_%i_c"%t)
         
-    names.append("ce")  
+    names.append("ce")
 
     return names
 

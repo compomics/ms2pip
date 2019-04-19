@@ -11,8 +11,8 @@
 //#include "../models/CID/model_20190107_CID_train_B.c"
 //#include "../models/CID/model_20190107_CID_train_Y.c"
 
-#include "../models/HCD/pkl_B_4deep.c"
-#include "../models/HCD/pkl_Y_4deep.c"
+#include "../models/HCD/pkl_B_9deep.c"
+#include "../models/HCD/pkl_Y_9deep.c"
 
 //#include "../models/HCD/model_20190107_HCD_train_B.c"
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
@@ -83,80 +83,11 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
-			pred = 1./(1+exp(-1*score_B_zero(v+1+(i*fnum))+0.5));
-			if (pred < 0.2) {
-				predictions[0*(peplen-1)+i] = 0.;
-			}
-			else {
-				pred = 1./(1+exp(-1*score_B_one(v+1+(i*fnum))+0.5));
-				if (pred > 0.9) {
-					predictions[0*(peplen-1)+i] = 1.;
-				}
-				else {
-					predictions[0*(peplen-1)+i] = pow(2,score_B_left(v+1+(i*fnum))+0.5);
-				}
-			}
-			pred = 1./(1+exp(-1*score_Y_zero(v+1+(i*fnum))+0.5));
-			if (pred < 0.2) {
-				predictions[2*(peplen-1)-i-1] = 0.;
-			}
-			else {
-				pred = 1./(1+exp(-1*score_Y_one(v+1+(i*fnum))+0.5));
-				if (pred > 0.9) {
-					predictions[2*(peplen-1)-i-1] = 1.;
-				}
-				else {
-					predictions[2*(peplen-1)-i-1] = pow(2,score_Y_left(v+1+(i*fnum))+0.5);
-				}
-			}			
-            //predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
-            //predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
+            predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
+            predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
         }
     }
-    // HCD
-    if (model_id == 1) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-        int fnum = v[0]/(peplen-1);
-        for (i=0; i < peplen-1; i++) {
-			pred = 1./(1+exp(-1*score_B_zero(v+1+(i*fnum))+0.5));
-			if (pred < 0.2) {
-				predictions[0*(peplen-1)+i] = 0.;
-			}
-			else {
-				pred = 1./(1+exp(-1*score_B_one(v+1+(i*fnum))+0.5));
-				if (pred > 0.9) {
-					predictions[0*(peplen-1)+i] = 1.;
-				}
-				else {
-					predictions[0*(peplen-1)+i] = pow(2,score_B_left(v+1+(i*fnum))+0.5);
-				}
-			}
-			pred = 1./(1+exp(-1*score_Y_zero(v+1+(i*fnum))+0.5));
-			if (pred < 0.2) {
-				predictions[2*(peplen-1)-i-1] = 0.;
-			}
-			else {
-				pred = 1./(1+exp(-1*score_Y_one(v+1+(i*fnum))+0.5));
-				if (pred > 0.9) {
-					predictions[2*(peplen-1)-i-1] = 1.;
-				}
-				else {
-					predictions[2*(peplen-1)-i-1] = pow(2,score_Y_left(v+1+(i*fnum))+0.5);
-				}
-			}			
-        }
-    }
-    /*
-    // HCD
-    if (model_id == 1) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-        int fnum = v[0]/(peplen-1);
-        for (i=0; i < peplen-1; i++) {
-            predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
-            predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
-        }
-    }
-
+	/*
     // TTOF5600
     else if (model_id == 2) {
         unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
