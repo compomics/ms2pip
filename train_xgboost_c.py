@@ -270,7 +270,7 @@ if __name__ == "__main__":
 		#"eval_metric": 'aucpr',
 		"silent": 1,
 		"eta": 0.5,
-		"max_depth": 9,
+		"max_depth": 4,
 		"grow_policy":"lossguide",
 		"min_child_weight": 10,
 		"gamma": 0,

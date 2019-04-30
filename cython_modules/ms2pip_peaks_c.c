@@ -1,3 +1,5 @@
+#define only_HCD 1
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,47 +10,47 @@
 #include "ms2pip_features_c_catboost.c"
 
 // Import models
-//#include "../models/CID/model_20190107_CID_train_B.c"
-//#include "../models/CID/model_20190107_CID_train_Y.c"
-
 #include "../models/HCD/pkl_B_4deep.c"
 #include "../models/HCD/pkl_Y_4deep.c"
-
 //#include "../models/HCD/model_20190107_HCD_train_B.c"
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
 
-//#include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
-//#include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
-
-//#include "../models/TMT/model_20190107_TMT_train_B.c"
-//#include "../models/TMT/model_20190107_TMT_train_Y.c"
-
-//#include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
-//#include "../models/iTRAQ/model_20190107_iTRAQ_train_Y.c"
-
-//#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_B.c"
-//#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_Y.c"
-
-//#include "../models/HCD/modelB2.c"
-//#include "../models/HCD/modelY2.c"
-
-//#include "../models/TTOF5600/TTOF5600_consensus_B.c"
-//#include "../models/TTOF5600/TTOF5600_consensus_Y.c"
-
-//#include "../models/TMT/tmt_human_consensus_train_100trees_b.c"
-//#include "../models/TMT/tmt_human_consensus_train_100trees_y.c"
-
-//#include "../models/iTRAQ/vectors_train_h5B_iTRAQ_c.c"
-//#include "../models/iTRAQ/vectors_train_h5Y_iTRAQ_c.c"
-
-//#include "../models/iTRAQphospho/vectors_train_h5B_iTRAQphospho_c.c"
-//#include "../models/iTRAQphospho/vectors_train_h5Y_iTRAQphospho_c.c"
-
-//#include "../models/EThcD/SyntheticEThcD_SCO100_B.c"
-//#include "../models/EThcD/SyntheticEThcD_SCO100_Y.c"
-//#include "../models/EThcD/SyntheticEThcD_SCO100_C.c"
-//#include "../models/EThcD/SyntheticEThcD_SCO100_Z.c"
-
+#if only_HCD != 1
+	#include "../models/CID/model_20190107_CID_train_B.c"
+	#include "../models/CID/model_20190107_CID_train_Y.c"
+	
+	#include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
+	#include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
+	
+	#include "../models/TMT/model_20190107_TMT_train_B.c"
+	#include "../models/TMT/model_20190107_TMT_train_Y.c"
+	
+	#include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
+	#include "../models/iTRAQ/model_20190107_iTRAQ_train_Y.c"
+	
+	#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_B.c"
+	#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_Y.c"
+	
+	#include "../models/HCD/modelB2.c"
+	#include "../models/HCD/modelY2.c"
+	
+	#include "../models/TTOF5600/TTOF5600_consensus_B.c"
+	#include "../models/TTOF5600/TTOF5600_consensus_Y.c"
+	
+	#include "../models/TMT/tmt_human_consensus_train_100trees_b.c"
+	#include "../models/TMT/tmt_human_consensus_train_100trees_y.c"
+	
+	#include "../models/iTRAQ/vectors_train_h5B_iTRAQ_c.c"
+	#include "../models/iTRAQ/vectors_train_h5Y_iTRAQ_c.c"
+	
+	#include "../models/iTRAQphospho/vectors_train_h5B_iTRAQphospho_c.c"
+	#include "../models/iTRAQphospho/vectors_train_h5Y_iTRAQphospho_c.c"
+	
+	#include "../models/EThcD/SyntheticEThcD_SCO100_B.c"
+	#include "../models/EThcD/SyntheticEThcD_SCO100_Y.c"
+	#include "../models/EThcD/SyntheticEThcD_SCO100_C.c"
+	#include "../models/EThcD/SyntheticEThcD_SCO100_Z.c"
+#endif
 
 float membuffer[10000];
 float ions[2000]; 
@@ -67,9 +69,18 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
     int i;
     float pred;
 
+    // HCD
+    if (model_id == 1) {
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge, ce);
+        int fnum = v[0]/(peplen-1);
+        for (i=0; i < peplen-1; i++) {
+            predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
+            predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
+        }
+    }
+#if only_HCD != 1
     // CID
-    /*
-    if (model_id == 0) {
+    else if (model_id == 0) {
         unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
@@ -77,17 +88,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
         }
     }
-	*/
-    // HCD
-    if (model_id == 1) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge, ce);
-        int fnum = v[0]/(peplen-1);
-        for (i=0; i < peplen-1; i++) {
-            predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
-            predictions[2*(peplen-1)-i-1] = score_Y(v+1+(i*fnum))+0.5;
-        }
-    }
-	/*
     // TTOF5600
     else if (model_id == 2) {
         unsigned int* v = get_v_ms2pip_old(peplen, peptide, modpeptide, charge);
@@ -151,8 +151,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
             predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
         }
     }
-    */
-
+#endif
     return predictions;
 }
 
