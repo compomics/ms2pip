@@ -122,10 +122,10 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
             v[fnum++] = props_buffer[(int)(0.75*(peplen-i-1))];
             v[fnum++] = props_buffer[peplen-i-2];
         }
-    }
     if (ce > 0) {
 		v[fnum++] = ce;
 	}
+    }
     v[0] = fnum-1;
     return v;
 }
