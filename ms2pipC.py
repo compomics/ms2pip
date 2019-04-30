@@ -69,7 +69,11 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     pepid_buf = []
 
     # transform pandas dataframe into dictionary for easy access
-    specdict = data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
+    if "ce" in data.columns:
+        specdict = data[["spec_id", "peptide", "modifications","charge","ce"]].set_index("spec_id").to_dict()
+        ces = specdict["ce"]
+    else:
+        specdict = data[["spec_id", "peptide", "modifications","charge"]].set_index("spec_id").to_dict()
     pepids = data['spec_id'].tolist()
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
@@ -80,6 +84,10 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         peptide = peptides[pepid]
         peptide = peptide.replace("L", "I")
         mods = modifications[pepid]
+        
+        colen = 0
+        if "ce" in data.columns:
+           colen=ces[pepid]
 
         # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
         if len(peptide) > 100:
@@ -111,8 +119,8 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         # For C-term ion types (y, y++, z), flip the order of predictions,
         # because get_predictions follows order from vector file
         # enumerate works for variable number (and all) ion types
-        predictions = ms2pipfeatures_pyx.get_predictions(peptide, modpeptide, ch)
-        prediction_buf.append(np.array(predictions, dtype=np.float32))
+        predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, ch, model_id, peaks_version, colen) #SD: added colen
+        prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -145,13 +153,11 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 
     # cols contains the names of the computed features
     cols_n = get_feature_names_new()
+    if "ce" in data.columns:                        
+        cols_n.append("ce")
     #cols_n = get_feature_names_catboost()
 
-    #for ti,tt in enumerate(names):
-    #   print("%i %s"%(ti+1,tt))
-
     #SD
-    # dresults = []
     dvectors = []
     dtargets = dict()
     psmids = []
@@ -221,7 +227,8 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 peptide = peptides[title]
                 peptide = peptide.replace("L", "I")
                 mods = modifications[title]
-                #SD
+                
+                #SD (peptide not correct, just skip)
                 if "mut" in mods:
                     continue
 
@@ -233,7 +240,6 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
 
                 modpeptide = apply_mods(peptide, mods, PTMmap)
-                #print(modpeptide)
                 if type(modpeptide) == str:
                     if modpeptide == "Unknown modification":
                         continue
@@ -256,44 +262,25 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 
                 # normalize and convert MS2 peaks
                 msms = np.array(msms, dtype=np.float32)
-                debug = False #SD: had to change this...
-                #3M
                 tic = np.sum(peaks)
-                if not debug:
-                    peaks = peaks / tic
-                    peaks = np.log2(np.array(peaks) + 0.001)
-                peaks = np.array(peaks)
+                peaks = peaks / tic
+                peaks = np.log2(np.array(peaks) + 0.001)
                 peaks = peaks.astype(np.float32)
 
                 model_id = MODELS[model]['id']
                 peaks_version = MODELS[model]['peaks_version']
 
+                colen = 0
+                if "ce" in data.columns:                        
+                    try:
+                        colen = int(float(ces[title]))
+                    except:
+                        sys.stderr.write("Could not parse collision energy!\n")
+                        continue
 
                 if vector_file:
-                    colen = 0
-                    if "ce" in data.columns:                        
-                        try:
-                            colen = int(float(ces[title]))
-                        except:
-                            continue
-                        #if ces[title]==30.0: colen = 1
-                        #if ces[title]==35.0: colen = 2
-                    # get targets
+                    # get targetsd
                     targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
-                    #print(targets[:2])
-                    #print(targets)
-                    #ss = 0
-                    #for v in targets[0]:
-                    #   if v != 0:
-                    #       ss +=1
-                    #for v in targets[1]:
-                    #   if v != 0:
-                    #       ss +=1
-                    #if ss == 0:
-                    #   print("%s %i %i"%(title,ss,2*len(targets[0])))
-                    #   dd
-                    #3M
-                    #targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
                     psmids.extend([title]*(len(targets[0])))
                     dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge, colen), dtype=np.uint16)) #SD: added collision energy
 
@@ -380,25 +367,17 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                                 it+=1
                     ft2.write("%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"%(title, len(modpeptide) - 2, len(msms), tic, pearsonr(ts,ps)[0], numby, numall, explainedby, explainedall, float(numby) / (2 * (len(peptide) - 3)), float(numall)/(18 * (len(peptide) - 3))))
                 else:
-                    # get targets
-                    targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
-
-                    #3M
-                    #targets = (np.array(targets[:2])/np.max(np.array(targets[:2]))) #SD: max norm should work better!!
-
                     # Predict the b- and y-ion intensities from the peptide
                     pepid_buf.append(title)
                     peplen_buf.append(len(peptide) - 2)
                     charge_buf.append(charge)
 
                     # get/append ion mzs, targets and predictions
+                    targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
+                    target_buf.append([np.array(t, dtype=np.float32) for t in targets])
                     mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
                     mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
-
-                    target_buf.append([np.array(t, dtype=np.float32) for t in targets])
-
-                    predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version)
-                    #print(predictions)
+                    predictions = ms2pip_pyx.get_predictions(peptide, modpeptide, charge, model_id, peaks_version, colen) #SD: added colen
                     prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
                 pcount += 1
@@ -528,7 +507,7 @@ def get_feature_names_catboost():
     return names
 
 def get_feature_names_new():
-    num_props = 5
+    num_props = 4
     names = ["peplen", "charge"]
     for t in range(5):
         names.append("charge"+str(t))
@@ -562,8 +541,6 @@ def get_feature_names_new():
         names.append("q3_%i_c"%t)
         names.append("q4_%i_c"%t)
         
-    names.append("ce")
-
     return names
 
 
@@ -750,22 +727,22 @@ def generate_modifications_file(params, MASSES, A_MAP):
         if l[2] == 'opt':
             if l[3] == "N-term":
                 pbuffer.append([tmpf, -1, ptmnum])
-                PTMmap[l[0].lower()] = ptmnum
-                #PTMmap[l[0]] = ptmnum
+                #PTMmap[l[0].lower()] = ptmnum
+                PTMmap[l[0]] = ptmnum
                 ptmnum += 1
                 continue
             if l[3] == "C-term":
                 pbuffer.append([tmpf, -2, ptmnum])
-                PTMmap[l[0].lower()] = ptmnum
-                #PTMmap[l[0]] = ptmnum
+                #PTMmap[l[0].lower()] = ptmnum
+                PTMmap[l[0]] = ptmnum
                 ptmnum += 1
                 continue
             if not l[3] in A_MAP:
                 continue
             pbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
-            PTMmap[l[0].lower()] = ptmnum
+            #PTMmap[l[0].lower()] = ptmnum
             #print("%i %s"%(ptmnum,l[0]))
-            #PTMmap[l[0]] = ptmnum
+            PTMmap[l[0]] = ptmnum
             ptmnum += 1
 
     f = tempfile.NamedTemporaryFile(delete=False, mode='wb')
@@ -879,8 +856,6 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
     # PTMs are loaded the same as in Omega
     # This allows me to use the same C init() function in bot ms2ip and Omega
     (modfile, modfile2, PTMmap) = generate_modifications_file(params, MASSES, A_MAP)
-    print(modfile)
-    print(modfile2)
 
     # read peptide information
     # the file contains the columns: spec_id, modifications, peptide and charge

@@ -1,5 +1,5 @@
-   // Compute feature vectors from peptide
-unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
+// Compute feature vectors from peptide
+unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int ce)
     {
     int i,j,k;
 
@@ -123,6 +123,9 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
             v[fnum++] = props_buffer[peplen-i-2];
         }
     }
+    if (ce > 0) {
+		v[fnum++] = ce;
+	}
     v[0] = fnum-1;
     return v;
 }

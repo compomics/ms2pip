@@ -11,8 +11,8 @@
 //#include "../models/CID/model_20190107_CID_train_B.c"
 //#include "../models/CID/model_20190107_CID_train_Y.c"
 
-#include "../models/HCD/pkl_B_9deep.c"
-#include "../models/HCD/pkl_Y_9deep.c"
+#include "../models/HCD/pkl_B_4deep.c"
+#include "../models/HCD/pkl_Y_4deep.c"
 
 //#include "../models/HCD/model_20190107_HCD_train_B.c"
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
@@ -62,7 +62,7 @@ struct annotations{
 typedef struct annotations annotations;
  
 //compute feature vector from peptide + predict intensities
-float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id)
+float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id, int ce)
     {
     int i;
     float pred;
@@ -80,7 +80,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	*/
     // HCD
     if (model_id == 1) {
-        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+        unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge, ce);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
             predictions[0*(peplen-1)+i] = score_B(v+1+(i*fnum))+0.5;
