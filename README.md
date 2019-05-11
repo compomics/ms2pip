@@ -1,4 +1,8 @@
 # MS²PIP
+[![GitHub release](https://img.shields.io/github/release-pre/compomics/ms2pip_c.svg)](https://github.com/compomics/ms2pip_c/releases)
+[![Build Status](https://travis-ci.org/compomics/ms2pip_c.svg?branch=dev)](https://travis-ci.org/compomics/ms2pip_c)
+[![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+
 MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
 It employs the XGBoost machine learning algorithm and is written in Python.
 
@@ -9,7 +13,11 @@ corresponding predicted MS² spectra can be downloaded in a CSV or MGF file
 format. The web server can also be contacted through the
 [REST API](https://iomics.ugent.be/ms2pip/api/).
 
-If you use MS²PIP for your research, please cite the following papers:
+If you use MS²PIP for your research, please cite the following articles:
+- Gabriels, R., Martens, L., & Degroeve, S. (2019). Updated MS²PIP web server
+delivers fast and accurate MS² peak intensity prediction for multiple
+fragmentation methods, instruments and labeling techniques. Nucleic Acids
+Research https://doi.org/10.1093/nar/gkz299
 - Degroeve, S., Maddelein, D., & Martens, L. (2015). MS²PIP prediction server:
 compute and visualize MS² peak intensity predictions for CID and HCD
 fragmentation. Nucleic Acids Research, 43(W1), W326–W330.
@@ -23,14 +31,11 @@ Please also take note of and mention the MS2PIP-version and [model-version](#ms2
 ## Installation
 Download the [latest release](https://github.com/compomics/ms2pip_c/releases/latest)
 and unzip. MS2PIPc runs on Python 3.5 or greater and the required Python packages are listed
-in `requirements.txt`. MS2PIPc requires machine specific compilation of the
-C-code:
+in `requirements.txt`. Install MS²PIP using pip:
 ```
-sh compile.sh
+pip install .
 ```
-Check out the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended_install_instructions)
-for a more detailed explanation.
-
+For development, add the `--editable` argument to the pip install command.
 
 ## Predicting MS2 peak intensities
 MS2PIPc comes with pre-trained models for a variety of fragmentation methods and
@@ -40,7 +45,7 @@ providing a list of peptides in the form of a [PEPREC file](https://github.com/c
 
 ### MS2PIPc command line interface
 ```
-usage: ms2pipC.py [-h] [-c FILE] [-s FILE] [-w FILE] [-m INT] <peptide file>
+usage: ms2pip [-h] [-c FILE] [-s FILE] [-w FILE] [-m INT] <peptide file>
 
 positional arguments:
   <peptide file>  list of peptides
