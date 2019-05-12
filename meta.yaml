@@ -14,7 +14,7 @@ build:
     - ms2pip=ms2pip.__main__:main
 
 requirements:
-  host:
+  build:
     - python 3.7
     - numpy >=1.15
     - Cython >=0.29.2
@@ -27,7 +27,6 @@ requirements:
     - matplotlib >=3.0.2
     - pyteomics >=3.5.1
     - biopython >=1.72
-
 
 #test:
 #  commands:
