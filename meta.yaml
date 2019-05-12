@@ -1,0 +1,46 @@
+{% set data = load_setup_py_data() %}
+
+package:
+  name: ms2pip
+  version: {{ data.get('version') }}
+
+source:
+  path: ./
+
+build:
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --ignore-installed -vv"
+  entry_points:
+    - ms2pip=ms2pip.__main__:main
+
+requirements:
+  host:
+    - python 3.7
+    - numpy >=1.15
+    - Cython >=0.29.2
+  run:
+    - python 3.7
+    - numpy >=1.15
+    - Cython >=0.29.2
+    - pandas >=0.23.4
+    - scipy >=1.1.0
+    - matplotlib >=3.0.2
+    - pyteomics >=3.5.1
+    - biopython >=1.72
+
+
+#test:
+#  commands:
+#    - python setup.py test
+
+about:
+  home: "{{ data.get('url') }}"
+  license: APACHE
+  license_file: LICENSE
+  summary: "{{ data.get('description') }}"
+
+extra:
+  identifiers:
+    - doi:10.1093/nar/gkz299
+    - doi:10.1093/nar/gkv542
+    - doi:10.1093/bioinformatics/btt544

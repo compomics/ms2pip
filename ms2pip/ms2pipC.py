@@ -12,7 +12,7 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 # From project
-from ms2pip.ms2pip_tools.spectrum_output import write_mgf, write_msp
+from ms2pip.ms2pip_tools import spectrum_output
 from ms2pip.cython_modules import ms2pip_pyx
 
 
@@ -86,7 +86,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         colen = 0
         if "ce" in data.columns:
-           colen=ces[pepid]
+            colen=ces[pepid]
 
         # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
         if len(peptide) > 100:
@@ -798,17 +798,6 @@ def argument_parser():
     return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu), args.tableau)
 
 
-def print_logo():
-    logo = """
- _____ _____ ___ _____ _____ _____
-|     |   __|_  |  _  |     |  _  |
-| | | |__   |  _|   __|-   -|   __|
-|_|_|_|_____|___|__|  |_____|__|
-           """
-    print(logo)
-    print("by sven.degroeve@ugent.be\n")
-
-
 def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None,
         output_filename=None, datasetname=None, return_results=False, limit=None, tableau=False):
     # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
@@ -1048,12 +1037,12 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
         mgf = False  # Set to True to write spectrum as MGF file
         if mgf:
             print("writing MGF file {}_predictions.mgf...".format(output_filename))
-            write_mgf(all_preds, peprec=data, output_filename=output_filename)
+            spectrum_output.write_mgf(all_preds, peprec=data, output_filename=output_filename)
 
         msp = False  # Set to True to write spectra as MSP file
         if msp:
             print("writing MSP file {}_predictions.msp...".format(output_filename))
-            write_msp(all_preds, data, output_filename=output_filename)
+            spectrum_output.write_msp(all_preds, data, output_filename=output_filename)
 
         if not return_results:
             sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
@@ -1061,14 +1050,3 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
             sys.stdout.write("done!\n")
         else:
             return all_preds
-
-
-def main():
-    print_logo()
-    pep_file, spec_file, vector_file, config_file, num_cpu, tableau = argument_parser()
-    params = load_configfile(config_file)
-    run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu, tableau=tableau)
-
-
-if __name__ == "__main__":
-    main()
