@@ -30,12 +30,15 @@ Please also take note of and mention the MS2PIP-version and [model-version](#ms2
 
 ## Installation
 Download the [latest release](https://github.com/compomics/ms2pip_c/releases/latest)
-and unzip. MS2PIPc runs on Python 3.5 or greater and the required Python packages are listed
-in `requirements.txt`. Install MS²PIP using pip:
+and unzip. MS2PIPc runs on Python 3.5 or greater. Build and install with Conda:
 ```
-pip install .
+conda build . -c bioconda
+conda install ms2pip --use-local
 ```
-For development, add the `--editable` argument to the pip install command.
+For development, use pip to install an editable version:
+```
+pip install --editable .
+```
 
 ## Predicting MS2 peak intensities
 MS2PIPc comes with pre-trained models for a variety of fragmentation methods and
