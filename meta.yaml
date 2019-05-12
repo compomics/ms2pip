@@ -14,11 +14,11 @@ build:
     - ms2pip=ms2pip.__main__:main
 
 requirements:
-  host:
+  build:
     - python 3.7
     - numpy >=1.15
     - Cython >=0.29.2
-  build:
+  host:
     - python 3.7
     - numpy >=1.15
     - Cython >=0.29.2
