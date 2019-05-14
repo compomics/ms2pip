@@ -10,10 +10,19 @@
 #include "ms2pip_features_c_catboost.c"
 
 // Import models
-#include "../models/HCD/pkl_B_4deep.c"
-#include "../models/HCD/pkl_Y_4deep.c"
+//#include "../models/HCD/pkl_B_4deep.c"
+//#include "../models/modelGBM_B.c"
+//#include "../models/HCD/pkl_Y_4deep.c"
+//#include "../models/merged_500_Y.c"
 //#include "../models/HCD/model_20190107_HCD_train_B.c"
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
+
+//#include "../models/TMT/model_20190107_TMT_train_B.c"
+//#include "../models/TMT/model_20190107_TMT_train_Y.c"
+
+#include "../models/TMT/tmt_human_mouse_sven_15_B.c"
+#include "../models/TMT/tmt_human_mouse_sven_20_Y.c"
+
 
 #if only_HCD != 1
 	#include "../models/CID/model_20190107_CID_train_B.c"
@@ -74,8 +83,8 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
         unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge, ce);
         int fnum = v[0]/(peplen-1);
         for (i=0; i < peplen-1; i++) {
-            predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
-            predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
+            predictions[0*(peplen-1)+i] = (((float)score_TMT_B(v+1+(i*fnum)))/1000)+0.5;
+            predictions[2*(peplen-1)-i-1] = (((float)score_TMT_Y(v+1+(i*fnum)))/1000)+0.5;
         }
     }
 #if only_HCD != 1

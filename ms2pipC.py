@@ -222,7 +222,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
                 if title not in peptides:
                     continue
 
-                #if title != "d.26625.26625.2.dta": continue
+                #if title != "human_229988": continue
 
                 peptide = peptides[title]
                 peptide = peptide.replace("L", "I")
@@ -510,7 +510,7 @@ def get_feature_names_new():
     num_props = 4
     names = ["peplen", "charge"]
     for t in range(5):
-        names.append("charge"+str(t))
+        names.append("charge"+str(t)) 
     for t in range(num_props):
         names.append("qmin_%i"%t)
         names.append("q1_%i"%t)
@@ -518,7 +518,7 @@ def get_feature_names_new():
         names.append("q3_%i"%t)
         names.append("qmax_%i"%t)
     names.append("len_n")
-    names.append("len_c")
+    names.append("len_c")#29
 
     for a in ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'M',
               'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']:
@@ -541,6 +541,9 @@ def get_feature_names_new():
         names.append("q3_%i_c"%t)
         names.append("q4_%i_c"%t)
         
+    #for i in range(len(names)):
+    #    print("%i %s"%(i+1,names[i]))
+
     return names
 
 
@@ -1067,6 +1070,7 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 
 def main():
     print_logo()
+    get_feature_names_new()
     pep_file, spec_file, vector_file, config_file, num_cpu, tableau = argument_parser()
     params = load_configfile(config_file)
     run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu, tableau=tableau)

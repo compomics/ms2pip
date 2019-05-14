@@ -23,6 +23,8 @@ def load_data(vector_filename, ion_type):
 		exit(1)
 	print("{} contains {} feature vectors".format(args.vectors, len(vectors)))
 
+	#vectors = vectors.sample(frac=0.3)
+
 	# Extract targets for given ion type
 	target_names = list(vectors.columns[vectors.columns.str.contains('targets')])
 	if not 'targets_{}'.format(ion_type) in target_names:
@@ -37,6 +39,9 @@ def load_data(vector_filename, ion_type):
 
 	# Get psmids
 	psmids = vectors.pop('psmid')
+	
+	#vectors = vectors.astype(int)
+	#print(vectors.dtypes)
 
 	return(vectors, targets, psmids)
 
@@ -71,7 +76,7 @@ vectors, targets, psmids = load_data(args.vectors, args.type)
 print("Splitting up into train and test set...")
 upeps = psmids.unique()
 np.random.shuffle(upeps)
-test_psms = upeps[:int(len(upeps) * 0.3)]
+test_psms = upeps[:int(len(upeps) * 0.2)]
 
 train_vectors = vectors[~psmids.isin(test_psms)]
 train_targets = targets[~psmids.isin(test_psms)]
@@ -87,6 +92,9 @@ test_psmids = psmids[psmids.isin(test_psms)]
 
 print(train_vectors.shape)
 print("Creating LightGBM datastructures...")
+
+print(train_vectors.dtypes)
+
 data = lgb.Dataset(train_vectors, label=train_targets)
 datatest = lgb.Dataset(test_vectors, label=test_targets)
 sys.stderr.write('loading data done\n')
@@ -94,13 +102,13 @@ sys.stderr.write('loading data done\n')
 params = {}
 params['objective'] = 'regression'
 params['metric'] = 'l1'
-params['learning_rate'] = 0.8
+params['learning_rate'] = 0.4
 #params['sub_feature'] = 1
-params['num_leaves'] = 10
-#params['min_data'] = 50
-params['max_depth'] = 3
+params['num_leaves'] = 100
+params['min_data'] = 50
+params['max_depth'] = 32
 
-num_round = 50
+num_round = 10
 #lgb.cv(param, data, num_round, nfold=5)
 bst = lgb.train(params, data, num_round, valid_sets=[datatest])
 		
@@ -124,7 +132,7 @@ def parseOneTree(root, index, array_type='double', return_type='double'):
 			return 'if ( ' + condition + ' ) { ' + left + ' } else { ' + right + ' }'
 	return return_type + ' predictTree' + str(index) + '(' + array_type + ' arr) { ' + ifElse(root) + ' }'
 
-def parseAllTrees(trees, array_type='unsigend int*', return_type='float'):
+def parseAllTrees(trees, array_type='unsigned int*', return_type='float'):
 	return '\n\n'.join([parseOneTree(tree['tree_structure'], idx, array_type, return_type) for idx, tree in enumerate(trees)]) \
 		+ '\n\n' + return_type + ' score_Y(' + array_type + ' arr) { ' \
 		+ 'return ' + ' + '.join(['predictTree' + str(i) + '(arr)' for i in range(len(trees))]) + ';' \

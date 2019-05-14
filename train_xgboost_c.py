@@ -209,7 +209,7 @@ if __name__ == "__main__":
 	print("Splitting up into train and test set...")
 	upeps = psmids.unique()
 	np.random.shuffle(upeps)
-	test_psms = upeps[:int(len(upeps) * 0.3)]
+	test_psms = upeps[:int(len(upeps) * 0.2)]
 
 	train_vectors = vectors[~psmids.isin(test_psms)]
 	train_targets = targets[~psmids.isin(test_psms)]
@@ -234,9 +234,6 @@ if __name__ == "__main__":
 	"""
 	numf = len(train_vectors.columns.values)
 
-	print(train_vectors.head())
-	print(train_vectors.columns)
-	print(train_vectors["ce"].value_counts())
 
 	# Rename features to understand decision tree dump
 	train_vectors.columns = ['Feature' + str(i) for i in range(len(train_vectors.columns))]
@@ -270,10 +267,11 @@ if __name__ == "__main__":
 		#"eval_metric": 'aucpr',
 		"silent": 1,
 		"eta": 0.5,
-		"max_depth": 4,
+		"max_depth": 9,
 		"grow_policy":"lossguide",
-		"min_child_weight": 10,
-		"gamma": 0,
+		"max_leaves":100,
+		"min_child_weight": 50,
+		"gamma": 0.1,
 		"subsample": 1,
 		#"lambda" : 2,
 		# "colsample_bytree": 1,
@@ -296,8 +294,8 @@ if __name__ == "__main__":
 		print("Using best parameters: {}".format(best_params))
 
 	print("Training XGBoost model...")
-	bst = xgb.train(params, xtrain, int(args.num_trees), evallist, early_stopping_rounds=10, maximize=False)
-	#bst = xgb.train(params, xtrain, int(args.num_trees), evallist, num_rounds=10, maximize=False)
+	#bst = xgb.train(params, xtrain, int(args.num_trees), evallist, early_stopping_rounds=10, maximize=False)
+	bst = xgb.train(params, xtrain, int(args.num_trees), evallist, maximize=False)
 
 	bst.save_model("{}.xgboost".format(filename))
 
