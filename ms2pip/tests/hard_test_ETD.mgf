@@ -1,0 +1,24 @@
+BEGIN IONS
+TITLE=peptide1
+CHARGE=2
+PEPMASS=475.137295 # just summed each amino acid mass
+72.044440 101 # b1
+89.070980 103 # c1
+132.03503 304 # z1
+148.06048 302 # y1
+175.05362 201 # b2
+192.08017 203 # c2
+247.06197 204 # z2
+263.08742 202 # y2
+290.08056 301 # b3
+307.10711 303 # c3
+350.07116 104 # z3
+366.09661 102 # y3
+END IONS
+# looked up on http://db.systemsbiology.net:8080/proteomicsToolkit/FragIonServlet.html
+# y2 and all z-ions are subtracted with 1 (1 proton)
+# Result in vector file should look like this:
+#      b   y   c   z
+#     101 102 103 104
+#     201 202 203 204
+#     301 302 303 304
