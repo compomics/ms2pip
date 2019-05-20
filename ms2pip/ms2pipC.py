@@ -85,7 +85,8 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 		peptide = peptide.replace("L", "I")
 		mods = modifications[pepid]
 
-		colen = 0
+		# TODO: Check if 30 is good default CE!
+		colen = 30
 		if "ce" in data.columns:
 			colen = ces[pepid]
 
@@ -268,7 +269,9 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 				model_id = MODELS[model]['id']
 				peaks_version = MODELS[model]['peaks_version']
 
-				colen = 0
+				# TODO: Check if 30 is good default CE!
+				# RG: removed `if ce == 0` in get_vector, split up into two functions 
+				colen = 30
 				if "ce" in data.columns:
 					try:
 						colen = int(float(ces[title]))
@@ -280,7 +283,10 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 					# get targetsd
 					targets = ms2pip_pyx.get_targets(modpeptide, msms, peaks, float(fragerror), peaks_version)
 					psmids.extend([title]*(len(targets[0])))
-					dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge, colen), dtype=np.uint16)) #SD: added collision energy
+					if "ce" in data.columns:
+						dvectors.append(np.array(ms2pip_pyx.get_vector_ce(peptide, modpeptide, charge, colen), dtype=np.uint16)) #SD: added collision energy
+					else:
+						dvectors.append(np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16))
 
 					# Collecting targets to dict; works for variable number of ion types
 					# For C-term ion types (y, y++, z), flip the order of targets,
@@ -396,16 +402,11 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 	if vector_file:
 		# If num_cpu > number of spectra, dvectors can be empty
 		if dvectors:
-			# Temporary: until new features are incorporated into other models
 			# Concatenating dvectors into a 2D ndarray before making DataFrame saves lots of memory!
-			if model in ['HCD', 'HCDch2', 'HCDTMT']:
+			if len(dvectors) > 1:
 				dvectors = np.concatenate(dvectors)
-				df = pd.DataFrame(dvectors, columns=cols_n, dtype=np.uint16, copy=False)
-			else:
-				if len(dvectors) > 1:
-					dvectors = np.concatenate(dvectors)
-				df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
-				df.columns = df.columns.astype(str)
+			df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
+			df.columns = df.columns.astype(str)
 		else:
 			df = pd.DataFrame()
 		return psmids, df, dtargets

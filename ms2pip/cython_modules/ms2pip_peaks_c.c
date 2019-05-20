@@ -1,4 +1,4 @@
-#define compile_HCD 0
+#define compile_HCD_ce 0
 #define compile_TMT 0
 #define compile_ALL 1
 
@@ -8,6 +8,7 @@
 
 #include "ms2pip_init_c.c"
 #include "ms2pip_features_c_general.c"
+#include "ms2pip_features_c_ce.c"
 #include "ms2pip_features_c_old.c"
 #include "ms2pip_features_c_catboost.c"
 
@@ -19,9 +20,9 @@
 //#include "../models/HCD/model_20190107_HCD_train_B.c"
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
 
-#if compile_HCD == 1
-	#include "../models/TMT/model_20190107_TMT_train_B.c"
-	#include "../models/TMT/model_20190107_TMT_train_Y.c"
+#if compile_HCD_ce == 1
+	#include "../models/HCD/pkl_B_9deep.c"
+	#include "../models/HCD/pkl_Y_9deep.c"
 #endif
 
 #if compile_TMT == 1
@@ -32,16 +33,17 @@
 #if compile_ALL == 1
 	#include "../models/CID/model_20190107_CID_train_B.c"
 	#include "../models/CID/model_20190107_CID_train_Y.c"
+
+	#include "../models/HCD/model_20190107_HCD_train_B.c"
+	#include "../models/HCD/model_20190107_HCD_train_Y.c"
+	#include "../models/HCD/model_20190107_HCD_train_B2.c"
+	#include "../models/HCD/model_20190107_HCD_train_Y2.c"
 	
 	#include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
 	#include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
-	
-	//Previous models
-	//#include "../models/TMT/model_20190107_TMT_train_B.c"
-	//#include "../models/TMT/model_20190107_TMT_train_Y.c"
-	//New models (with integer intensities)
-	#include "../models/TMT/tmt_human_mouse_sven_15_B.c"
-	#include "../models/TMT/tmt_human_mouse_sven_20_Y.c"
+
+	#include "../models/TMT/model_20190107_TMT_train_B.c"
+	#include "../models/TMT/model_20190107_TMT_train_Y.c"
 
 	#include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
 	#include "../models/iTRAQ/model_20190107_iTRAQ_train_Y.c"
@@ -67,10 +69,10 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	int i;
 	float pred;
 
-#if compile_HCD == 1
-	// HCD
+#if compile_HCD_ce == 1
+	// HCD with collision energy
 	if (model_id == 1) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge, ce);
+		unsigned int* v = get_v_ms2pip_ce(peplen, peptide, modpeptide, charge, ce);
 		int fnum = v[0]/(peplen-1);
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
@@ -79,7 +81,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 #endif
 #if compile_TMT == 1
-	// TMT
+	// TMT with integer intentities
 	if (model_id == 3) {
 		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
 		int fnum = v[0]/(peplen-1);
@@ -103,7 +105,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 
 	// HCD
 	if (model_id == 1) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge, ce);
+		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
 		int fnum = v[0]/(peplen-1);
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
@@ -142,16 +144,16 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 	
 	// EThcD
-	if (model_id == 6) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_EThcD_Y(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)+i] = score_EThcD_C(v+1+(i*fnum))+0.5;
-			predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
-		}
-	}
+	//if (model_id == 6) {
+	//	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+	//	int fnum = v[0]/(peplen-1);
+	//	for (i=0; i < peplen-1; i++) {
+	//		predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;
+	//		predictions[2*(peplen-1)-i-1] = score_EThcD_Y(v+1+(i*fnum))+0.5;
+	//		predictions[2*(peplen-1)+i] = score_EThcD_C(v+1+(i*fnum))+0.5;
+	//		predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
+	//	}
+	//}
 
 	// HCDch2
 	if (model_id == 7) {

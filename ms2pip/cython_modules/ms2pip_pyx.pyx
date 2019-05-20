@@ -14,7 +14,8 @@ cdef extern from "ms2pip_peaks_c.c":
 
 	void init_ms2pip(char* amino_masses_fname, char* modifications_fname, char* modifications_fname_sptm)
 	
-	unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int ce)
+	unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
+	unsigned int* get_v_ms2pip_ce(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int ce)
 	unsigned int* get_v_ms2pip_old(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	unsigned int* get_v_ms2pip_catboost(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 
@@ -30,16 +31,15 @@ cdef extern from "ms2pip_peaks_c.c":
 	float* get_t_ms2pip_ch2(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
 
 
-
 def ms2pip_init(amino_masses_fname, modifications_fname, modifications_fname_sptm):
 	init_ms2pip(amino_masses_fname, modifications_fname, modifications_fname_sptm)
 
 
 def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 			   np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
-			   charge, ce):
+			   charge):
 
-	cdef unsigned int* results = get_v_ms2pip(len(peptide)-2, &peptide[0], &modpeptide[0], charge, ce)
+	cdef unsigned int* results = get_v_ms2pip(len(peptide)-2, &peptide[0], &modpeptide[0], charge)
 
 	r = []
 	offset = 0
@@ -52,6 +52,26 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 		r.append(np.array(v,dtype=np.uint16))
 
 	return r
+
+
+def get_vector_ce(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
+			   np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
+			   charge, ce):
+
+	cdef unsigned int* results = get_v_ms2pip_ce(len(peptide)-2, &peptide[0], &modpeptide[0], charge, ce)
+
+	r = []
+	offset = 0
+	fnum = results[0]/(len(peptide)-3)
+	for i in range(len(peptide)-3):
+		v = []
+		for j in range(fnum):
+			v.append(results[j+1+offset])
+		offset+=fnum
+		r.append(np.array(v,dtype=np.uint16))
+
+	return r
+
 
 def get_vector_catboost(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 						np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
