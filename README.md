@@ -1,6 +1,6 @@
 # MS²PIP
 [![GitHub release](https://img.shields.io/github/release-pre/compomics/ms2pip_c.svg)](https://github.com/compomics/ms2pip_c/releases)
-[![Build Status](https://travis-ci.org/compomics/ms2pip_c.svg?branch=dev)](https://travis-ci.org/compomics/ms2pip_c)
+[![Build Status](https://travis-ci.org/compomics/ms2pip_c.svg?branch=master)](https://travis-ci.org/compomics/ms2pip_c)
 [![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
