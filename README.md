@@ -9,9 +9,9 @@ It employs the XGBoost machine learning algorithm and is written in Python.
 You can install MS²PIP on your machine by following the [instructions below](https://github.com/compomics/ms2pip_c#installation) or the [extended install instructions](https://github.com/compomics/ms2pip_c/wiki/Extended_install_instructions).
 For a more user friendly experience, we created a [web server](https://iomics.ugent.be/ms2pip)
 . There, you can easily upload a list of peptide sequences, after which the
-corresponding predicted MS² spectra can be downloaded in a CSV or MGF file
-format. The web server can also be contacted through the
-[REST API](https://iomics.ugent.be/ms2pip/api/).
+corresponding predicted MS² spectra can be downloaded in multiple file
+formats. The web server can also be contacted through the
+[RESTful API](https://iomics.ugent.be/ms2pip/api/).
 
 If you use MS²PIP for your research, please cite the following articles:
 - Gabriels, R., Martens, L., & Degroeve, S. (2019). Updated MS²PIP web server
@@ -26,7 +26,7 @@ https://doi.org/10.1093/nar/gkv542
 prediction. Bioinformatics (Oxford, England), 29(24), 3199–203.
 https://doi.org/10.1093/bioinformatics/btt544
 
-Please also take note of and mention the MS2PIP-version and [model-version](#ms2pip-models) you used.
+Please also take note of and mention the MS²PIP-version and [model-version](#mspip-models) you used.
 
 ## Installation
 Download the [latest release](https://github.com/compomics/ms2pip_c/releases/latest)
@@ -65,7 +65,7 @@ optional arguments:
 Several MS2PIPc options need to be set in this config file.
 
 The models that should be used are set as `model=X` where X is one of the
-currently supported MS2PIP models (see [MS2PIP Models](#ms2pip-models)).
+currently supported MS²2PIP models (see [MS²PIP Models](#mspip-models)).
 
 The fragment ion error tolerance is set as `frag_error=X` where is X is
 the tolerance in Da.
@@ -110,18 +110,22 @@ which means that the second and fifth amino acid is modified with `Cam`,
 that there is an N-terminal modification `Ace`, and that there is a
 C-terminal modification `Glyloss`.
 
+In the `conversion_tools` folder, we provide a host of Python scripts
+to convert common search engine output files to a PEPREC file.
+
 The predictions are saved in a `.csv` file with the name
 `<peptide_file>_predictions.csv`.
 If you want the output to be in the form of an `.mgf` file, replace the
 variable `mgf` in line 716 of `ms2pipC.py`.
 
-### MS2PIP models
-Currently the following models are supported in MS2PIP:
+### MS²PIP models
+Currently the following models are supported in MS²PIP:
 `HCD`, `CID`, `TTOF5600`, `TMT`, `iTRAQ`,
 `iTRAQphospho`, `HCDch2` and `CIDch2`. The last two "ch2" models also include predictions for doubly charged fragment ions (b++ and y++), next to the predictions for singly charged b- and y-ions. 
 
-If you use MS2PIP for your research, always mention the MS2PIP-version (see releases page) and model-version (see table below) you used.
+If you use MS²PIP for your research, always mention the MS²PIP-version (see releases page) and model-version (see table below) you used.
 
+#### Models, version numbers, and the train and test datasets used to create each model
 Model | Current version | Train-test dataset (unique peptides) | Evaluation dataset (unique peptides) | Median Pearson correlation on evaluation dataset
 -|-|-|-|-
 HCD | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786
@@ -132,5 +136,19 @@ TMT | v20190107 | [Peng Lab TMT Spectral Library](https://doi.org/10.1021/acs.jp
 TTOF5600 | v20190107 | [PXD000954](https://doi.org/10.1038/sdata.2014.31) (215 713) | [PXD001587](https://doi.org/10.1038/nmeth.3255) (15 111) | 0.746823
 HCDch2 | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786 (+) and 0.644162 (++)
 CIDch2 | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947 (+) and 0.813342 (++)
+
+#### MS² acquisition information and peptide properties of the models' training datasets
+For optimal results, your experimental data should match the properties of the MS²PIP model.
+
+Model |	Fragmentation method	| MS² mass analyzer	| Peptide properties
+-|-|-|-
+HCD	| HCD	| Orbitrap |	Tryptic digest
+CID |	CID	| Linear ion trap	| Tryptic digest
+iTRAQ |	HCD	| Orbitrap |	Tryptic digest, iTRAQ-labeled
+iTRAQphospho |	HCD |	Orbitrap |	Tryptic digest, iTRAQ-labeled, enriched for phosphorylation
+TMT	| HCD	| Orbitrap	| Tryptic digest, TMT-labeled
+TTOF5600 |	CID	| Quadrupole Time-of-Flight	| Tryptic digest
+HCDch2	| HCD	| Orbitrap |	Tryptic digest
+CIDch2 |	CID	| Linear ion trap	| Tryptic digest
 
 To train custom MS2PIPc models, please refer to [Training new MS2PIP models](https://github.com/compomics/ms2pip_c/wiki/Training_new_MS2PIP_models) on our Wiki pages.
