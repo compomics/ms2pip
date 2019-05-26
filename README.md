@@ -9,7 +9,11 @@ corresponding predicted MS² spectra can be downloaded in multiple file
 formats. The web server can also be contacted through the
 [RESTful API](https://iomics.ugent.be/ms2pip/api/).
 
-If you use MS²PIP for your research, please cite the following papers:
+If you use MS²PIP for your research, please cite the following articles:
+- Gabriels, R., Martens, L., & Degroeve, S. (2019). Updated MS²PIP web server
+delivers fast and accurate MS² peak intensity prediction for multiple
+fragmentation methods, instruments and labeling techniques. Nucleic Acids
+Research https://doi.org/10.1093/nar/gkz299
 - Degroeve, S., Maddelein, D., & Martens, L. (2015). MS²PIP prediction server:
 compute and visualize MS² peak intensity predictions for CID and HCD
 fragmentation. Nucleic Acids Research, 43(W1), W326–W330.
