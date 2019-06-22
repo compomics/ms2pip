@@ -131,7 +131,12 @@ def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
 
             out.append('MS2PIP_ID="{}"'.format(spec_id))
 
-            out.append('\nNum peaks: {}\n'.format(numpeaks))
+            out.append('\nCharge: {}\n'.format(charge))
+
+            if add_rt:
+                out.append('RetentionTimeMins: {}\n'.format(peprec_sel[rt_index] * 60))
+
+            out.append('Num peaks: {}\n'.format(numpeaks))
 
             lines = list(zip(
                 [row[mz_index] for row in preds],
