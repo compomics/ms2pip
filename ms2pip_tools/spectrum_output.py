@@ -134,7 +134,7 @@ def write_msp(all_preds_in, peprec_in, output_filename, write_mode='wt+'):
             out.append('\nCharge: {}\n'.format(charge))
 
             if add_rt:
-                out.append('RetentionTimeMins: {}\n'.format(peprec_sel[rt_index] * 60))
+                out.append('RetentionTimeMins: {}\n'.format(peprec_sel[rt_index] / 60))
 
             out.append('Num peaks: {}\n'.format(numpeaks))
 
