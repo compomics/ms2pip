@@ -9,6 +9,13 @@ corresponding predicted MS² spectra can be downloaded in multiple file
 formats. The web server can also be contacted through the
 [RESTful API](https://iomics.ugent.be/ms2pip/api/).
 
+To generate a predicted spectral library starting from a FASTA file, we developed
+a pipeline called [fasta2speclib](https://github.com/compomics/ms2pip_c/blob/releases/fasta2speclib_config.md).
+Usage of this pipeline is described in
+[fasta2speclib_config.md](https://github.com/compomics/ms2pip_c/blob/releases/fasta2speclib_config.md).
+Fasta2speclib was developed in collaboration with the [ProGenTomics](http://www.progentomics.ugent.be/)
+group for the [MS²PIP for DIA](https://github.com/brvpuyve/MS2PIP-for-DIA) project.
+
 If you use MS²PIP for your research, please cite the following articles:
 - Gabriels, R., Martens, L., & Degroeve, S. (2019). Updated MS²PIP web server
 delivers fast and accurate MS² peak intensity prediction for multiple
