@@ -1,4 +1,13 @@
-# fasta2speclib configuration info
+# fasta2speclib: generate MS²PIP-predicted spectral libraries
+The fasta2speclib pipeline allows you to generate an MS²PIP-predicted spectral library, starting from a FASTA file. Multiple parameters to adjust the comprehensiveness of the spectral library can be set in a JSON config file, such as digestion enzyme, precursor charges, modifications... The pipeline also allows you to easily create a predicted decoy spectral library (currently by reversing digested peptide sequences). All information on the usage of fasta2speclib and its parameters is listed below.
+
+To use fasta2speclib, the installation of MS²PIP (and optionally of Elude, which is included with [Percolator](https://github.com/percolator/percolator/releases)) is required. Instructions on how to install MS²PIP are detailed in the [Extended Install Instructions](https://github.com/compomics/ms2pip_c/wiki/Extended_install_instructions). However, specific input formats (such as PEPREC) are not required for fasta2speclib, only a protein/proteome FASTA file.
+
+fasta2speclib makes use of the [Biopython (Cock et al.)](https://doi.org/10.1093/bioinformatics/btp163) library to read the FASTA file and of [Pyteomics (Levitsky et al.)](https://doi.org/10.1021/acs.jproteome.8b00717) for the in silico protein digestion. If you use fasta2speclib and MS²PIP for your research please cite:
+>Gabriels, R., Martens, L., Degroeve, S. (2019). **Updated MS²PIP web server delivers fast and accurate MS² peak intensity prediction for multiple fragmentation methods, instruments and labeling techniques.** *Nucleic Acids Research* doi: https://doi.org/10.1093/nar/gkz299
+
+fasta2speclib was first described in:
+>Van Puyvelde, B.\*, Willems, S.\*, Gabriels, R.\*, Daled, S., De Clerck, L., Staes, A., Impens, F., Deforce, D., Martens, L., Degroeve, S., Dhaenens, M.§ (2019). **The future of peptide-centric Data-Independent Acquisition is predicted.** *bioRxiv* 681429 doi: https://doi.org/10.1101/681429
 
 ## fasta2speclib arguments
 ```
