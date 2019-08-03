@@ -48,71 +48,101 @@ providing a list of peptides in the form of a [PEPREC file](https://github.com/c
 
 ### MS2PIPc command line interface
 ```
-usage: ms2pip [-h] [-c FILE] [-s FILE] [-w FILE] [-m INT] <peptide file>
+usage: ms2pip [-h] [-c CONFIG_FILE] [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
+              [-t] [-m NUM_CPU]
+              <PEPREC file>
 
 positional arguments:
-  <peptide file>  list of peptides
+  <PEPREC file>             list of peptides
 
 optional arguments:
-  -h, --help      show this help message and exit
-  -c FILE         config file (by default config.txt)
-  -s FILE         .mgf MS2 spectrum file (optional)
-  -w FILE         write feature vectors to FILE.{pkl,h5} (optional)
-  -m INT          number of cpu's to use
+  -h, --help                show this help message and exit
+  -c CONFIG_FILE            config file (by default config.txt)
+  -s MGF_FILE               .mgf MS2 spectrum file (optional)
+  -w FEATURE_VECTOR_OUTPUT  write feature vectors to FILE.{pkl,h5} (optional)
+  -t                        create Tableau Reader file
+  -m NUM_CPU                number of cpu's to use
 ```
 
 ### Config file
 Several MS2PIPc options need to be set in this config file.
-
-The models that should be used are set as `model=X` where X is one of the
+- The models that should be used are set as `model=X` where X is one of the
 currently supported MS²2PIP models (see [MS²PIP Models](#mspip-models)).
-
-The fragment ion error tolerance is set as `frag_error=X` where is X is
-the tolerance in Da.
-
-PTMs (see further) are set as `ptm=X,Y,opt,Z` for each internal PTM
-where X is a string that represents the PTM, Y is the difference in Da
-associated with the PTM, opt is a required for compatibility with
-other CompOmics projects, and Z is the amino acid that is modified by the PTM.
-For N- and C-terminal modifications, Z should be `N-term` or `C-term`,
-respectively.
+- The fragment ion error tolerance is set as `frag_error=X` where is X is the
+tolerance in Da.
+- PTMs (see further) are set as `ptm=X,Y,opt,Z` for each internal PTM where X is
+a string that represents the PTM, Y is the difference in Da associated with the
+PTM, opt is a required for compatibility with other CompOmics projects, and Z
+is the amino acid IAA) that is modified by the PTM. For N- and C-terminal
+modifications, Z should be `N-term` or `C-term`, respectively.
 
 
-### PEPREC file
-To apply the pre-trained models you need to pass *only* a `<peptide file>`
-to `ms2pipC.py`. This file contains the peptide sequences for which you
-want to predict the b- and y-ion peak intensities. The file is space
-separated and contains four columns with the following header names:
+### Input files
+#### PEPREC file
+To apply the pre-trained models you need to pass *only* a `<PEPREC file>` to
+MS2PIPc. This file contains the peptide sequences for which you want to predict
+peak intensities. The file is space separated and contains at least the
+following four columns:
 
-- `spec_id`: an id for the peptide/spectrum
-- `modifications`: a string indicating the modified amino acids
-- `peptide`: the unmodified amino acid sequence
-- `charge`: charge state to predict
+- `spec_id`: unique id (string) for the peptide/spectrum. This must match the
+TITLE field in the corresponding MGF file, if given.
+- `modifications`: Amino acid modifications for the given peptide. Every
+modification is listed as `location|name`, separated by a pipe (`|`) between the
+location, the name, and other modifications. `location` is an integer counted
+starting at `1` for the first AA. `0` is reserved for N-terminal modifications,
+`-1` for C-terminal modifications. `name` has to correspond to a modification
+listed in the [Config file](#config-file). Unmodified peptides are marked with
+a hyphen (`-`).
+- `peptide`: the unmodified amino acid sequence.
+- `charge`: precursor charge state as an integer (without `+`).
 
-The *spec_id* column is a unique identifier for each peptide that will
-be used in the TITLE field of the predicted MS2 `.mgf` file. The
-`modifications` column is a string that lists the PTMs in the peptide.
-Each PTM is written as `A|B` where A is the location of the PTM in the
-peptide (the first amino acid has location 1, location 0 is used for
-n-term modifications, while -1 is used for c-term modifications) and B
-is a string that represent the PTM as defined in the config file (`-c`
-command line argument). Multiple PTMs in the `modifications` column are
-concatenated with '|'.
-
-As an example, suppose the config file contains the line
-```
-ptm=Cam,57.02146,opt,C
-ptm=Ace,42.010565,opt,N-term
-ptm=Glyloss,-58.005479,opt,C-term
-```
-then a modifications string could like `0|Ace|2|Cam|5|Cam|-1|Glyloss`
-which means that the second and fifth amino acid is modified with `Cam`,
-that there is an N-terminal modification `Ace`, and that there is a
-C-terminal modification `Glyloss`.
+Peptides must be strictly longer than 2 and shorter than 100 amino acids and
+cannot contain the following amino acid one-letter codes: B, J, O, U, X or Z.
+Peptides not fulfilling these requirements will be filtered out and will not be
+reported in the output.
 
 In the `conversion_tools` folder, we provide a host of Python scripts
 to convert common search engine output files to a PEPREC file.
 
+
+#### MGF file (optional)
+Optionally, an MGF file with measured spectra can be passed to MS2PIPc. In this
+case, MS2PIPc will calculate correlations between the measured and predicted
+peak intensities. Make sure that the PEPREC `spec_id` matches the mgf `TITLE`
+field. Spectra present in the MGF file, but missing in the PEPREC file (and
+vice versa) will be skipped.
+
+#### Example
+Suppose the config file contains the following lines
+```
+ptm=Carbamidomethyl,57.02146,opt,C
+ptm=Acetyl,42.010565,opt,N-term
+ptm=Glyloss,-58.005479,opt,C-term
+```
+then the PEPREC file could look like this:
+```
+spec_id modifications peptide charge
+peptide1 - ACDEK 2
+peptide2 2|Carbamidomethyl ACDEFGR 3
+peptide3 0|Acetyl|2|Carbamidomethyl ACDEFGHIK 2
+```
+In this example, `peptide3` is N-terminally acetylated and carries a
+carbamidomethyl on its second amino acid.
+
+The corresponding (optional) MGF file could contain the following spectrum:
+```
+BEGIN IONS
+TITLE=peptide1
+PEPMASS=283.11849750978325
+CHARGE=2+
+72.04434967 0.00419513
+147.11276245 0.17418982
+175.05354309 0.03652963
+...
+END IONS
+```
+
+### Output
 The predictions are saved in a `.csv` file with the name
 `<peptide_file>_predictions.csv`.
 If you want the output to be in the form of an `.mgf` file, replace the

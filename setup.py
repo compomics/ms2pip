@@ -14,7 +14,7 @@ extensions = [
 		extra_compile_args=[
 			'-fno-var-tracking-assignments',
 			'-fno-var-tracking',
-			'-O3',
+			'-O0',
 			'-Wno-unused-result',
 			'-Wno-cpp',
 			'-Wno-unused-function'
