@@ -91,22 +91,6 @@ optional arguments:
 ### Input files
 #### Config file
 Several MS²PIP options need to be set in this config file.
-- The models that should be used are set as `model=X` where X is one of the
-currently supported MS²PIP models (see [Multiple prediction models](#multiple-prediction-models)).
-- The fragment ion error tolerance is set as `frag_error=X` where is X is the
-tolerance in Da.
-- Output formats to write predictions to, set as `out=X` where X is a 
-comma-separated list of a selection of the following list: `csv`, `mgf`, `msp`,
-or `bibliospec` (SSL/MS2, also for Skyline). For example: `out=csv,msp`.
-- PTMs (see further) are set as `ptm=X,Y,opt,Z` for each internal PTM where X is
-a string that represents the PTM, Y is the difference in Da associated with the
-PTM, opt is a required for compatibility with other CompOmics projects, and Z
-is the amino acid IAA) that is modified by the PTM. For N- and C-terminal
-modifications, Z should be `N-term` or `C-term`, respectively.
-
-
-
-Several MS²PIP options need to be set in this config file.
 - `model=X` where X is one of the currently supported MS²PIP models (see 
 [Multiple prediction models](#multiple-prediction-models)).
 - `frag_error=X` where is X is the fragmentation spectrum mass tolerance in Da
