@@ -3,13 +3,18 @@ from ms2pip.ms2pipC import argument_parser, load_configfile, run
 
 def print_logo():
 	logo = """
- _____ _____ ___ _____ _____ _____
-|     |   __|_  |  _  |     |  _  |
-| | | |__   |  _|   __|-   -|   __|
-|_|_|_|_____|___|__|  |_____|__|
+ __  __ ___  __ ___ ___ ___  
+|  \/  / __||_ ) _ \_ _| _ \ 
+| |\/| \__ \/__|  _/| ||  _/ 
+|_|  |_|___/   |_| |___|_|   
+                             
+by CompOmics
+sven.degroeve@ugent.be
+ralf.gabriels@ugent.be
+
+http://compomics.github.io/projects/ms2pip_c.html
 		   """
 	print(logo)
-	print("by sven.degroeve@ugent.be\n")
 
 
 def main():

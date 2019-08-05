@@ -14,7 +14,7 @@ extensions = [
 		extra_compile_args=[
 			'-fno-var-tracking-assignments',
 			'-fno-var-tracking',
-			'-O0',
+			'-O1',
 			'-Wno-unused-result',
 			'-Wno-cpp',
 			'-Wno-unused-function'
@@ -24,7 +24,7 @@ extensions = [
 
 setup(
 	name='ms2pip',
-	version='20190510',
+	version='20190805',
 	description='MS²PIP: MS² Peak Intensity Prediction',
 	author='Sven Degroeve, Ralf Gabriels, Ana Sílvia C. Silva',
 	author_email='sven.degroeve@vib-ugent.be',
