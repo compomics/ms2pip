@@ -571,18 +571,18 @@ def calc_correlations(df):
 
 def argument_parser():
 	parser = argparse.ArgumentParser()
-	parser.add_argument("pep_file", metavar="<peptide file>",
+	parser.add_argument("pep_file", metavar="<PEPREC file>",
 						help="list of peptides")
-	parser.add_argument("-c", metavar="FILE", action="store", dest="config_file", default="config.txt",
+	parser.add_argument("-c", metavar="CONFIG_FILE", action="store", dest="config_file", default="config.txt",
 						help="config file (by default config.txt)")
-	parser.add_argument("-s", metavar="FILE", action="store", dest="spec_file",
+	parser.add_argument("-s", metavar="MGF_FILE", action="store", dest="spec_file",
 						help=".mgf MS2 spectrum file (optional)")
-	parser.add_argument("-w", metavar="FILE", action="store", dest="vector_file",
+	parser.add_argument("-w", metavar="FEATURE_VECTOR_OUTPUT", action="store", dest="vector_file",
 						help="write feature vectors to FILE.{pkl,h5} (optional)")
-	parser.add_argument("-m", metavar="INT", action="store", dest="num_cpu",
-						default="23", help="number of cpu's to use")
 	parser.add_argument('-t', action='store_true', default=False, dest='tableau',
-					help='create Tableau Reader file')
+						help='create Tableau Reader file')
+	parser.add_argument("-m", metavar="NUM_CPU", action="store", dest="num_cpu",
+						default="23", help="number of cpu's to use")
 	args = parser.parse_args()
 
 	if not args.config_file:
@@ -656,6 +656,18 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 		data = pep_file
 	# for some reason the missing values are converted to float otherwise
 	data = data.fillna("-")
+
+	# Filter PEPREC for unsupported peptides
+	num_pep = len(data)
+	data = data[
+		~(data['peptide'].str.contains('B|J|O|U|X|Z')) &
+		~(data['peptide'].str.len() < 3) &
+		~(data['peptide'].str.len() > 99)
+	].copy()
+	num_pep_filtered = num_pep - len(data)
+	if num_pep_filtered > 0:
+		sys.stdout.write("Removed {} unsupported peptide sequences (< 3, > 99 \
+amino acids, or containing B, J, O, U, X or Z).\n".format(num_pep_filtered))
 
 	sys.stdout.write("starting workers...\n")
 	myPool = multiprocessing.Pool(num_cpu)
@@ -837,6 +849,10 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 		if msp:
 			print("writing MSP file {}_predictions.msp...".format(output_filename))
 			spectrum_output.write_msp(all_preds, data, output_filename=output_filename)
+
+		if bibliospec:
+			print("writing SSL/MS2 files...")
+			spectrum_output.write_bibliospec(all_preds, data, params, output_filename=output_filename)
 
 		if not return_results:
 			sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
