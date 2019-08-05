@@ -158,7 +158,7 @@ def write_msp(all_preds_in, peprec_in, output_filename='MS2PIP_Predictions',
 		write(msp_output)
 		return msp_output
 	else:
-		with open("{}_predictions.mgf".format(output_filename), write_mode) as msp_output:
+		with open("{}_predictions.msp".format(output_filename), write_mode) as msp_output:
 			write(msp_output)
 
 

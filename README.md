@@ -95,11 +95,30 @@ Several MS²PIP options need to be set in this config file.
 currently supported MS²PIP models (see [Multiple prediction models](#multiple-prediction-models)).
 - The fragment ion error tolerance is set as `frag_error=X` where is X is the
 tolerance in Da.
+- Output formats to write predictions to, set as `out=X` where X is a 
+comma-separated list of a selection of the following list: `csv`, `mgf`, `msp`,
+or `bibliospec` (SSL/MS2, also for Skyline). For example: `out=csv,msp`.
 - PTMs (see further) are set as `ptm=X,Y,opt,Z` for each internal PTM where X is
 a string that represents the PTM, Y is the difference in Da associated with the
 PTM, opt is a required for compatibility with other CompOmics projects, and Z
 is the amino acid IAA) that is modified by the PTM. For N- and C-terminal
 modifications, Z should be `N-term` or `C-term`, respectively.
+
+
+
+Several MS²PIP options need to be set in this config file.
+- `model=X` where X is one of the currently supported MS²PIP models (see 
+[Multiple prediction models](#multiple-prediction-models)).
+- `frag_error=X` where is X is the fragmentation spectrum mass tolerance in Da
+(only relevant if an MGF file is passed).
+- `out=X` where X is a comma-separated list of a selection of the currently
+supported output file formats: `csv`, `mgf`, `msp`, or `bibliospec` (SSL/MS2,
+also for Skyline). For example: `out=csv,msp`.
+- `ptm=X,Y,opt,Z` for every peptide modification where:
+  - `X` is a string that represents the 
+PTM name (needs to match the names in the [PEPREC file](#peprec-file)).
+  - `Y` is the mass shift in Da associated with the PTM.
+  - `Z` is the one-letter code of the amino acid AA that is modified by the PTM. For N- and C-terminal modifications, `Z` should be `N-term` or `C-term`, respectively.
 
 #### PEPREC file
 To apply the pre-trained models you need to pass *only* a `<PEPREC file>` to
@@ -128,6 +147,8 @@ In the [conversion_tools](https://github.com/compomics/ms2pip_c/tree/releases/co
 folder, we provide a host of Python scripts to convert common search engine
 output files to a PEPREC file.
 
+To start from a FASTA file, see [fasta2speclib](http://compomics.github.io/projects/ms2pip_c/wiki/fasta2speclib).
+
 
 #### MGF file (optional)
 Optionally, an MGF file with measured spectra can be passed to MS²PIP. In this
@@ -139,6 +160,9 @@ vice versa) will be skipped.
 #### Examples
 Suppose the **config file** contains the following lines
 ```
+model=HCD
+frag_error=0.02
+out=csv,mgf,msp
 ptm=Carbamidomethyl,57.02146,opt,C
 ptm=Acetyl,42.010565,opt,N-term
 ptm=Glyloss,-58.005479,opt,C-term
@@ -153,7 +177,7 @@ peptide3 0|Acetyl|2|Carbamidomethyl ACDEFGHIK 2
 In this example, `peptide3` is N-terminally acetylated and carries a
 carbamidomethyl on its second amino acid.
 
-The corresponding (optional) **MGF file** could contain the following spectrum:
+The corresponding (optional) **MGF file** can contain the following spectrum:
 ```
 BEGIN IONS
 TITLE=peptide1

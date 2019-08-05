@@ -17,6 +17,9 @@ from ms2pip.feature_names import get_feature_names_new
 from ms2pip.cython_modules import ms2pip_pyx
 
 
+# Supported output formats
+SUPPORTED_OUT_FORMATS = ['csv', 'mgf', 'msp', 'bibliospec']
+
 # Models and their properties
 # id is passed to get_predictions to select model
 # ion_types is required to write the ion types in the headers of the result files
@@ -614,6 +617,19 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 		exit(1)
 	fragerror = params["frag_error"]
 
+	# Validate requested output formats
+	if "out" in params:
+		out_formats = [o.lower().strip() for o in params["out"].split(',')]
+		for o in out_formats:
+			if o not in SUPPORTED_OUT_FORMATS:
+				print("Unknown output format: '{}'".format(o))
+				print("Should be one of the following formats: {}".format(SUPPORTED_OUT_FORMATS))
+				exit(1)
+	else:
+		print("No output format specified; defaulting to csv")
+		out_formats = ['csv']
+
+	# Validate requested model
 	if model in MODELS.keys():
 		print("using {} models".format(model))
 	else:
@@ -668,6 +684,11 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23
 	if num_pep_filtered > 0:
 		sys.stdout.write("Removed {} unsupported peptide sequences (< 3, > 99 \
 amino acids, or containing B, J, O, U, X or Z).\n".format(num_pep_filtered))
+
+	if len(data) == 0:
+		sys.stdout.write("No peptides for which to predict intensities. Please \
+provide at least one valid peptide sequence.\n")
+		exit(1)
 
 	sys.stdout.write("starting workers...\n")
 	myPool = multiprocessing.Pool(num_cpu)
@@ -840,23 +861,23 @@ amino acids, or containing B, J, O, U, X or Z).\n".format(num_pep_filtered))
 		all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
 
 
-		mgf = False  # Set to True to write spectrum as MGF file
-		if mgf:
-			print("writing MGF file {}_predictions.mgf...".format(output_filename))
-			spectrum_output.write_mgf(all_preds, peprec=data, output_filename=output_filename)
-
-		msp = False  # Set to True to write spectra as MSP file
-		if msp:
-			print("writing MSP file {}_predictions.msp...".format(output_filename))
-			spectrum_output.write_msp(all_preds, data, output_filename=output_filename)
-
-		if bibliospec:
-			print("writing SSL/MS2 files...")
-			spectrum_output.write_bibliospec(all_preds, data, params, output_filename=output_filename)
-
 		if not return_results:
-			sys.stdout.write("writing file {}_predictions.csv...\n".format(output_filename))
-			all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
+			if 'mgf' in out_formats:
+				print("writing MGF file {}_predictions.mgf...".format(output_filename))
+				spectrum_output.write_mgf(all_preds, peprec=data, output_filename=output_filename)
+
+			if 'msp' in out_formats:
+				print("writing MSP file {}_predictions.msp...".format(output_filename))
+				spectrum_output.write_msp(all_preds, data, output_filename=output_filename)
+
+			if 'bibliospec' in out_formats:
+				print("writing SSL/MS2 files...")
+				spectrum_output.write_bibliospec(all_preds, data, params, output_filename=output_filename)
+
+			if 'csv' in out_formats:
+				print("writing CSV {}_predictions.csv...".format(output_filename))
+				all_preds.to_csv("{}_predictions.csv".format(output_filename), index=False)
+			
 			sys.stdout.write("done!\n")
 		else:
 			return all_preds

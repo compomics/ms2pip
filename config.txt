@@ -1,5 +1,7 @@
 model=HCD
 frag_error=0.02
+out=csv
+
 ptm=PhosphoS,79.966331,opt,S
 ptm=PhosphoT,79.966331,opt,T
 ptm=PhosphoY,79.966331,opt,Y
