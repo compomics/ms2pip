@@ -67,7 +67,6 @@ typedef struct annotations annotations;
 float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id, int ce)
 	{
 	int i;
-	float pred;
 
 #if compile_HCD_ce == 1
 	// HCD with collision energy
@@ -314,7 +313,7 @@ float* get_mz_ms2pip_ch2(int peplen, unsigned short* modpeptide)
 //get all fragment ion peaks from spectrum
 annotations get_t_ms2pip_all(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
 	{
-	int i,j,tmp;
+	int i,tmp;
 	float mz;
 	int msms_pos;
 	int mem_pos;
