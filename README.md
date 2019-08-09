@@ -85,6 +85,7 @@ optional arguments:
   -s MGF_FILE               .mgf MS2 spectrum file (optional)
   -w FEATURE_VECTOR_OUTPUT  write feature vectors to FILE.{pkl,h5} (optional)
   -t                        create Tableau Reader file
+  -x                        calculate correlations (if MGF is given)
   -m NUM_CPU                number of cpu's to use
 ```
 
