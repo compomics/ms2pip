@@ -12,7 +12,7 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 # From project
-from ms2pip.ms2pip_tools import spectrum_output
+from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.cython_modules import ms2pip_pyx
 
@@ -564,14 +564,6 @@ def peakcount(x):
 	return c / len(x)
 
 
-def calc_correlations(df):
-	correlations = df.groupby(['spec_id'])[['target', 'prediction']].corr().iloc[::2]['prediction']
-	correlations.index = correlations.index.droplevel(3)
-	correlations = correlations.to_frame().reset_index()
-	correlations.columns = ['spec_id', 'pearsonr']
-	return correlations
-
-
 def argument_parser():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("pep_file", metavar="<PEPREC file>",
@@ -582,6 +574,8 @@ def argument_parser():
 						help=".mgf MS2 spectrum file (optional)")
 	parser.add_argument("-w", metavar="FEATURE_VECTOR_OUTPUT", action="store", dest="vector_file",
 						help="write feature vectors to FILE.{pkl,h5} (optional)")
+	parser.add_argument('-x', action='store_true', default=False, dest='correlations',
+						help='calculate correlations (if MGF is given)')
 	parser.add_argument('-t', action='store_true', default=False, dest='tableau',
 						help='create Tableau Reader file')
 	parser.add_argument("-m", metavar="NUM_CPU", action="store", dest="num_cpu",
@@ -592,11 +586,13 @@ def argument_parser():
 		print("Please provide a configfile (-c)!")
 		exit(1)
 
-	return(args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu), args.tableau)
+	return args.pep_file, args.spec_file, args.vector_file, args.config_file, int(args.num_cpu), args.correlations, args.tableau
 
 
-def run(pep_file, spec_file=None, vector_file=None, config_file=None, num_cpu=23, params=None,
-		output_filename=None, datasetname=None, return_results=False, limit=None, tableau=False):
+def run(pep_file, spec_file=None, vector_file=None, config_file=None,
+		num_cpu=23, params=None, output_filename=None, datasetname=None,
+		return_results=False, limit=None, compute_correlations=False,
+		tableau=False):
 	# datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
 
 	# If not specified, get parameters from config_file
@@ -794,11 +790,13 @@ provide at least one valid peptide sequence.\n")
 			sys.stdout.write("\nwriting file {}_pred_and_emp.csv...\n".format(output_filename))
 			all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
 
-			#sys.stdout.write('computing correlations...\n')
-			#correlations = calc_correlations(all_preds)
-			#correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
-			#sys.stdout.write("median correlations: \n")
-			#sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
+			if compute_correlations:
+				sys.stdout.write('computing correlations...\n')
+				correlations = calc_correlations.calc_correlations(all_preds)
+				correlations.to_csv("{}_correlations.csv".format(output_filename), index=True)
+				sys.stdout.write("median correlations: \n")
+				sys.stdout.write("{}\n".format(correlations.groupby('ion')['pearsonr'].median()))
+			
 			sys.stdout.write("done! \n")
 
 	# Only get the predictions

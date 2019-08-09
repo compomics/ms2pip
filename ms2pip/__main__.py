@@ -19,9 +19,10 @@ http://compomics.github.io/projects/ms2pip_c.html
 
 def main():
 	print_logo()
-	pep_file, spec_file, vector_file, config_file, num_cpu, tableau = argument_parser()
+	pep_file, spec_file, vector_file, config_file, num_cpu, correlations, tableau = argument_parser()
 	params = load_configfile(config_file)
-	run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params, num_cpu=num_cpu, tableau=tableau)
+	run(pep_file, spec_file=spec_file, vector_file=vector_file, params=params,
+	num_cpu=num_cpu, compute_correlations=correlations, tableau=tableau)
 
 
 if __name__ == "__main__":
