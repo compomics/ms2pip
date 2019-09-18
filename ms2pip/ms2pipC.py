@@ -18,7 +18,7 @@ from ms2pip.cython_modules import ms2pip_pyx
 
 
 # Supported output formats
-SUPPORTED_OUT_FORMATS = ['csv', 'mgf', 'msp', 'bibliospec']
+SUPPORTED_OUT_FORMATS = ['csv', 'mgf', 'msp', 'bibliospec', 'spectronaut']
 
 # Models and their properties
 # id is passed to get_predictions to select model
@@ -622,8 +622,11 @@ def run(pep_file, spec_file=None, vector_file=None, config_file=None,
 				print("Should be one of the following formats: {}".format(SUPPORTED_OUT_FORMATS))
 				exit(1)
 	else:
-		print("No output format specified; defaulting to csv")
-		out_formats = ['csv']
+		if not return_results:
+			print("No output format specified; defaulting to csv")
+			out_formats = ['csv']
+		else:
+			out_formats = []
 
 	# Validate requested model
 	if model in MODELS.keys():
@@ -871,6 +874,10 @@ provide at least one valid peptide sequence.\n")
 			if 'bibliospec' in out_formats:
 				print("writing SSL/MS2 files...")
 				spectrum_output.write_bibliospec(all_preds, data, params, output_filename=output_filename)
+
+			if 'spectronaut' in out_formats:
+				print("writing Spectronaut CSV files...")
+				spectrum_output.write_spectronaut(all_preds, data, params, output_filename=output_filename)
 
 			if 'csv' in out_formats:
 				print("writing CSV {}_predictions.csv...".format(output_filename))

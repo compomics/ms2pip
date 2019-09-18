@@ -34,7 +34,7 @@ from Bio import SeqIO
 
 # MS2PIP
 from ms2pip.ms2pipC import run
-from ms2pip.ms2pip_tools.spectrum_output import write_mgf, write_msp, write_bibliospec
+from ms2pip.ms2pip_tools import spectrum_output
 from ms2pip.ms2pip_tools.get_elude_predictions import get_elude_predictions
 
 
@@ -279,6 +279,14 @@ def run_batches(peprec, decoy=False):
                 unimod_mapping={mod['name']: mod['unimod_accession'] for mod in params['modifications']}
             )
 
+        if type(params['rt_predictions_file']) == str:
+            logging.info("Adding RT predictions from file")
+            rt_df = pd.read_csv(params['rt_predictions_file'])
+            for col in ['peptide', 'modifications', 'rt']:
+                assert col in rt_df.columns, "RT file should contain a `%s` column" % col
+            peprec_batch = peprec_batch.merge(rt_df, on=['peptide', 'modifications'], how='left')
+            assert not peprec_batch['rt'].isna().any(), "Not all required peptide-modification combinations could be found in RT file"
+
         logging.debug("Adding charge states %s", str(params['charges']))
         peprec_batch = add_charges(peprec_batch)
 
@@ -288,10 +296,10 @@ def run_batches(peprec, decoy=False):
             peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
 
         # Write ptm/charge-extended peprec from this batch to H5 file:
-        # peprec_batch.astype(str).to_hdf(
-        #     '{}_expanded_{}.peprec.hdf'.format(params['output_filename'], b_count), key='table',
-        #     format='table', complevel=3, complib='zlib', mode='w'
-        # )
+        peprec_batch.astype(str).to_hdf(
+            '{}_expanded.peprec.hdf'.format(params['output_filename']), key='table',
+            format='table', complevel=3, complib='zlib', mode='a'
+        )
 
         logging.info("Running MS2PIPc for %d peptides", len(peprec_batch))
         all_preds = run(peprec_batch, num_cpu=params['num_cpu'], output_filename=params['output_filename'],
@@ -323,8 +331,8 @@ def run_batches(peprec, decoy=False):
             )
             """
 
-            logging.info("Writing MSP file with all peptides")
-            write_msp(
+            logging.info("Writing MSP file")
+            spectrum_output.write_msp(
                 all_preds,
                 peprec_batch,
                 output_filename="{}".format(params['output_filename']),
@@ -332,18 +340,8 @@ def run_batches(peprec, decoy=False):
             )
 
         if 'mgf' in params['output_filetype']:
-            """
-            logging.info("Writing MGF file with unmodified peptides")
-            write_mgf(
-                all_preds,
-                peprec=peprec_batch[peprec_batch['modifications'] == '-'],
-                output_filename="{}_unmodified".format(params['output_filename']),
-                write_mode=write_mode
-            )
-            """
-
-            logging.info("Writing MGF file with all peptides")
-            write_mgf(
+            logging.info("Writing MGF file")
+            spectrum_output.write_mgf(
                 all_preds,
                 peprec=peprec_batch,
                 output_filename="{}".format(params['output_filename']),
@@ -351,21 +349,21 @@ def run_batches(peprec, decoy=False):
             )
 
         if 'bibliospec' in params['output_filetype']:
-            logging.info("Writing BiblioSpec SSL and MS2 files with unmodified peptides")
-            """
-            write_bibliospec(
-                all_preds,
-                peprec_batch[peprec_batch['modifications'] == '-'],
-                output_filename="{}_unmodified".format(params['output_filename']),
-                write_mode=write_mode
-            )
-            """
-
-            logging.info("Writing BiblioSpec SSL and MS2 files file with all peptides")
-            write_bibliospec(
+            logging.info("Writing BiblioSpec SSL and MS2 files")
+            spectrum_output.write_bibliospec(
                 all_preds,
                 peprec_batch,
-                params,
+                ms2pip_params,
+                output_filename="{}".format(params['output_filename']),
+                write_mode=write_mode
+            )
+
+        if 'spectronaut' in params['output_filetype']:
+            logging.info("Writing Spectronaut CSV file")
+            spectrum_output.write_spectronaut(
+                all_preds,
+                peprec_batch,
+                ms2pip_params,
                 output_filename="{}".format(params['output_filename']),
                 write_mode=write_mode
             )

@@ -32,7 +32,10 @@ setup(
 	packages=['ms2pip', 'ms2pip.ms2pip_tools'],
 	include_package_data=False,
 	entry_points={
-		'console_scripts': ['ms2pip=ms2pip.__main__:main'],
+		'console_scripts': [
+			'ms2pip=ms2pip.__main__:main',
+			'fasta2speclib=fasta2speclib.fasta2speclib:main'
+		],
 	},
 	classifiers=[
 		"Intended Audience :: Science/Research",

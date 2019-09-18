@@ -18,12 +18,16 @@ from io import StringIO
 
 # Third party libraries
 import pandas as pd
+from pyteomics import mass
 try:
 	from tqdm import tqdm
 except ImportError:
 	use_tqdm = False
 else:
 	use_tqdm = True
+
+
+PROTON_MASS = 1.007825032070059
 
 
 def write_msp(all_preds_in, peprec_in, output_filename='MS2PIP_Predictions',
@@ -53,7 +57,7 @@ def write_msp(all_preds_in, peprec_in, output_filename='MS2PIP_Predictions',
 			max_ionnumber = max([row[ionnumber_index] for row in preds])
 			mass_b = [row[mz_index] for row in preds if row[ion_index] == 'B' and row[ionnumber_index] == 1][0]
 			mass_y = [row[mz_index] for row in preds if row[ion_index] == 'Y' and row[ionnumber_index] == max_ionnumber][0]
-			pepmass = mass_b + mass_y - 2 * 1.007236
+			pepmass = mass_b + mass_y - 2 * PROTON_MASS
 
 			out.append('Name: {}/{}\n'.format(sequence, charge))
 			out.append('MW: {}\n'.format(pepmass))
@@ -69,7 +73,7 @@ def write_msp(all_preds_in, peprec_in, output_filename='MS2PIP_Predictions',
 				mods = [(str(x), sequence[x], y) for (x, y) in mods]
 				out.append("Mods={}/{} ".format(len(mods), '/'.join([','.join(list(x)) for x in mods])))
 
-			out.append("Parent={} ".format((pepmass + charge * 1.007236) / charge))
+			out.append("Parent={} ".format((pepmass + charge * PROTON_MASS) / charge))
 
 			if add_protein:
 				try:
@@ -199,6 +203,29 @@ def dfs_to_dicts(all_preds, peprec=None, rt_to_seconds=True):
 	return peprec_dict, preds_dict, rt_present
 
 
+def get_precursor_mz_pyteomics(peptide, modifications, charge, mass_shifts):
+	"""
+	Calculate precursor mass and mz for given peptide and modification list,
+	using Pyteomics.
+
+	peptide: stripped peptide sequence
+	modifications: MS2PIP-style formatted modifications list (e.g.
+	`0|Acetyl|2|Oxidation`)
+	mass_shifts: dictionary with `modification_name -> mass_shift` pairs
+
+	Returns: tuple(prec_mass, prec_mz)
+
+	Note: This method does not use the build-in Pyteomics modification handling, as
+	that would require a known atomic composition of the modification.
+	"""
+	charge = int(charge)
+	unmodified_mass = mass.fast_mass(peptide)
+	mods_massses = sum([mass_shifts[mod] for mod in modifications.split('|')[1::2]])
+	prec_mass = unmodified_mass + mods_massses
+	prec_mz = (prec_mass + charge * PROTON_MASS) / charge
+	return prec_mass, prec_mz
+
+
 def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False, peprec=None):
 	"""
 	Write MS2PIP predictions to MGF spectrum file.
@@ -223,7 +250,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
 		for spec_id in sorted(spec_id_list):
 			out.append('BEGIN IONS')
 			charge = preds_dict[spec_id]['charge']
-			pepmass = preds_dict[spec_id]['peaks']['B'][0][0] + preds_dict[spec_id]['peaks']['Y'][-1][0] - 2 * 1.007236
+			pepmass = preds_dict[spec_id]['peaks']['B'][0][0] + preds_dict[spec_id]['peaks']['Y'][-1][0] - 2 * PROTON_MASS
 			peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
 			peaks = sorted(peaks, key=itemgetter(0))
 
@@ -246,7 +273,7 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
 			else:
 				out.append('TITLE={}'.format(spec_id))
 
-			out.append('PEPMASS={}'.format((pepmass + (charge * 1.007825032)) / charge))
+			out.append('PEPMASS={}'.format((pepmass + (charge * PROTON_MASS)) / charge))
 			out.append('CHARGE={}+'.format(charge))
 			if rt_present:
 				out.append('RTINSECONDS={}'.format(rt))
@@ -266,7 +293,36 @@ def write_mgf(all_preds_in, output_filename="MS2PIP", unlog=True, write_mode='w+
 	del all_preds
 
 
-def write_bibliospec(all_preds_in, peprec, params, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False):
+def build_ssl_modified_sequence(seq, mods, ssl_mods):
+	"""
+	Build BiblioSpec SSL modified sequence string.
+
+	Arguments:
+	seq - peptide sequence
+	mods - MS2PIP-formatted modifications
+	ssl_mods - dict of name: mass shift strings
+
+	create ssl_mods from MS2PIP params with:
+	`ssl_mods = \
+		{ptm.split(',')[0]:\
+		"{:+.1f}".format(round(float(ptm.split(',')[1]),1))\
+		for ptm in params['ptm']}`
+	"""
+	pep = list(seq)
+	for loc, name in zip(mods.split('|')[::2], mods.split('|')[1::2]):
+		# C-term mod
+		if loc == '-1':
+			pep[-1] = pep[-1] + '[{}]'.format(ssl_mods[name])
+		# N-term mod
+		elif loc == '0':
+			pep[0] = pep[0] + '[{}]'.format(ssl_mods[name])
+		# Normal mod
+		else:
+			pep[int(loc) - 1] = pep[int(loc) - 1] + '[{}]'.format(ssl_mods[name])
+	return ''.join(pep)
+
+
+def write_bibliospec(all_preds_in, peprec_in, params, output_filename="MS2PIP", unlog=True, write_mode='w+', return_stringbuffer=False):
 	"""
 	Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
 	(For example for use in Skyline).
@@ -289,41 +345,13 @@ def write_bibliospec(all_preds_in, peprec, params, output_filename="MS2PIP", unl
 		return last_scannr
 
 
-	def build_ssl_modified_sequence(seq, mods, ssl_mods):
-		"""
-		Build BiblioSpec SSL modified sequence string.
-
-		Arguments:
-		seq - peptide sequence
-		mods - MS2PIP-formatted modifications
-		ssl_mods - dict of name: mass shift strings
-
-		create ssl_mods from MS2PIP params with:
-		`ssl_mods = \
-			{ptm.split(',')[0]:\
-			"{:+.1f}".format(round(float(ptm.split(',')[1]),1))\
-			for ptm in params['ptm']}`
-		"""
-		pep = list(seq)
-		for loc, name in zip(mods.split('|')[::2], mods.split('|')[1::2]):
-			# C-term mod
-			if loc == '-1':
-				pep[-1] = pep[-1] + '[{}]'.format(ssl_mods[name])
-			# N-term mod
-			elif loc == '0':
-				pep[0] = pep[0] + '[{}]'.format(ssl_mods[name])
-			# Normal mod
-			else:
-				pep[int(loc) - 1] = pep[int(loc) - 1] + '[{}]'.format(ssl_mods[name])
-		return ''.join(pep)
-
-
 	def write(all_preds, peprec, params, ssl_output, ms2_output, start_scannr=0, output_filename="MS2PIP"):
 		ms2_out = []
 		ssl_out = []
 
-		# Prepare ssl_mods
+		# Prepare ssl_mods and mass shifts
 		ssl_mods = {ptm.split(',')[0]: "{:+.1f}".format(round(float(ptm.split(',')[1]), 1)) for ptm in params['ptm']}
+		mass_shifts = {ptm.split(',')[0]: float(ptm.split(',')[1]) for ptm in params['ptm']}
 
 		# Replace spec_id with integer, starting from last scan in existing SSL file
 		peprec.index = range(start_scannr, start_scannr + len(peprec))
@@ -334,13 +362,12 @@ def write_bibliospec(all_preds_in, peprec, params, output_filename="MS2PIP", unl
 		peprec_dict, preds_dict, rt_present = dfs_to_dicts(all_preds, peprec=peprec, rt_to_seconds=True)
 
 		for spec_id in sorted(preds_dict.keys()):
-			charge = preds_dict[spec_id]['charge']
-			prec_mass = preds_dict[spec_id]['peaks']['B'][0][0] + preds_dict[spec_id]['peaks']['Y'][-1][0] - 2 * 1.007236
-			prec_mz = (prec_mass + (charge * 1.007825032)) / charge
-			peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
-			peaks = sorted(peaks, key=itemgetter(0))
 			seq = peprec_dict[spec_id]['peptide']
 			mods = peprec_dict[spec_id]['modifications']
+			charge = preds_dict[spec_id]['charge']
+			prec_mass, prec_mz = get_precursor_mz_pyteomics(seq, mods, charge, mass_shifts)
+			peaks = [item for sublist in preds_dict[spec_id]['peaks'].values() for item in sublist]
+			peaks = sorted(peaks, key=itemgetter(0))
 
 			if mods != '-' and mods != '':
 				mod_seq = build_ssl_modified_sequence(seq, mods, ssl_mods)
@@ -362,6 +389,7 @@ def write_bibliospec(all_preds_in, peprec, params, output_filename="MS2PIP", unl
 
 
 	all_preds = all_preds_in.copy()
+	peprec = peprec_in.copy()
 	if unlog:
 		all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
 		all_preds.reset_index(inplace=True)
@@ -392,3 +420,75 @@ def write_bibliospec(all_preds_in, peprec, params, output_filename="MS2PIP", unl
 
 	if return_stringbuffer:
 		return ssl_output, ms2_output
+
+
+def write_spectronaut(all_preds_in, peprec_in, params, output_filename="MS2PIP",
+					  unlog=True, write_mode='w+', return_stringbuffer=False):
+	"""
+	Write to Spectronaut library import format.
+
+	Reference: https://biognosys.com/media.ashx/spectronautmanual.pdf
+	"""
+
+	def write(all_preds, peprec, output_file, header=True):
+		# Prepare peptide-level data
+		# Modified sequence
+		ssl_mods = {ptm.split(',')[0]: "{:+.1f}".format(round(float(ptm.split(',')[1]), 1)) for ptm in params['ptm']}
+		apply_build_modseq = lambda row: build_ssl_modified_sequence(row['peptide'], row['modifications'], ssl_mods)
+		peprec['ModifiedPeptide'] = peprec.apply(apply_build_modseq, axis=1)
+		peprec['ModifiedPeptide'] = '_' + peprec['ModifiedPeptide'] + '_'
+
+		# Precursor mz
+		mass_shifts = {ptm.split(',')[0]: float(ptm.split(',')[1]) for ptm in params['ptm']}
+		apply_get_mz = lambda row: get_precursor_mz_pyteomics(row['peptide'], row['modifications'], row['charge'], mass_shifts)[1]
+		peprec['PrecursorMz'] = peprec.apply(apply_get_mz, axis=1)
+
+		# Additional columns
+		peprec['FragmentLossType'] = 'noloss'
+
+		# Retention time
+		rt_cols = []
+		if 'rt' in peprec.columns:
+			rt_cols = ['iRT']
+			peprec['iRT'] = peprec['rt']
+
+		# Rename columns and merge with predictions
+		peprec = peprec.rename(columns={'charge': 'PrecursorCharge', 'peptide': 'StrippedPeptide'})
+		peptide_cols = ['ModifiedPeptide', 'StrippedPeptide', 'PrecursorCharge', 'PrecursorMz'] + rt_cols + ['FragmentLossType']
+		spectronaut_df = peprec[peptide_cols + ['spec_id']]
+		spectronaut_df = all_preds.merge(spectronaut_df, on='spec_id')
+
+		# Fragment columns
+		spectronaut_df['FragmentCharge'] = spectronaut_df['ion'].str.contains('2').map({True: 2, False: 1})
+		spectronaut_df['FragmentType'] = spectronaut_df['ion'].str[0].str.lower()
+		col_mapping = {'mz': 'FragmentMz', 'prediction': 'RelativeIntensity', 'ionnumber': 'FragmentNumber'}
+		spectronaut_df = spectronaut_df.rename(columns=col_mapping)
+
+		# Sort columns
+		fragment_cols = ['FragmentCharge', 'FragmentMz', 'RelativeIntensity', 'FragmentType', 'FragmentNumber']
+		spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
+
+		# Write
+		spectronaut_df.to_csv(output_file, index=False, header=header)
+
+
+	# Undo log transformation and TIC-normalize
+	peprec = peprec_in.copy()
+	all_preds = all_preds_in.copy()
+	if unlog:
+		all_preds['prediction'] = ((2**all_preds['prediction']) - 0.001).clip(lower=0)
+		all_preds.reset_index(inplace=True)
+		all_preds['prediction'] = all_preds.groupby(['spec_id'])['prediction'].apply(lambda x: x / x.sum())
+
+	if return_stringbuffer:
+		output_file = StringIO()
+		write(all_preds, peprec, output_file)
+		return output_file
+	else:
+		f_name = "{}_predictions_spectronaut.csv".format(output_filename)
+		if 'w' in write_mode:
+			header = True
+		elif 'a' in write_mode:
+			header = False
+		with open(f_name, write_mode) as output_file:
+			write(all_preds, peprec, output_file, header=header)

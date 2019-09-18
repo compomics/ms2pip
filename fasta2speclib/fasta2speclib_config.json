@@ -1,5 +1,5 @@
 {
-    "output_filetype":["msp", "mgf", "bibliospec", "hdf"],
+    "output_filetype":["msp", "mgf", "bibliospec", "spectronaut", "hdf"],
     "charges":[2, 3],
     "min_peplen":8,
     "max_pepmass":5000,
@@ -14,6 +14,7 @@
     "ms2pip_model":"HCD",
     "decoy":true,
     "elude_model_file":null,
+    "rt_predictions_file":null,
     "peprec_filter":null,
     "batch_size":5000,
     "num_cpu":24
