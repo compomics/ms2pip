@@ -69,19 +69,20 @@ def main():
                         prev = peptide[0]
                         # sys.stderr.write(prev)
 
-                    tmp = mods.split('/')
-                    if tmp[0] != '0':
+                    if mods[0] != '0':
+                        tmp = mods[1:-1].replace("(","").replace(")",",").split(',')
                         m = ""
-                        for i in range(1, len(tmp)):
-                            tmp2 = tmp[i].split(',')
-                            if (tmp2[0] == '0') & (tmp2[2] == 'iTRAQ'):
-                                m += '0|' + tmp2[2] + '|'
+                        p = 0
+                        for i in range(0, int(mods[0])):
+                            if (tmp[p] == '0') & (tmp[p+2] == 'iTRAQ'):
+                                m += '0|' + tmp[p+2] + '|'
                             else:
-                                m += str(int(tmp2[0])+1)+'|'+tmp2[2] +'|'
+                                m += str(int(tmp[p])+1)+'|'+tmp[p+2] +'|'
                                 # m += str(int(tmp2[0]) + 1) + '|' + tmp2[2] + peptide[int(tmp2[0])] + '|'
-                            if not tmp2[2] in PTMs:
-                                PTMs[tmp2[2]] = 0
-                            PTMs[tmp2[2]] += 1
+                            if not tmp[p+2] in PTMs:
+                                PTMs[tmp[p+2]] = 0
+                            PTMs[tmp[p+2]] += 1
+                            p++3
                         fpip.write('{}{} {} {} {}\n'.format(title_prefix, specid, m[:-1], peptide, charge))
 
                     else:
@@ -90,12 +91,13 @@ def main():
                     fmeta.write('{}{} {} {} {} {} {}\n'.format(title_prefix, specid, charge, peptide, parentmz, purity, HCDenergy))
 
                     # THIS IS NOT A PROBLEM: MW is nothing
-                    if tmp[0] == '0':
+                    if mods[0] == '0':
                         if 'X' in peptide:
                             continue
                         tmp1 = 18.010601 + sum([AminoMass[x] for x in peptide])
                         tmp2 = (float(parentmz) * (float(charge))) - ((float(charge)) * 1.007825035)  # or 0.0073??
                         if abs(tmp1 - tmp2) > 0.5:
+                            print(row)
                             print(".")
 
                     buf = "BEGIN IONS\n"

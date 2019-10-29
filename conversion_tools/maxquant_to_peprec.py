@@ -8,9 +8,11 @@ __email__ = "Ralf.Gabriels@ugent.be"
 # Native libraries
 import re
 import logging
+import argparse
 
 # Third party libraries
 import pandas as pd
+from tqdm import tqdm
 
 
 def maxquant_to_peprec(evidence_file, msms_file,
@@ -36,8 +38,8 @@ def maxquant_to_peprec(evidence_file, msms_file,
     """
 
     for (aa, mod) in fixed_modifications:
-        if re.fullmatch('[A-Z]', aa) is None:
-            raise ValueError("Fixed modification amino acid `{}` should be a single capital character. E.g. `C`".format(aa))
+        if re.fullmatch('[A-Z]|n_term', aa) is None:
+            raise ValueError("Fixed modification amino acid `{}` should be a single capital character (e.g. `C`) or `n_term`.".format(aa))
         if re.fullmatch('[a-z]{2}', mod) is None:
             raise ValueError("Fixed modification label `{}` can only contain two non-capital characters. E.g. `cm`".format(mod))
 
@@ -82,7 +84,10 @@ def maxquant_to_peprec(evidence_file, msms_file,
     # Parse modifications
     logging.debug("Parsing modifications")
     for aa, mod in fixed_modifications:
-        m['Modified sequence'] = m['Modified sequence'].str.replace(aa, '{}({})'.format(aa, mod))
+        if aa == 'n_term':
+            m['Modified sequence'] = ['_({})'.format(mod) + seq[1:] if seq[:2] != '_(' else seq for seq in m['Modified sequence']]
+        else:
+            m['Modified sequence'] = m['Modified sequence'].str.replace(aa, '{}({})'.format(aa, mod))
 
     pattern = r'\([a-z].\)'
     m['Parsed modifications'] = ['|'.join(['{}|{}'.format(m.start(0) - 1 - i*4, ptm_mapping[m.group()]) for i, m in enumerate(re.finditer(pattern, s))]) for s in m['Modified sequence']]
@@ -93,7 +98,7 @@ def maxquant_to_peprec(evidence_file, msms_file,
     m['Protein list'] = m['Proteins'].str.split(';')
     m['MS2PIP ID'] = range(len(m))
     peprec_cols = ['MS2PIP ID', 'Sequence', 'Parsed modifications', 'Charge', 'Protein list',
-                   'Retention time', 'Scan number', 'Scan index', 'Raw file']
+                   'Retention time', 'Score', 'Delta score', 'PEP', 'Scan number', 'Scan index', 'Raw file']
     peprec = m[peprec_cols].sort_index().copy()
 
     col_mapping = {
@@ -103,6 +108,12 @@ def maxquant_to_peprec(evidence_file, msms_file,
         'Charge': 'charge',
         'Protein list': 'protein_list',
         'Retention time': 'rt',
+        'Score': 'andromeda_score',
+        'Delta score': 'andromeda_delta_score',
+        'PEP': 'andromeda_pep',
+        'Scan number': 'scan_number',
+        'Scan index': 'scan_index',
+        'Raw file': 'raw_file'
     }
 
     peprec = peprec.rename(columns=col_mapping)
@@ -110,3 +121,71 @@ def maxquant_to_peprec(evidence_file, msms_file,
     logging.debug('PEPREC ready!')
 
     return peprec
+
+
+def scan_mgf(peprec, mgf_folder, filename_col='raw_file', scan_num_col='scan_number', outname='SpecLib.mgf'):
+    with open(outname, 'w') as out:
+        count_runs = 0
+        count = 0
+        runs = peprec[filename_col].unique()
+        logging.info("Scanning MGF files...")
+        for run in tqdm(runs):
+            spec_dict = dict(('msmsid:F{:06d}'.format(v), k) for k, v in peprec[(peprec[filename_col] == run)][scan_num_col].to_dict().items())
+
+            # Parse file
+            found = False
+            with open('{}/{}.mgf'.format(mgf_folder, str(run)), 'r') as f:
+                for i, line in enumerate(f):
+                    if 'TITLE' in line:
+                        scan_num = re.split('TITLE=|,', line)[1]  # Edit to match MGF title notation
+                        if scan_num in spec_dict:
+                            found = True
+                            out.write("BEGIN IONS\n")
+                            line = "TITLE=" + str(spec_dict[scan_num]) + '\n'
+                            count += 1
+                    if 'END IONS' in line:
+                        if found:
+                            out.write(line + '\n')
+                            found = False
+                    if found and line[-4:] != '0.0\n':
+                        out.write(line)
+    logging.info("{}/{} spectra found and written to new MGF file.".format(count, len(peprec)))
+
+
+def ArgParse():
+    parser = argparse.ArgumentParser(description='Convert MaxQuant txt files and MGF to MS2PIP spectral library.')
+    parser.add_argument('-t', '--txt', dest='txt_folder', action='store', default='txt',
+                        help='Folder with MaxQuant txt files (default: "msf")')
+    parser.add_argument('-g', '--mgf', dest='mgf_folder', action='store', default='mgf',
+                        help='Folder with MGF spectrum files (default: "mgf")')
+    parser.add_argument('-o', '--out', dest='outname', action='store', default='SpecLib',
+                        help='Name for output files (default: "SpecLib")')
+    args = parser.parse_args()
+
+    return(args)
+
+
+def main():
+    args = ArgParse()
+
+    logging.basicConfig(
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=logging.DEBUG
+    )
+
+    peprec = maxquant_to_peprec(
+        '{}/evidence.txt'.format(args.txt_folder),
+        '{}/msms.txt'.format(args.txt_folder),
+        ptm_mapping={'(ox)': 'Oxidation', '(ac)': 'Acetyl', '(cm)': 'Carbamidomethyl', '(tn)': 'TMT6plexN', '(tk)': 'TMT6plex'},
+        fixed_modifications=[('C', 'cm'), ('n_term', 'tn'), ('K', 'tk')]
+    )
+
+    peprec.to_csv('{}.peprec'.format(args.outname), sep=' ', index=False)
+
+    scan_mgf(peprec, args.mgf_folder, outname='{}.mgf'.format(args.outname))
+
+
+
+if __name__ == '__main__':
+    main()
