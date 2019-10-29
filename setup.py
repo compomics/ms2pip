@@ -24,12 +24,12 @@ extensions = [
 
 setup(
 	name='ms2pip',
-	version='20190805',
+	version='v20191029',
 	description='MS²PIP: MS² Peak Intensity Prediction',
 	author='Sven Degroeve, Ralf Gabriels, Ana Sílvia C. Silva',
 	author_email='sven.degroeve@vib-ugent.be',
 	url='https://www.github.com/compomics/ms2pip_c',
-	packages=['ms2pip', 'ms2pip.ms2pip_tools'],
+	packages=['ms2pip', 'ms2pip.ms2pip_tools', 'fasta2speclib'],
 	include_package_data=False,
 	entry_points={
 		'console_scripts': [
