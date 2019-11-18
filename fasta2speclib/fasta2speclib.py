@@ -77,16 +77,25 @@ def get_params():
 
 def prot_to_peprec(protein):
     params = get_params()
+    # Calculate longest and shortest possible peptide with given max_pepmass
+    max_pepmass_min_len = int(params['max_pepmass'] / 186.08 + 2)
+    max_pepmass_max_len = int(params['max_pepmass'] / 57.02 + 2)
     tmp = pd.DataFrame(columns=['spec_id', 'peptide', 'modifications', 'charge'])
     pep_count = 0
     for peptide in cleave(str(protein.seq), expasy_rules['trypsin'], params['missed_cleavages']):
         if False not in [aa not in peptide for aa in ['B', 'J', 'O', 'U', 'X', 'Z']]:
-            if params['min_peplen'] <= len(peptide) < int(params['max_pepmass'] / 186 + 2):
-                if not mass.calculate_mass(sequence=peptide) > params['max_pepmass']:
-                    pep_count += 1
-                    row = {'spec_id': '{}_{:03d}'.format(protein.id, pep_count),
-                           'peptide': peptide, 'modifications': '-', 'charge': np.nan}
-                    tmp = tmp.append(row, ignore_index=True)
+            if params['min_peplen'] <= len(peptide) <= max_pepmass_max_len:
+                # Skip peptide if it's mass is larger than allowed
+                # Only calculate if longer than shortest possible peptide with max_pepmass
+                if len(peptide) > max_pepmass_min_len:
+                    if mass.calculate_mass(sequence=peptide) > params['max_pepmass']:
+                        continue
+                pep_count += 1
+                row = {
+                    'spec_id': '{}_{:03d}'.format(protein.id, pep_count),
+                    'peptide': peptide, 'modifications': '-', 'charge': np.nan
+                }
+                tmp = tmp.append(row, ignore_index=True)
     return tmp
 
 
