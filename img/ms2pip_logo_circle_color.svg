@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="99.958801mm"
+   height="99.958801mm"
+   viewBox="0 0 99.958801 99.958801"
+   version="1.1"
+   id="svg8"
+   sodipodi:docname="ms2pip_circle_color.svg"
+   inkscape:version="0.92.4 (5da689c313, 2019-01-14)">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="31.964309"
+     inkscape:cy="268.00797"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1842"
+     inkscape:window-height="1177"
+     inkscape:window-x="70"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-55.020599,-98.520607)">
+    <rect
+       style="fill:#ffffff;fill-opacity:0;stroke-width:0.21700473"
+       id="rect4528"
+       width="99.958801"
+       height="99.958801"
+       x="55.020599"
+       y="98.520607" />
+    <ellipse
+       style="fill:#15a387;fill-opacity:1;stroke-width:0.26458332"
+       id="path4532"
+       cx="105"
+       cy="148.5"
+       rx="49.979401"
+       ry="49.979397" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:300;font-stretch:normal;font-size:6.3499999px;line-height:1.25;font-family:Bahnschrift;-inkscape-font-specification:'Bahnschrift, Light';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458332"
+       x="61.349216"
+       y="156.81992"
+       id="text4538"><tspan
+         sodipodi:role="line"
+         x="61.349216"
+         y="156.81992"
+         id="tspan4536"
+         style="stroke-width:0.26458332"><tspan
+           x="61.349216"
+           y="156.81992"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:22.57777786px;font-family:'Montserrat ExtraBold';-inkscape-font-specification:'Montserrat ExtraBold, ';fill:#ffffff;fill-opacity:1;stroke-width:0.26458332"
+           id="tspan4534">MS²PIP</tspan></tspan></text>
+  </g>
+</svg>

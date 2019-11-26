@@ -1,7 +1,16 @@
-# MS²PIP
-[![GitHub release](https://img.shields.io/github/release-pre/compomics/ms2pip_c.svg)](https://github.com/compomics/ms2pip_c/releases)
-[![Build Status](https://travis-ci.org/compomics/ms2pip_c.svg?branch=master)](https://travis-ci.org/compomics/ms2pip_c)
-[![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[<img src="./img/ms2pip_logo_circle_color.svg" width="150" height="150" />](https://iomics.ugent.be/ms2pip/)
+<br/><br/>
+
+[![GitHub release](https://img.shields.io/github/release-pre/compomics/ms2pip_c.svg?style=flat-square)](https://github.com/compomics/ms2pip_c/releases)
+![Python version](https://img.shields.io/badge/python-3.7%20%7C%203.8-blue?style=flat-square)
+[![Build Status](https://img.shields.io/travis/compomics/ms2pip_c?style=flat-square)](https://travis-ci.org/compomics/ms2pip_c)
+[![GitHub issues](https://img.shields.io/github/issues/compomics/ms2pip_c?style=flat-square)](https://github.com/compomics/ms2pip_c/issues)
+[![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c.svg?style=flat-square)](https://www.apache.org/licenses/LICENSE-2.0)
+
+MS²PIP: MS² Peak Intensity Prediction - Fast and accurate peptide fragmention
+spectrum prediction for multiple fragmentation methods, instruments and labeling techniques.
+
+---
 
 - [Introduction](#introduction)
 - [Installation](#installation)
@@ -14,8 +23,8 @@
 MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
 It employs the XGBoost machine learning algorithm and is written in Python.
 
-You can install MS²PIP on your machine by following the [instructions below](#installation) or the
-[extended install instructions](http://compomics.github.io/projects/ms2pip_c/wiki/extended-install-instructions.html).
+You can install MS²PIP on your machine by following the [instructions below](#installation)
+or the [extended install instructions](http://compomics.github.io/projects/ms2pip_c/wiki/extended-install-instructions.html).
 For a more user friendly experience, go to the
 [MS²PIP web server](https://iomics.ugent.be/ms2pip).
 There, you can easily upload a list of peptide sequences, after which the
@@ -50,7 +59,7 @@ Please also take note of and mention the MS²PIP-version you used.
 ## Installation
 Download the
 [latest release](https://github.com/compomics/ms2pip_c/releases/latest) and
-unzip. MS²PIP runs on Python 3.5 or greater. Build and install with Conda:
+unzip. MS²PIP runs on Python 3.7 or greater. Build and install with Conda:
 ```
 conda build . -c bioconda
 conda install ms2pip --use-local
@@ -103,7 +112,9 @@ supported output file formats: `csv`, `mgf`, `msp`, `spectronaut`, or
   - `X` is a string that represents the 
 PTM name (needs to match the names in the [PEPREC file](#peprec-file)).
   - `Y` is the mass shift in Da associated with the PTM.
-  - `Z` is the one-letter code of the amino acid AA that is modified by the PTM. For N- and C-terminal modifications, `Z` should be `N-term` or `C-term`, respectively.
+  - `Z` is the one-letter code of the amino acid AA that is modified by the PTM.
+For N- and C-terminal modifications, `Z` should be `N-term` or `C-term`,
+respectively.
 
 #### PEPREC file
 To apply the pre-trained models you need to pass *only* a `<PEPREC file>` to
