@@ -1,4 +1,4 @@
-[<img src="./img/ms2pip_logo_circle_color.svg" width="150" height="150" />](https://iomics.ugent.be/ms2pip/)
+[<img src="https://github.com/compomics/ms2pip_c/raw/releases/img/ms2pip_logo_1000px.png" width="150" height="150" />](https://iomics.ugent.be/ms2pip/)
 <br/><br/>
 
 [![GitHub release](https://img.shields.io/github/release-pre/compomics/ms2pip_c.svg?style=flat-square)](https://github.com/compomics/ms2pip_c/releases)
