@@ -3,10 +3,6 @@ language: python
 python:
   - "3.7"
 
-branches:
-  only:
-  - master
-
 install:
   - sudo apt-get update
   - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh

@@ -24,7 +24,7 @@ extensions = [
 
 setup(
 	name='ms2pip',
-	version='v20191029',
+	version='3.0.5-alpha',
 	description='MS²PIP: MS² Peak Intensity Prediction',
 	author='Sven Degroeve, Ralf Gabriels, Ana Sílvia C. Silva',
 	author_email='sven.degroeve@vib-ugent.be',
