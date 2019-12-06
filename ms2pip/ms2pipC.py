@@ -786,9 +786,9 @@ provide at least one valid peptide sequence.\n")
 			all_preds["charge"] = charges
 			all_preds["ion"] = ions
 			all_preds["ionnumber"] = ionnumbers
-			all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
-			all_preds["target"] = np.hstack(np.concatenate(target_bufs, axis=None))
-			all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
+			all_preds["mz"] = np.concatenate(mz_bufs, axis=None)
+			all_preds["target"] = np.concatenate(target_bufs, axis=None)
+			all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
 
 			sys.stdout.write("\nwriting file {}_pred_and_emp.csv...\n".format(output_filename))
 			all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
@@ -858,8 +858,8 @@ provide at least one valid peptide sequence.\n")
 		all_preds["charge"] = charges
 		all_preds["ion"] = ions
 		all_preds["ionnumber"] = ionnumbers
-		all_preds["mz"] = np.hstack(np.concatenate(mz_bufs, axis=None))
-		all_preds["prediction"] = np.hstack(np.concatenate(prediction_bufs, axis=None))
+		all_preds["mz"] = np.concatenate(mz_bufs, axis=None)
+		all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
 
 
 		if not return_results:
