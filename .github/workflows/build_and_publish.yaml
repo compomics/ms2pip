@@ -7,8 +7,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 4
     steps:
     - uses: actions/checkout@v1
 
@@ -28,8 +26,8 @@ jobs:
         flake8 ./ms2pip ./fasta2speclib --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 ./ms2pip ./fasta2speclib --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Build manylinux Python wheels
-      uses: RalfG/python-wheels-manylinux-build@v0.1.0.a5
+    - name: Run RalfG/python-wheels-manylinux-build@v0.1.0
+      uses: RalfG/python-wheels-manylinux-build@v0.1.0
       with:
         python-versions: 'cp36-cp36m cp37-cp37m cp38-cp38'
         build-requirements: 'setuptools numpy cython'
@@ -39,4 +37,4 @@ jobs:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        twine upload wheelhouse/ms2pip*
+        twine upload wheelhouse/ms2pip*-manylinux1_x86_64.whl
