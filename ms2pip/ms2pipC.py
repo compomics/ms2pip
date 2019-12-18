@@ -406,7 +406,7 @@ def process_spectra(worker_num, spec_file, vector_file, data, afile, modfile, mo
 		# If num_cpu > number of spectra, dvectors can be empty
 		if dvectors:
 			# Concatenating dvectors into a 2D ndarray before making DataFrame saves lots of memory!
-			if len(dvectors) > 1:
+			if len(dvectors) >= 1:
 				dvectors = np.concatenate(dvectors)
 			df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
 			df.columns = df.columns.astype(str)
