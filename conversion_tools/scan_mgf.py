@@ -13,14 +13,15 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 import argparse
 import mmap
+import os
 
 import pandas as pd
 try:
     from tqdm import tqdm
 except ImportError:
-    use_tqdm_glob = False
+    USE_TQDM = False
 else:
-    use_tqdm_glob = True
+    USE_TQDM = True
 
 
 def argument_parser():
@@ -29,14 +30,14 @@ def argument_parser():
         given PEPREC file and write those spectra to a new MGF file.'
     )
     parser.add_argument(
-        'mgf_folder', metavar="<mgf folder>",
-        help='Folder containing MGF files to scan.'
+        'mgf', metavar="<mgf>",
+        help='Path to MGF file or directory containing MGF files. If a\
+        directory is given, the peprec file must have an additional column\
+        `mgf_filename` that contains the respective MGF filename.'
     )
     parser.add_argument(
-        "peprec_file", metavar="<peprec file>",
-        help="MS2PIP PEPREC file that contains the peptide spectra to scan for.\
-        For scan_mgf to work, an additional column `mgf_filename` that contains\
-        the respective MGF filename is required."
+        "peprec", metavar="<peprec>",
+        help="Path to PEPREC file that contains the peptides to scan for."
     )
     # parser.add_argument(
     #     "--tqdm", action="store_true", dest='use_tqdm', default=False,
@@ -104,8 +105,23 @@ def scan_mgf(df_in, mgf_folder, outname='scan_mgf_result.mgf',
 
 def main():
     args = argument_parser()
-    peprec = pd.read_csv(args.peprec_file, sep=' ')
-    scan_mgf(peprec, args.mgf_folder, use_tqdm=use_tqdm_glob)
+    
+    peprec = pd.read_csv(args.peprec, sep=' ')
+
+    if os.path.isfile(args.mgf):
+        mgf = os.path.dirname(args.mgf)
+        peprec['mgf_filename'] = os.path.basename(args.mgf)
+    elif os.path.isdir(args.mgf):
+        assert 'mgf_file' in peprec.columns, "Path to MGF directory was given, \
+but PEPREC does not contain a `mgf_file` column."
+        mgf = args.mgf
+    else:
+        print(f"{args.mgf} does not exist.")
+        exit(1)
+
+    outname = os.path.splitext(args.mgf)[0] + '_scanned.mgf'
+
+    scan_mgf(peprec, mgf, outname=outname, use_tqdm=USE_TQDM)
 
 
 if __name__ == '__main__':
