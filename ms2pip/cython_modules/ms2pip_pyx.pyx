@@ -44,13 +44,13 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 
 	r = []
 	offset = 0
-	fnum = results[0]/(len(peptide)-3)
-	for i in range(len(peptide)-3):
+	fnum = int(results[0] / (len(peptide) - 3))
+	for i in range(len(peptide) - 3):
 		v = []
 		for j in range(fnum):
-			v.append(results[j+1+offset])
-		offset+=fnum
-		r.append(np.array(v,dtype=np.uint16))
+			v.append(results[j + 1 + offset])
+		offset += fnum
+		r.append(np.array(v, dtype=np.uint16))
 
 	return r
 
@@ -63,13 +63,13 @@ def get_vector_ce(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 
 	r = []
 	offset = 0
-	fnum = results[0]/(len(peptide)-3)
-	for i in range(len(peptide)-3):
+	fnum = int(results[0] / (len(peptide) - 3))
+	for i in range(len(peptide) - 3):
 		v = []
 		for j in range(fnum):
-			v.append(results[j+1+offset])
-		offset+=fnum
-		r.append(np.array(v,dtype=np.uint16))
+			v.append(results[j + 1 + offset])
+		offset += fnum
+		r.append(np.array(v, dtype=np.uint16))
 
 	return r
 
@@ -82,12 +82,12 @@ def get_vector_catboost(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 
 	r = []
 	offset = 0
-	fnum = results[0] / (len(peptide)-3)
-	for i in range(len(peptide)-3):
+	fnum = int(results[0] / (len(peptide) - 3))
+	for i in range(len(peptide) - 3):
 		v = []
 		for j in range(fnum):
-			v.append(results[j+1+offset])
-		offset+=fnum
+			v.append(results[j + 1 + offset])
+		offset += fnum
 		r.append(np.array(v, dtype=np.uint16))
 
 	return r

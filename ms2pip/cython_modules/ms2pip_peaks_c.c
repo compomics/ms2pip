@@ -1,3 +1,4 @@
+#define compile_HCD 0
 #define compile_HCD_ce 0
 #define compile_TMT 0
 #define compile_ALL 1
@@ -19,6 +20,11 @@
 //#include "../models/merged_500_Y.c"
 //#include "../models/HCD/model_20190107_HCD_train_B.c"
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
+
+#if compile_HCD == 1
+	#include "../models/HCD/model_20190107_HCD_train_B.c"
+	#include "../models/HCD/model_20190107_HCD_train_Y.c"
+#endif
 
 #if compile_HCD_ce == 1
 	#include "../models/HCD/pkl_B_9deep.c"
@@ -90,6 +96,19 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 		}
 	}
 #endif
+
+#if compile_HCD == 1
+	// HCD
+	if (model_id == 1) {
+		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+		int fnum = v[0]/(peplen-1);
+		for (i=0; i < peplen-1; i++) {
+			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
+		}
+	}
+#endif
+
 
 #if compile_ALL == 1
 	// CID
