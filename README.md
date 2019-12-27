@@ -1,9 +1,10 @@
 [<img src="https://github.com/compomics/ms2pip_c/raw/releases/img/ms2pip_logo_1000px.png" width="150" height="150" />](https://iomics.ugent.be/ms2pip/)
 <br/><br/>
 
-[![GitHub release](https://img.shields.io/github/release-pre/compomics/ms2pip_c.svg?style=flat-square)](https://github.com/compomics/ms2pip_c/releases)
-![Python version](https://img.shields.io/badge/python-3.7%20%7C%203.8-blue?style=flat-square)
-[![Build Status](https://img.shields.io/travis/compomics/ms2pip_c?style=flat-square)](https://travis-ci.org/compomics/ms2pip_c)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
+[![PyPI](https://img.shields.io/pypi/v/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
+[![PyPI - Wheel](https://img.shields.io/pypi/wheel/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/compomics/ms2pip_c/Tests)](https://github.com/compomics/ms2pip_c/actions)
 [![GitHub issues](https://img.shields.io/github/issues/compomics/ms2pip_c?style=flat-square)](https://github.com/compomics/ms2pip_c/issues)
 [![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c.svg?style=flat-square)](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -57,14 +58,18 @@ Please also take note of and mention the MS²PIP-version you used.
 ---
 
 ## Installation
-Download the
-[latest release](https://github.com/compomics/ms2pip_c/releases/latest) and
-unzip. MS²PIP runs on Python 3.7 or greater. Build and install with Conda:
+
+#### Install with pip
+
 ```
-conda build . -c bioconda
-conda install ms2pip --use-local
+pip install ms2pip
 ```
-For development, use pip to install an editable version:
+We recommend using a [conda](https://docs.conda.io/en/latest/) or
+[venv](https://docs.python.org/3/library/venv.html) virtual environment.
+
+#### For development
+
+Clone the repository and use pip to install an editable version:
 ```
 pip install --editable .
 ```
