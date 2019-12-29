@@ -37,9 +37,14 @@ jobs:
         pip install wheelhouse/ms2pip-*-cp38-cp38-manylinux1_x86_64.whl
         pytest
 
-    - name: Publish wheels to PyPI
+    - name: Package source distribution
+      run: |
+        python setup.py sdist
+
+    - name: Publish to PyPI
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
         twine upload wheelhouse/ms2pip*-manylinux1_x86_64.whl
+        twine upload dist/*.tar.gz
