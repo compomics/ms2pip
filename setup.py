@@ -41,7 +41,8 @@ INSTALL_REQUIRES = [
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
-
+import os
+from glob import glob
 from subprocess import call
 from setuptools import setup, find_packages
 from setuptools.extension import Extension
@@ -53,10 +54,11 @@ import numpy
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
-call(
-    "rm -f ms2pip/cython_modules/ms2pip_pyx.c* ms2pip/cython_modules/ms2pip_pyx.so",
-    shell=True,
-)
+to_remove = [
+    "ms2pip/cython_modules/ms2pip_pyx.c*",
+    "ms2pip/cython_modules/ms2pip_pyx.so",
+]
+_ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
 
 extensions = [
     Extension(
