@@ -38,6 +38,7 @@ INSTALL_REQUIRES = [
     "pyteomics>=3.5,<5",
     "scipy>=1.2,<2",
     "tqdm>=4,<5",
+    "tables>=3.4",
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
