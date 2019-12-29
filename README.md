@@ -24,9 +24,8 @@ spectrum prediction for multiple fragmentation methods, instruments and labeling
 MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
 It employs the XGBoost machine learning algorithm and is written in Python.
 
-You can install MS²PIP on your machine by following the [instructions below](#installation)
-or the [extended install instructions](http://compomics.github.io/projects/ms2pip_c/wiki/extended-install-instructions.html).
-For a more user friendly experience, go to the
+You can install MS²PIP on your machine by following the
+[instructions below](#installation). For a more user friendly experience, go to the
 [MS²PIP web server](https://iomics.ugent.be/ms2pip).
 There, you can easily upload a list of peptide sequences, after which the
 corresponding predicted MS² spectra can be downloaded in multiple file
@@ -87,20 +86,21 @@ MS²PIP predictions can be compared to spectra in an
 ### Command line interface
 ```
 usage: ms2pip [-h] [-c CONFIG_FILE] [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
-              [-t] [-m NUM_CPU]
+              [-x] [-t] [-m NUM_CPU]
               <PEPREC file>
 
 positional arguments:
-  <PEPREC file>             list of peptides
+  <PEPREC file>         list of peptides
 
 optional arguments:
-  -h, --help                show this help message and exit
-  -c CONFIG_FILE            config file (by default config.txt)
-  -s MGF_FILE               .mgf MS2 spectrum file (optional)
-  -w FEATURE_VECTOR_OUTPUT  write feature vectors to FILE.{pkl,h5} (optional)
-  -t                        create Tableau Reader file
-  -x                        calculate correlations (if MGF is given)
-  -m NUM_CPU                number of cpu's to use
+  -h, --help            show this help message and exit
+  -c CONFIG_FILE        config file
+  -s MGF_FILE           .mgf MS2 spectrum file (optional)
+  -w FEATURE_VECTOR_OUTPUT
+                        write feature vectors to FILE.{pkl,h5} (optional)
+  -x                    calculate correlations (if MGF is given)
+  -t                    create Tableau Reader file
+  -m NUM_CPU            number of CPUs to use (default: all available)
 ```
 
 ### Input files
