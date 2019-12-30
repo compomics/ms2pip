@@ -1,0 +1,2 @@
+include ms2pip/cython_modules/*.c
+include ms2pip/models/*.c

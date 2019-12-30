@@ -1,4 +1,4 @@
-VERSION = "3.0.6"
+VERSION = "3.0.7"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
@@ -44,8 +44,7 @@ PYTHON_REQUIRES = ">=3.6,<4"
 
 import os
 from glob import glob
-from subprocess import call
-from setuptools import setup, find_packages
+from setuptools import setup
 from setuptools.extension import Extension
 
 from Cython.Distutils import build_ext
@@ -90,7 +89,7 @@ setup(
     keywords=KEYWORDS,
     classifiers=CLASSIFIERS,
     packages=["ms2pip", "ms2pip.ms2pip_tools", "fasta2speclib"],
-    include_package_data=False,
+    include_package_data=True,
     entry_points={
         "console_scripts": [
             "ms2pip=ms2pip.__main__:main",
