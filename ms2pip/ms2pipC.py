@@ -126,11 +126,11 @@ A_MAP = {a: i for i, a in enumerate(AMINOS)}
 
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
-	Function for each worker to process a list of peptides. The models are
-	chosen based on model. PTMmap, Ntermmap and Ctermmap determine the
-	modifications applied to each peptide sequence. Returns the predicted
-	spectra for all the peptides.
-	"""
+    Function for each worker to process a list of peptides. The models are
+    chosen based on model. PTMmap, Ntermmap and Ctermmap determine the
+    modifications applied to each peptide sequence. Returns the predicted
+    spectra for all the peptides.
+    """
 
     ms2pip_pyx.ms2pip_init(
         bytearray(afile.encode()),
@@ -234,13 +234,13 @@ def process_spectra(
     tableau,
 ):
     """
-	Function for each worker to process a list of spectra. Each peptide's
-	sequence is extracted from the mgf file. Then models are chosen based on
-	model. PTMmap, Ntermmap and Ctermmap determine the modifications
-	applied to each peptide sequence and the spectrum is predicted. Then either
-	the feature vectors are returned, or a DataFrame with the predicted and
-	empirical intensities.
-	"""
+    Function for each worker to process a list of spectra. Each peptide's
+    sequence is extracted from the mgf file. Then models are chosen based on
+    model. PTMmap, Ntermmap and Ctermmap determine the modifications
+    applied to each peptide sequence and the spectrum is predicted. Then either
+    the feature vectors are returned, or a DataFrame with the predicted and
+    empirical intensities.
+    """
 
     ms2pip_pyx.ms2pip_init(
         bytearray(afile.encode()),
@@ -603,8 +603,8 @@ def process_spectra(
 
 def scan_spectrum_file(filename):
     """
-	go over mgf file and return list with all spectrum titles
-	"""
+    go over mgf file and return list with all spectrum titles
+    """
     titles = []
     f = open(filename)
     while 1:
@@ -623,9 +623,9 @@ def scan_spectrum_file(filename):
 
 def prepare_titles(titles, num_cpu):
     """
-	Take a list and return a list containing num_cpu smaller lists with the
-	spectrum titles/peptides that will be split across the workers
-	"""
+    Take a list and return a list containing num_cpu smaller lists with the
+    spectrum titles/peptides that will be split across the workers
+    """
     # titles might be ordered from small to large peptides,
     # shuffling improves parallel speeds
     shuffle(titles)
@@ -645,10 +645,10 @@ def prepare_titles(titles, num_cpu):
 
 def apply_mods(peptide, mods, PTMmap):
     """
-	Takes a peptide sequence and a set of modifications. Returns the modified
-	version of the peptide sequence, c- and n-term modifications. This modified
-	version are hard coded in ms2pipfeatures_c.c for now.
-	"""
+    Takes a peptide sequence and a set of modifications. Returns the modified
+    version of the peptide sequence, c- and n-term modifications. This modified
+    version are hard coded in ms2pipfeatures_c.c for now.
+    """
     modpeptide = np.array(peptide[:], dtype=np.uint16)
 
     if mods != "-":
@@ -958,10 +958,10 @@ provide at least one valid peptide sequence.\n"
 
     if spec_file:
         """
-		When an mgf file is provided, MS2PIP either saves the feature vectors to
-		train models with or writes a file with the predicted spectra next to
-		the empirical one.
-		"""
+        When an mgf file is provided, MS2PIP either saves the feature vectors to
+        train models with or writes a file with the predicted spectra next to
+        the empirical one.
+        """
         sys.stdout.write("scanning spectrum file... \n")
         titles = scan_spectrum_file(spec_file)
         split_titles = prepare_titles(titles, num_cpu)
@@ -970,13 +970,13 @@ provide at least one valid peptide sequence.\n"
         for i in range(num_cpu):
             tmp = split_titles[i]
             """
-			process_spectra(
-				i,
-				spec_file,
-				vector_file,
-				data[data["spec_id"].isin(tmp)],
-				afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
-			"""
+            process_spectra(
+                i,
+                spec_file,
+                vector_file,
+                data[data["spec_id"].isin(tmp)],
+                afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
+            """
             results.append(
                 myPool.apply_async(
                     process_spectra,
@@ -1107,11 +1107,11 @@ provide at least one valid peptide sequence.\n"
         for i in range(num_cpu):
             tmp = split_titles[i]
             """
-			process_peptides(
-				i,
-				data[data.spec_id.isin(tmp)],
-				afile, modfile, modfile2, PTMmap, model)
-			"""
+            process_peptides(
+                i,
+                data[data.spec_id.isin(tmp)],
+                afile, modfile, modfile2, PTMmap, model)
+            """
             results.append(
                 myPool.apply_async(
                     process_peptides,
