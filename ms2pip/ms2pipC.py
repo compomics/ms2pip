@@ -222,9 +222,9 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
 def process_spectra(
     worker_num,
+    data,
     spec_file,
     vector_file,
-    data,
     afile,
     modfile,
     modfile2,
@@ -945,7 +945,6 @@ class MS2PIP:
                     )
                 sys.stdout.write("done! \n")
         else:
-            sys.stdout.write("scanning peptide file... ")
             results = self._process_peptides(afile, modfile, modfile2, PTMmap)
 
             sys.stdout.write("merging results...\n")
@@ -1014,6 +1013,26 @@ class MS2PIP:
 
         self.data = data
 
+    def _execute_in_pool(self, titles, func, args):
+        split_titles = prepare_titles(titles, self.num_cpu)
+        results = []
+        for i in range(self.num_cpu):
+            tmp = split_titles[i]
+            results.append(
+                self.myPool.apply_async(
+                    func,
+                    args=(
+                        i,
+                        self.data[self.data.spec_id.isin(tmp)],
+                        *args
+                    ),
+                )
+            )
+            # """
+        self.myPool.close()
+        self.myPool.join()
+        return results
+
     def _process_spectra(self, afile, modfile, modfile2, PTMmap):
         """
         When an mgf file is provided, MS2PIP either saves the feature vectors to
@@ -1022,41 +1041,16 @@ class MS2PIP:
         """
         sys.stdout.write("scanning spectrum file... \n")
         titles = scan_spectrum_file(self.spec_file)
-        split_titles = prepare_titles(titles, self.num_cpu)
-        results = []
-
-        for i in range(self.num_cpu):
-            tmp = split_titles[i]
-            """
-            process_spectra(
-                i,
-                spec_file,
-                vector_file,
-                data[data["spec_id"].isin(tmp)],
-                afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
-            """
-            results.append(
-                self.myPool.apply_async(
-                    process_spectra,
-                    args=(
-                        i,
+        return self._execute_in_pool(titles, process_spectra, (
                         self.spec_file,
                         self.vector_file,
-                        self.data[self.data["spec_id"].isin(tmp)],
                         afile,
                         modfile,
                         modfile2,
                         PTMmap,
                         self.model,
                         self.fragerror,
-                        self.tableau,
-                    ),
-                )
-            )
-            # """
-        self.myPool.close()
-        self.myPool.join()
-        return results
+                        self.tableau))
 
     def _write_vector_file(self, results):
         all_results = []
@@ -1140,36 +1134,14 @@ class MS2PIP:
         return all_preds
 
     def _process_peptides(self, afile, modfile, modfile2, PTMmap):
+        sys.stdout.write("scanning peptide file... ")
         titles = self.data.spec_id.tolist()
-        split_titles = prepare_titles(titles, self.num_cpu)
-        results = []
-
-        for i in range(self.num_cpu):
-            tmp = split_titles[i]
-            """
-            process_peptides(
-                i,
-                data[data.spec_id.isin(tmp)],
-                afile, modfile, modfile2, PTMmap, model)
-            """
-            results.append(
-                self.myPool.apply_async(
-                    process_peptides,
-                    args=(
-                        i,
-                        self.data[self.data.spec_id.isin(tmp)],
+        return self._execute_in_pool(titles, process_peptides, (
                         afile,
                         modfile,
                         modfile2,
                         PTMmap,
-                        self.model,
-                    ),
-                )
-            )
-            # """
-        self.myPool.close()
-        self.myPool.join()
-        return results
+                        self.model))
 
     def _write_results(self, all_preds):
         if "mgf" in self.out_formats:
