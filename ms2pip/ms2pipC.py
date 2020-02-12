@@ -217,7 +217,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
             sys.stdout.write("(%i)%i " % (worker_num, pcount))
             sys.stdout.flush()
 
-    return mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf
+    return mz_buf, prediction_buf, None, peplen_buf, charge_buf, pepid_buf
 
 
 def process_spectra(
@@ -831,6 +831,380 @@ def argument_parser():
     )
 
 
+class MS2PIP:
+    def __init__(self, pep_file,
+                 spec_file=None,
+                 vector_file=None,
+                 config_file=None,
+                 num_cpu=23,
+                 params=None,
+                 output_filename=None,
+                 datasetname=None,
+                 return_results=True,
+                 limit=None,
+                 compute_correlations=False,
+                 tableau=False):
+        self.pep_file = pep_file
+        self.spec_file = spec_file
+        self.vector_file = vector_file
+        self.num_cpu = num_cpu
+        self.return_results = return_results
+        self.limit = limit
+        self.compute_correlations = compute_correlations
+        self.tableau = tableau
+
+        # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
+        if params is None:
+            if config_file is None:
+                # TODO: what about datasetname? It doesn't seem to be used
+                if datasetname is None:
+                    print("No config file specified")
+                    exit(1)
+            else:
+                self.params = load_configfile(config_file)
+        else:
+            self.params = params
+
+        if "model" in self.params:
+            self.model = self.params["model"]
+        elif "frag_method" in self.params:
+            self.model = self.params["frag_method"]
+        else:
+            # TODO: exception
+            print("Please specify model in config file or parameters.")
+            exit(1)
+        self.fragerror = self.params["frag_error"]
+
+        # Validate requested output formats
+        if "out" in self.params:
+            self.out_formats = [o.lower().strip() for o in self.params["out"].split(",")]
+            for o in self.out_formats:
+                if o not in SUPPORTED_OUT_FORMATS:
+                    print("Unknown output format: '{}'".format(o))
+                    print(
+                        "Should be one of the following formats: {}".format(
+                            SUPPORTED_OUT_FORMATS
+                        )
+                    )
+                    exit(1)
+        else:
+            if not return_results:
+                print("No output format specified; defaulting to csv")
+                self.out_formats = ["csv"]
+            else:
+                self.out_formats = []
+
+        # Validate requested model
+        if self.model in MODELS.keys():
+            print("using {} models".format(self.model))
+        else:
+            print("Unknown fragmentation method: {}".format(self.model))
+            print("Should be one of the following methods: {}".format(MODELS.keys()))
+            exit(1)
+
+        if output_filename is None and not return_results:
+            self.output_filename = "{}_{}".format(".".join(pep_file.split(".")[:-1]), self.model)
+        else:
+            self.output_filename = output_filename
+
+    def run(self):
+        afile = self._write_amino_accid_masses()
+
+        # PTMs are loaded the same as in Omega
+        # This allows me to use the same C init() function in bot ms2ip and Omega
+        (modfile, modfile2, PTMmap) = generate_modifications_file(self.params, MASSES, A_MAP)
+
+        self._read_peptide_information()
+
+        sys.stdout.write("starting workers...\n")
+        self.myPool = multiprocessing.Pool(self.num_cpu)
+
+        if self.spec_file:
+            results = self._process_spectra(afile, modfile, modfile2, PTMmap)
+
+            sys.stdout.write("\nmerging results ")
+            if self.vector_file:
+                self._write_vector_file(results)
+            else:
+                all_preds = self._predict_spec(results)
+
+                sys.stdout.write(
+                    "\nwriting file {}_pred_and_emp.csv...\n".format(self.output_filename)
+                )
+                all_preds.to_csv("{}_pred_and_emp.csv".format(self.output_filename), index=False)
+
+                if self.compute_correlations:
+                    sys.stdout.write("computing correlations...\n")
+                    correlations = calc_correlations.calc_correlations(all_preds)
+                    correlations.to_csv(
+                        "{}_correlations.csv".format(self.output_filename), index=True
+                    )
+                    sys.stdout.write("median correlations: \n")
+                    sys.stdout.write(
+                        "{}\n".format(correlations.groupby("ion")["pearsonr"].median())
+                    )
+                sys.stdout.write("done! \n")
+        else:
+            sys.stdout.write("scanning peptide file... ")
+            results = self._process_peptides(afile, modfile, modfile2, PTMmap)
+
+            sys.stdout.write("merging results...\n")
+            all_preds = self._predict_spec(results)
+
+        if not self.return_results:
+            self._write_results(all_preds)
+        else:
+            return all_preds
+
+    def _write_amino_accid_masses(self):
+        # Create amino acid MASSES file
+        # to be compatible with Omega
+        # that might have fixed modifications
+        f = tempfile.NamedTemporaryFile(delete=False)
+        for m in MASSES:
+            f.write(str.encode("{}\n".format(m)))
+        f.write(str.encode("0\n"))
+        f.close()
+        return f.name
+
+    def _read_peptide_information(self):
+        # read peptide information
+        # the file contains the columns: spec_id, modifications, peptide and charge
+        if type(self.pep_file) == str:
+            with open(self.pep_file, "rt") as f:
+                line = f.readline()
+                if line[:7] != "spec_id":
+                    sys.stdout.write("PEPREC file should start with header column\n")
+                    exit(1)
+                sep = line[7]
+            data = pd.read_csv(
+                self.pep_file,
+                sep=sep,
+                index_col=False,
+                dtype={"spec_id": str, "modifications": str},
+                nrows=self.limit,
+            )
+        else:
+            data = self.pep_file
+        # for some reason the missing values are converted to float otherwise
+        data = data.fillna("-")
+
+        # Filter PEPREC for unsupported peptides
+        num_pep = len(data)
+        data = data[
+            ~(data["peptide"].str.contains("B|J|O|U|X|Z"))
+            & ~(data["peptide"].str.len() < 3)
+            & ~(data["peptide"].str.len() > 99)
+        ].copy()
+        num_pep_filtered = num_pep - len(data)
+        if num_pep_filtered > 0:
+            sys.stdout.write(
+                "Removed {} unsupported peptide sequences (< 3, > 99 \
+    amino acids, or containing B, J, O, U, X or Z).\n".format(
+                    num_pep_filtered
+                )
+            )
+
+        if len(data) == 0:
+            sys.stdout.write(
+                "No peptides for which to predict intensities. Please \
+    provide at least one valid peptide sequence.\n"
+            )
+            exit(1)
+
+        self.data = data
+
+    def _process_spectra(self, afile, modfile, modfile2, PTMmap):
+        """
+        When an mgf file is provided, MS2PIP either saves the feature vectors to
+        train models with or writes a file with the predicted spectra next to
+        the empirical one.
+        """
+        sys.stdout.write("scanning spectrum file... \n")
+        titles = scan_spectrum_file(self.spec_file)
+        split_titles = prepare_titles(titles, self.num_cpu)
+        results = []
+
+        for i in range(self.num_cpu):
+            tmp = split_titles[i]
+            """
+            process_spectra(
+                i,
+                spec_file,
+                vector_file,
+                data[data["spec_id"].isin(tmp)],
+                afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
+            """
+            results.append(
+                self.myPool.apply_async(
+                    process_spectra,
+                    args=(
+                        i,
+                        self.spec_file,
+                        self.vector_file,
+                        self.data[self.data["spec_id"].isin(tmp)],
+                        afile,
+                        modfile,
+                        modfile2,
+                        PTMmap,
+                        self.model,
+                        self.fragerror,
+                        self.tableau,
+                    ),
+                )
+            )
+            # """
+        self.myPool.close()
+        self.myPool.join()
+        return results
+
+    def _write_vector_file(self, results):
+        all_results = []
+        for r in results:
+            sys.stdout.write(".")
+            psmids, df, dtargets = r.get()
+
+            # dtargets is a dict, containing targets for every ion type (keys are int)
+            for i, t in dtargets.items():
+                df[
+                    "targets_{}".format(MODELS[self.model]["ion_types"][i])
+                ] = np.concatenate(t, axis=None)
+            df["psmid"] = psmids
+
+            all_results.append(df)
+
+        # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
+        all_results = pd.concat([df for df in all_results if len(df) != 0])
+
+        sys.stdout.write("\nwriting vector file {}... \n".format(self.vector_file))
+        # write result. write format depends on extension:
+        ext = self.vector_file.split(".")[-1]
+        if ext == "pkl":
+            all_results.to_pickle(self.vector_file + ".pkl")
+        elif ext == "csv":
+            all_results.to_csv(self.vector_file)
+        else:
+            # "table" is a tag used to read back the .h5
+            all_results.to_hdf(self.vector_file, "table")
+        
+        return all_results
+
+    def _predict_spec(self, results):
+        mz_bufs = []
+        prediction_bufs = []
+        target_bufs = []
+        peplen_bufs = []
+        charge_bufs = []
+        pepid_bufs = []
+        for r in results:
+            (
+                mz_buf,
+                prediction_buf,
+                target_buf,
+                peplen_buf,
+                charge_buf,
+                pepid_buf,
+            ) = r.get()
+            mz_bufs.extend(mz_buf)
+            prediction_bufs.extend(prediction_buf)
+            peplen_bufs.extend(peplen_buf)
+            charge_bufs.extend(charge_buf)
+            pepid_bufs.extend(pepid_buf)
+            if target_buf:
+                target_bufs.extend(target_buf)
+
+        # Reconstruct DataFrame
+        num_ion_types = len(MODELS[self.model]["ion_types"])
+        ions = []
+        ionnumbers = []
+        charges = []
+        pepids = []
+        for pi, pl in enumerate(peplen_bufs):
+            [
+                ions.extend([ion_type] * (pl - 1))
+                for ion_type in MODELS[self.model]["ion_types"]
+            ]
+            ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
+            charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
+            pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
+        all_preds = pd.DataFrame()
+        all_preds["spec_id"] = pepids
+        all_preds["charge"] = charges
+        all_preds["ion"] = ions
+        all_preds["ionnumber"] = ionnumbers
+        all_preds["mz"] = np.concatenate(mz_bufs, axis=None)
+        all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
+        if target_bufs:
+            all_preds["target"] = np.concatenate(target_bufs, axis=None)
+
+        return all_preds
+
+    def _process_peptides(self, afile, modfile, modfile2, PTMmap):
+        titles = self.data.spec_id.tolist()
+        split_titles = prepare_titles(titles, self.num_cpu)
+        results = []
+
+        for i in range(self.num_cpu):
+            tmp = split_titles[i]
+            """
+            process_peptides(
+                i,
+                data[data.spec_id.isin(tmp)],
+                afile, modfile, modfile2, PTMmap, model)
+            """
+            results.append(
+                self.myPool.apply_async(
+                    process_peptides,
+                    args=(
+                        i,
+                        self.data[self.data.spec_id.isin(tmp)],
+                        afile,
+                        modfile,
+                        modfile2,
+                        PTMmap,
+                        self.model,
+                    ),
+                )
+            )
+            # """
+        self.myPool.close()
+        self.myPool.join()
+        return results
+
+    def _write_results(self, all_preds):
+        if "mgf" in self.out_formats:
+            print("writing MGF file {}_predictions.mgf...".format(self.output_filename))
+            spectrum_output.write_mgf(
+                all_preds, peprec=self.data, output_filename=self.output_filename
+            )
+
+        if "msp" in self.out_formats:
+            print("writing MSP file {}_predictions.msp...".format(self.output_filename))
+            spectrum_output.write_msp(
+                all_preds, self.data, output_filename=self.output_filename
+            )
+
+        if "bibliospec" in self.out_formats:
+            print("writing SSL/MS2 files...")
+            spectrum_output.write_bibliospec(
+                all_preds, self.data, self.params, output_filename=self.output_filename
+            )
+
+        if "spectronaut" in self.out_formats:
+            print("writing Spectronaut CSV files...")
+            spectrum_output.write_spectronaut(
+                all_preds, self.data, self.params, output_filename=self.output_filename
+            )
+
+        if "csv" in self.out_formats:
+            print("writing CSV {}_predictions.csv...".format(self.output_filename))
+            all_preds.to_csv(
+                "{}_predictions.csv".format(self.output_filename), index=False
+            )
+
+        sys.stdout.write("done!\n")
+
+
 def run(
     pep_file,
     spec_file=None,
@@ -845,360 +1219,15 @@ def run(
     compute_correlations=False,
     tableau=False,
 ):
-    # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
-
-    # If not specified, get parameters from config_file
-    if params is None:
-        if config_file is None:
-            if datasetname is None:
-                print("No config file specified")
-                exit(1)
-        else:
-            params = load_configfile(config_file)
-
-    if "model" in params:
-        model = params["model"]
-    elif "frag_method" in params:
-        model = params["frag_method"]
-    else:
-        print("Please specify model in config file or parameters.")
-        exit(1)
-    fragerror = params["frag_error"]
-
-    # Validate requested output formats
-    if "out" in params:
-        out_formats = [o.lower().strip() for o in params["out"].split(",")]
-        for o in out_formats:
-            if o not in SUPPORTED_OUT_FORMATS:
-                print("Unknown output format: '{}'".format(o))
-                print(
-                    "Should be one of the following formats: {}".format(
-                        SUPPORTED_OUT_FORMATS
-                    )
-                )
-                exit(1)
-    else:
-        if not return_results:
-            print("No output format specified; defaulting to csv")
-            out_formats = ["csv"]
-        else:
-            out_formats = []
-
-    # Validate requested model
-    if model in MODELS.keys():
-        print("using {} models".format(model))
-    else:
-        print("Unknown fragmentation method: {}".format(model))
-        print("Should be one of the following methods: {}".format(MODELS.keys()))
-        exit(1)
-
-    if output_filename is None and not return_results:
-        output_filename = "{}_{}".format(".".join(pep_file.split(".")[:-1]), model)
-
-    # Create amino acid MASSES file
-    # to be compatible with Omega
-    # that might have fixed modifications
-    f = tempfile.NamedTemporaryFile(delete=False)
-    for m in MASSES:
-        f.write(str.encode("{}\n".format(m)))
-    f.write(str.encode("0\n"))
-    f.close()
-    afile = f.name
-
-    # PTMs are loaded the same as in Omega
-    # This allows me to use the same C init() function in bot ms2ip and Omega
-    (modfile, modfile2, PTMmap) = generate_modifications_file(params, MASSES, A_MAP)
-
-    # read peptide information
-    # the file contains the columns: spec_id, modifications, peptide and charge
-    if type(pep_file) == str:
-        with open(pep_file, "rt") as f:
-            line = f.readline()
-            if line[:7] != "spec_id":
-                sys.stdout.write("PEPREC file should start with header column\n")
-                exit(1)
-            sep = line[7]
-        data = pd.read_csv(
-            pep_file,
-            sep=sep,
-            index_col=False,
-            dtype={"spec_id": str, "modifications": str},
-            nrows=limit,
-        )
-    else:
-        data = pep_file
-    # for some reason the missing values are converted to float otherwise
-    data = data.fillna("-")
-
-    # Filter PEPREC for unsupported peptides
-    num_pep = len(data)
-    data = data[
-        ~(data["peptide"].str.contains("B|J|O|U|X|Z"))
-        & ~(data["peptide"].str.len() < 3)
-        & ~(data["peptide"].str.len() > 99)
-    ].copy()
-    num_pep_filtered = num_pep - len(data)
-    if num_pep_filtered > 0:
-        sys.stdout.write(
-            "Removed {} unsupported peptide sequences (< 3, > 99 \
-amino acids, or containing B, J, O, U, X or Z).\n".format(
-                num_pep_filtered
-            )
-        )
-
-    if len(data) == 0:
-        sys.stdout.write(
-            "No peptides for which to predict intensities. Please \
-provide at least one valid peptide sequence.\n"
-        )
-        exit(1)
-
-    sys.stdout.write("starting workers...\n")
-    myPool = multiprocessing.Pool(num_cpu)
-
-    if spec_file:
-        """
-        When an mgf file is provided, MS2PIP either saves the feature vectors to
-        train models with or writes a file with the predicted spectra next to
-        the empirical one.
-        """
-        sys.stdout.write("scanning spectrum file... \n")
-        titles = scan_spectrum_file(spec_file)
-        split_titles = prepare_titles(titles, num_cpu)
-        results = []
-
-        for i in range(num_cpu):
-            tmp = split_titles[i]
-            """
-            process_spectra(
-                i,
-                spec_file,
-                vector_file,
-                data[data["spec_id"].isin(tmp)],
-                afile, modfile, modfile2, PTMmap, model, fragerror, tableau)
-            """
-            results.append(
-                myPool.apply_async(
-                    process_spectra,
-                    args=(
-                        i,
-                        spec_file,
-                        vector_file,
-                        data[data["spec_id"].isin(tmp)],
-                        afile,
-                        modfile,
-                        modfile2,
-                        PTMmap,
-                        model,
-                        fragerror,
-                        tableau,
-                    ),
-                )
-            )
-            # """
-        myPool.close()
-        myPool.join()
-
-        sys.stdout.write("\nmerging results ")
-
-        # Create vector file
-        if vector_file:
-            all_results = []
-            for r in results:
-                sys.stdout.write(".")
-                psmids, df, dtargets = r.get()
-
-                # dtargets is a dict, containing targets for every ion type (keys are int)
-                for i, t in dtargets.items():
-                    df[
-                        "targets_{}".format(MODELS[model]["ion_types"][i])
-                    ] = np.concatenate(t, axis=None)
-                df["psmid"] = psmids
-
-                all_results.append(df)
-
-            # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
-            all_results = pd.concat([df for df in all_results if len(df) != 0])
-
-            sys.stdout.write("\nwriting vector file {}... \n".format(vector_file))
-            # write result. write format depends on extension:
-            ext = vector_file.split(".")[-1]
-            if ext == "pkl":
-                all_results.to_pickle(vector_file + ".pkl")
-            elif ext == "csv":
-                all_results.to_csv(vector_file)
-            else:
-                # "table" is a tag used to read back the .h5
-                all_results.to_hdf(vector_file, "table")
-
-        # Predict and compare with MGF file
-        else:
-            mz_bufs = []
-            prediction_bufs = []
-            target_bufs = []
-            peplen_bufs = []
-            charge_bufs = []
-            pepid_bufs = []
-            for r in results:
-                (
-                    mz_buf,
-                    prediction_buf,
-                    target_buf,
-                    peplen_buf,
-                    charge_buf,
-                    pepid_buf,
-                ) = r.get()
-                mz_bufs.extend(mz_buf)
-                prediction_bufs.extend(prediction_buf)
-                target_bufs.extend(target_buf)
-                peplen_bufs.extend(peplen_buf)
-                charge_bufs.extend(charge_buf)
-                pepid_bufs.extend(pepid_buf)
-
-            # Reconstruct DataFrame
-            num_ion_types = len(mz_bufs[0])
-            ions = []
-            ionnumbers = []
-            charges = []
-            pepids = []
-            for pi, pl in enumerate(peplen_bufs):
-                [
-                    ions.extend([ion_type] * (pl - 1))
-                    for ion_type in MODELS[model]["ion_types"]
-                ]
-                ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
-                charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
-                pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
-            all_preds = pd.DataFrame()
-            all_preds["spec_id"] = pepids
-            all_preds["charge"] = charges
-            all_preds["ion"] = ions
-            all_preds["ionnumber"] = ionnumbers
-            all_preds["mz"] = np.concatenate(mz_bufs, axis=None)
-            all_preds["target"] = np.concatenate(target_bufs, axis=None)
-            all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
-
-            sys.stdout.write(
-                "\nwriting file {}_pred_and_emp.csv...\n".format(output_filename)
-            )
-            all_preds.to_csv("{}_pred_and_emp.csv".format(output_filename), index=False)
-
-            if compute_correlations:
-                sys.stdout.write("computing correlations...\n")
-                correlations = calc_correlations.calc_correlations(all_preds)
-                correlations.to_csv(
-                    "{}_correlations.csv".format(output_filename), index=True
-                )
-                sys.stdout.write("median correlations: \n")
-                sys.stdout.write(
-                    "{}\n".format(correlations.groupby("ion")["pearsonr"].median())
-                )
-
-            sys.stdout.write("done! \n")
-
-    # Only get the predictions
-    else:
-        sys.stdout.write("scanning peptide file... ")
-
-        titles = data.spec_id.tolist()
-        split_titles = prepare_titles(titles, num_cpu)
-        results = []
-
-        for i in range(num_cpu):
-            tmp = split_titles[i]
-            """
-            process_peptides(
-                i,
-                data[data.spec_id.isin(tmp)],
-                afile, modfile, modfile2, PTMmap, model)
-            """
-            results.append(
-                myPool.apply_async(
-                    process_peptides,
-                    args=(
-                        i,
-                        data[data.spec_id.isin(tmp)],
-                        afile,
-                        modfile,
-                        modfile2,
-                        PTMmap,
-                        model,
-                    ),
-                )
-            )
-            # """
-        myPool.close()
-        myPool.join()
-
-        sys.stdout.write("merging results...\n")
-
-        mz_bufs = []
-        prediction_bufs = []
-        peplen_bufs = []
-        charge_bufs = []
-        pepid_bufs = []
-        for r in results:
-            mz_buf, prediction_buf, peplen_buf, charge_buf, pepid_buf = r.get()
-            mz_bufs.extend(mz_buf)
-            prediction_bufs.extend(prediction_buf)
-            peplen_bufs.extend(peplen_buf)
-            charge_bufs.extend(charge_buf)
-            pepid_bufs.extend(pepid_buf)
-
-        # Reconstruct DataFrame
-        num_ion_types = len(MODELS[model]["ion_types"])
-
-        ions = []
-        ionnumbers = []
-        charges = []
-        pepids = []
-        for pi, pl in enumerate(peplen_bufs):
-            _ = [
-                ions.extend([ion_type] * (pl - 1))
-                for ion_type in MODELS[model]["ion_types"]
-            ]
-            ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
-            charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
-            pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
-        all_preds = pd.DataFrame()
-        all_preds["spec_id"] = pepids
-        all_preds["charge"] = charges
-        all_preds["ion"] = ions
-        all_preds["ionnumber"] = ionnumbers
-        all_preds["mz"] = np.concatenate(mz_bufs, axis=None)
-        all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
-
-        if not return_results:
-            if "mgf" in out_formats:
-                print("writing MGF file {}_predictions.mgf...".format(output_filename))
-                spectrum_output.write_mgf(
-                    all_preds, peprec=data, output_filename=output_filename
-                )
-
-            if "msp" in out_formats:
-                print("writing MSP file {}_predictions.msp...".format(output_filename))
-                spectrum_output.write_msp(
-                    all_preds, data, output_filename=output_filename
-                )
-
-            if "bibliospec" in out_formats:
-                print("writing SSL/MS2 files...")
-                spectrum_output.write_bibliospec(
-                    all_preds, data, params, output_filename=output_filename
-                )
-
-            if "spectronaut" in out_formats:
-                print("writing Spectronaut CSV files...")
-                spectrum_output.write_spectronaut(
-                    all_preds, data, params, output_filename=output_filename
-                )
-
-            if "csv" in out_formats:
-                print("writing CSV {}_predictions.csv...".format(output_filename))
-                all_preds.to_csv(
-                    "{}_predictions.csv".format(output_filename), index=False
-                )
-
-            sys.stdout.write("done!\n")
-        else:
-            return all_preds
+    return MS2PIP(pep_file,
+                  spec_file=spec_file,
+                  vector_file=vector_file,
+                  config_file=config_file,
+                  num_cpu=num_cpu,
+                  params=params,
+                  output_filename=output_filename,
+                  datasetname=datasetname,
+                  return_results=return_results,
+                  limit=limit,
+                  compute_correlations=compute_correlations,
+                  tableau=tableau).run()
