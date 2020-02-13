@@ -64,8 +64,8 @@ float mzs[2000];
 float predictions[1000];
 
 struct annotations{
-   float* peaks;
-   float* msms;
+	float* peaks;
+	float* msms;
 };
 typedef struct annotations annotations;
  
@@ -564,7 +564,7 @@ annotations get_t_ms2pip_all(int peplen, unsigned short* modpeptide, int numpeak
 	
 	//for (i=0; i < 18*(peplen-1); i++) { // 2*9 iontypes: b: a -H2O -NH3 b c y: -H2O z y x 
 	//    fprintf(stderr,"%f ",ions[i]); //HARD CODED!!
-   // }
+	//}
 	//fprintf(stderr,"\n");
 
 	struct annotations r = {ions,mzs};
