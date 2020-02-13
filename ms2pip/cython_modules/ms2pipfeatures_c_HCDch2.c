@@ -383,7 +383,7 @@ float* get_t_ms2pip(int peplen, unsigned short* modpeptide, int numpeaks, float*
 }
 
 int cmpfunc (const void * a, const void * b) {
-   return ( *(int*)a - *(int*)b );
+    return ( *(int*)a - *(int*)b );
 }
 
 //compute feature vectors from peptide
