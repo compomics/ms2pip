@@ -124,6 +124,10 @@ MASSES = [
 A_MAP = {a: i for i, a in enumerate(AMINOS)}
 
 
+class UnknownModification(ValueError):
+    pass
+
+
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
     Function for each worker to process a list of peptides. The models are
@@ -184,10 +188,10 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         # convert peptide string to integer list to speed up C code
         peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
 
-        modpeptide = apply_mods(peptide, mods, PTMmap)
-        if type(modpeptide) == str:
-            if modpeptide == "Unknown modification":
-                continue
+        try:
+            modpeptide = apply_mods(peptide, mods, PTMmap)
+        except UnknownModification:
+            continue
 
         pepid_buf.append(pepid)
         peplen = len(peptide) - 2
@@ -350,10 +354,10 @@ def process_spectra(
                     [0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16
                 )
 
-                modpeptide = apply_mods(peptide, mods, PTMmap)
-                if type(modpeptide) == str:
-                    if modpeptide == "Unknown modification":
-                        continue
+                try:
+                    modpeptide = apply_mods(peptide, mods, PTMmap)
+                except UnknownModification:
+                    continue
 
                 # remove reporter ions
                 if "iTRAQ" in model:
@@ -658,8 +662,7 @@ def apply_mods(peptide, mods, PTMmap):
             if tl in PTMmap:
                 modpeptide[int(l[i])] = PTMmap[tl]
             else:
-                sys.stderr.write("Unknown modification: {}\n".format(tl))
-                return "Unknown modification"
+                raise UnknownModification(tl)
 
     return modpeptide
 
