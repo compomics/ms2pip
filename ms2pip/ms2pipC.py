@@ -190,7 +190,8 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         try:
             modpeptide = apply_mods(peptide, mods, PTMmap)
-        except UnknownModification:
+        except UnknownModification as e:
+            sys.stderr.write("Unknown modification: {}\n".format(e))
             continue
 
         pepid_buf.append(pepid)
@@ -356,7 +357,8 @@ def process_spectra(
 
                 try:
                     modpeptide = apply_mods(peptide, mods, PTMmap)
-                except UnknownModification:
+                except UnknownModification as e:
+                    sys.stderr.write("Unknown modification: {}\n".format(e))
                     continue
 
                 # remove reporter ions
