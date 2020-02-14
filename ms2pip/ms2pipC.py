@@ -7,11 +7,15 @@ import multiprocessing
 from random import shuffle
 import tempfile
 import logging
+import bisect
+import itertools
+from operator import itemgetter
 
 # Third party
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
+import pyteomics.mgf
 
 # From project
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
@@ -125,6 +129,8 @@ MASSES = [
     # 147.0354  # iTRAQ fixed N-term modification (gets written to amino acid masses file)
 ]
 A_MAP = {a: i for i, a in enumerate(AMINOS)}
+
+PROTON_MASS = 1.007236
 
 
 class UnknownModificationError(ValueError):
@@ -852,6 +858,31 @@ def argument_parser():
     )
 
 
+# NOTE: taken from ms2pip server
+def get_precursor_mz_pyteomics(peptide, modifications, charge, mass_shifts):
+    """
+    Calculate precursor mass and mz for given peptide and modification list,
+    using Pyteomics.
+    peptide: stripped peptide sequence
+    modifications: MS2PIP-style formatted modifications list (e.g.
+    `0|Acetyl|2|Oxidation`)
+    mass_shifts: dictionary with `modification_name -> mass_shift` pairs
+    Returns: tuple(prec_mass, prec_mz)
+    Note: This method does not use the build-in Pyteomics modification handling, as
+    that would require a known atomic composition of the modification.
+    """
+    charge = int(charge)
+    unmodified_mass = pyteomics.mass.fast_mass(peptide)
+    mods_massses = sum([mass_shifts[mod] for mod in modifications.split('|')[1::2]])
+    prec_mass = unmodified_mass + mods_massses
+    prec_mz = (prec_mass + charge * PROTON_MASS) / charge
+    return prec_mass, prec_mz
+
+
+def get_intense_mzs(mzs, intensity, n=3):
+    return [x[0] for x in sorted(zip(mzs, intensity), key=itemgetter(1), reverse=True)[:n]]
+
+
 class MS2PIP:
     def __init__(
         self,
@@ -1199,6 +1230,35 @@ class MS2PIP:
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
 
+    def _match_spectra(self, results, max_error=0.02):
+        mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
+
+        # TODO: predictions and peptides could be done in one run if self.data were indexed
+        predictions = dict(zip(itertools.chain.from_iterable(pepid_bufs),
+                               (get_intense_mzs(np.concatenate(mzs[0], axis=None),
+                                                np.concatenate(mzs[1], axis=None))
+                                for mzs in zip(itertools.chain.from_iterable(mz_bufs), itertools.chain.from_iterable(prediction_bufs)))))
+
+        peptides = []
+        for _, peptide in self.data.iterrows():
+            mz = get_precursor_mz_pyteomics(peptide.peptide, peptide.modifications, peptide.charge, PTMmap)[1]
+            peptides.append((peptide, mz, predictions[peptide.spec_id]))
+
+        peptides.sort(key=itemgetter(1))
+        precursors = [x[1] for x in peptides]
+
+        with pyteomics.mgf.read(self.spec_file) as reader:
+            for spectrum in reader:
+                if 'pepmass' in spectrum['params']:
+                    pepmass = spectrum['params']['pepmass'][0]
+                    ms_top3 = get_intense_mzs(spectrum['m/z array'], spectrum['intensity array'])
+
+                    i = bisect.bisect_right(precursors, pepmass - max_error)
+                    while i < len(precursors) and precursors[i] < pepmass + max_error:
+                        pep_top3 = peptides[i][2]
+                        if all(abs(m - p) < max_error for m, p in zip(ms_top3, pep_top3)):
+                            yield peptide, spectrum
+                        i += 1
 
 def run(
     pep_file,
