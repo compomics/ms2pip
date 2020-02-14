@@ -905,11 +905,11 @@ class MS2PIP:
             self.output_filename = output_filename
 
     def run(self):
-        afile = self._write_amino_accid_masses()
+        self._write_amino_accid_masses()
 
         # PTMs are loaded the same as in Omega
         # This allows me to use the same C init() function in bot ms2ip and Omega
-        (modfile, modfile2, PTMmap) = generate_modifications_file(self.params, MASSES, A_MAP)
+        (self.modfile, self.modfile2, self.PTMmap) = generate_modifications_file(self.params, MASSES, A_MAP)
 
         self._read_peptide_information()
 
@@ -917,7 +917,7 @@ class MS2PIP:
         self.myPool = multiprocessing.Pool(self.num_cpu)
 
         if self.spec_file:
-            results = self._process_spectra(afile, modfile, modfile2, PTMmap)
+            results = self._process_spectra()
 
             sys.stdout.write("\nmerging results ")
             if self.vector_file:
@@ -942,7 +942,7 @@ class MS2PIP:
                     )
                 sys.stdout.write("done! \n")
         else:
-            results = self._process_peptides(afile, modfile, modfile2, PTMmap)
+            results = self._process_peptides()
 
             sys.stdout.write("merging results...\n")
             all_preds = self._predict_spec(results)
@@ -961,7 +961,7 @@ class MS2PIP:
             f.write(str.encode("{}\n".format(m)))
         f.write(str.encode("0\n"))
         f.close()
-        return f.name
+        self.afile = f.name
 
     def _read_peptide_information(self):
         # read peptide information
@@ -1030,7 +1030,7 @@ class MS2PIP:
         self.myPool.join()
         return results
 
-    def _process_spectra(self, afile, modfile, modfile2, PTMmap):
+    def _process_spectra(self):
         """
         When an mgf file is provided, MS2PIP either saves the feature vectors to
         train models with or writes a file with the predicted spectra next to
@@ -1041,10 +1041,10 @@ class MS2PIP:
         return self._execute_in_pool(titles, process_spectra, (
                         self.spec_file,
                         self.vector_file,
-                        afile,
-                        modfile,
-                        modfile2,
-                        PTMmap,
+                        self.afile,
+                        self.modfile,
+                        self.modfile2,
+                        self.PTMmap,
                         self.model,
                         self.fragerror,
                         self.tableau))
@@ -1130,14 +1130,14 @@ class MS2PIP:
 
         return all_preds
 
-    def _process_peptides(self, afile, modfile, modfile2, PTMmap):
+    def _process_peptides(self):
         sys.stdout.write("scanning peptide file... ")
         titles = self.data.spec_id.tolist()
         return self._execute_in_pool(titles, process_peptides, (
-                        afile,
-                        modfile,
-                        modfile2,
-                        PTMmap,
+                        self.afile,
+                        self.modfile,
+                        self.modfile2,
+                        self.PTMmap,
                         self.model))
 
     def _write_predictions(self, all_preds):
