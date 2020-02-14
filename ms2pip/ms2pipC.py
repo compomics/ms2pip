@@ -136,11 +136,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     spectra for all the peptides.
     """
 
-    ms2pip_pyx.ms2pip_init(
-        bytearray(afile.encode()),
-        bytearray(modfile.encode()),
-        bytearray(modfile2.encode()),
-    )
+    ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     pcount = 0
 
@@ -247,11 +243,7 @@ def process_spectra(
     empirical intensities.
     """
 
-    ms2pip_pyx.ms2pip_init(
-        bytearray(afile.encode()),
-        bytearray(modfile.encode()),
-        bytearray(modfile2.encode()),
-    )
+    ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
