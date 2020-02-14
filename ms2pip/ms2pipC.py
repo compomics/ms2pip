@@ -948,7 +948,7 @@ class MS2PIP:
             all_preds = self._predict_spec(results)
 
             if not self.return_results:
-                self._write_results(all_preds)
+                self._write_predictions(all_preds)
             else:
                 return all_preds
 
@@ -1140,7 +1140,7 @@ class MS2PIP:
                         PTMmap,
                         self.model))
 
-    def _write_results(self, all_preds):
+    def _write_predictions(self, all_preds):
         if "mgf" in self.out_formats:
             print("writing MGF file {}_predictions.mgf...".format(self.output_filename))
             spectrum_output.write_mgf(
