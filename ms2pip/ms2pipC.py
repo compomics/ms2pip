@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Native library
+import os
 import sys
 import argparse
 import multiprocessing
@@ -941,12 +942,14 @@ class MS2PIP:
                         "{}\n".format(correlations.groupby("ion")["pearsonr"].median())
                     )
                 sys.stdout.write("done! \n")
+            self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
 
             sys.stdout.write("merging results...\n")
             all_preds = self._predict_spec(results)
 
+            self._remove_amino_accid_masses()
             if not self.return_results:
                 self._write_predictions(all_preds)
             else:
@@ -962,6 +965,9 @@ class MS2PIP:
         f.write(str.encode("0\n"))
         f.close()
         self.afile = f.name
+
+    def _remove_amino_accid_masses(self):
+        os.remove(self.afile)
 
     def _read_peptide_information(self):
         # read peptide information
