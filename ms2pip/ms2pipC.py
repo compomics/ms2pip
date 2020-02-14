@@ -947,10 +947,10 @@ class MS2PIP:
             sys.stdout.write("merging results...\n")
             all_preds = self._predict_spec(results)
 
-        if not self.return_results:
-            self._write_results(all_preds)
-        else:
-            return all_preds
+            if not self.return_results:
+                self._write_results(all_preds)
+            else:
+                return all_preds
 
     def _write_amino_accid_masses(self):
         # Create amino acid MASSES file
