@@ -829,6 +829,13 @@ def argument_parser():
         help="calculate correlations (if MGF is given)",
     )
     parser.add_argument(
+        "-p",
+        action="store_true",
+        default=False,
+        dest="match_spectra",
+        help="match peptides to spectra based on predicted spectra (if MGF is given)",
+    )
+    parser.add_argument(
         "-t",
         action="store_true",
         default=False,
@@ -847,15 +854,7 @@ def argument_parser():
     if not args.num_cpu:
         args.num_cpu = multiprocessing.cpu_count()
 
-    return (
-        args.pep_file,
-        args.spec_file,
-        args.vector_file,
-        args.config_file,
-        int(args.num_cpu),
-        args.correlations,
-        args.tableau,
-    )
+    return args
 
 
 # NOTE: taken from ms2pip server
@@ -898,6 +897,7 @@ class MS2PIP:
         return_results=True,
         limit=None,
         compute_correlations=False,
+        match_spectra=False,
         tableau=False,
     ):
         self.pep_file = pep_file
@@ -907,6 +907,7 @@ class MS2PIP:
         self.return_results = return_results
         self.limit = limit
         self.compute_correlations = compute_correlations
+        self.match_spectra = match_spectra
         self.tableau = tableau
 
         # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
@@ -977,7 +978,7 @@ class MS2PIP:
 
         self._read_peptide_information()
 
-        if self.spec_file:
+        if self.spec_file and not self.match_spectra:
             results = self._process_spectra()
 
             logger.info("merging results")
@@ -1001,6 +1002,11 @@ class MS2PIP:
                         "median correlations: %f",
                         correlations.groupby("ion")["pearsonr"].median(),
                     )
+            self._remove_amino_accid_masses()
+        elif self.spec_file and self.match_spectra:
+            results = self._process_peptides()
+            for pep, spec in self._match_spectra(results):
+                print(spec['params']['title'], pep.spec_id)
             self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
@@ -1237,11 +1243,15 @@ class MS2PIP:
         predictions = dict(zip(itertools.chain.from_iterable(pepid_bufs),
                                (get_intense_mzs(np.concatenate(mzs[0], axis=None),
                                                 np.concatenate(mzs[1], axis=None))
-                                for mzs in zip(itertools.chain.from_iterable(mz_bufs), itertools.chain.from_iterable(prediction_bufs)))))
+                                for mzs in zip(itertools.chain.from_iterable(mz_bufs),
+                                               itertools.chain.from_iterable(prediction_bufs)))))
 
         peptides = []
         for _, peptide in self.data.iterrows():
-            mz = get_precursor_mz_pyteomics(peptide.peptide, peptide.modifications, peptide.charge, PTMmap)[1]
+            mz = get_precursor_mz_pyteomics(peptide.peptide,
+                                            peptide.modifications,
+                                            peptide.charge,
+                                            self.PTMmap)[1]
             peptides.append((peptide, mz, predictions[peptide.spec_id]))
 
         peptides.sort(key=itemgetter(1))
@@ -1251,13 +1261,15 @@ class MS2PIP:
             for spectrum in reader:
                 if 'pepmass' in spectrum['params']:
                     pepmass = spectrum['params']['pepmass'][0]
-                    ms_top3 = get_intense_mzs(spectrum['m/z array'], spectrum['intensity array'])
+                    ms_top3 = get_intense_mzs(spectrum['m/z array'],
+                                              spectrum['intensity array'])
 
+                    # compare all peptides with a similar precursor m/z
                     i = bisect.bisect_right(precursors, pepmass - max_error)
                     while i < len(precursors) and precursors[i] < pepmass + max_error:
                         pep_top3 = peptides[i][2]
                         if all(abs(m - p) < max_error for m, p in zip(ms_top3, pep_top3)):
-                            yield peptide, spectrum
+                            yield peptides[i][0], spectrum
                         i += 1
 
 def run(
@@ -1273,6 +1285,7 @@ def run(
     return_results=False,
     limit=None,
     compute_correlations=False,
+    match_spectra=False,
     tableau=False,
 ):
     return MS2PIP(
@@ -1288,5 +1301,6 @@ def run(
         return_results=return_results,
         limit=limit,
         compute_correlations=compute_correlations,
+        match_spectra=match_spectra,
         tableau=tableau,
     ).run()

@@ -31,16 +31,17 @@ def main():
     root_logger.setLevel(logging.INFO)
 
     print_logo()
-    pep_file, spec_file, vector_file, config_file, num_cpu, correlations, tableau = argument_parser()
-    params = load_configfile(config_file)
+    args = argument_parser()
+    params = load_configfile(args.config_file)
     try:
-        run(pep_file,
-            spec_file=spec_file,
-            vector_file=vector_file,
+        run(args.pep_file,
+            spec_file=args.spec_file,
+            vector_file=args.vector_file,
             params=params,
-            num_cpu=num_cpu,
-            compute_correlations=correlations,
-            tableau=tableau)
+            num_cpu=args.num_cpu,
+            compute_correlations=args.correlations,
+            match_spectra=args.match_spectra,
+            tableau=args.tableau)
     except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
     except NoValidPeptideSequencesError:
