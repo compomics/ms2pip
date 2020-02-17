@@ -6,6 +6,7 @@ import argparse
 import multiprocessing
 from random import shuffle
 import tempfile
+import logging
 
 # Third party
 import numpy as np
@@ -17,6 +18,7 @@ from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.cython_modules import ms2pip_pyx
 
+logger = logging.getLogger('ms2pip')
 
 # Supported output formats
 SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut"]
@@ -188,7 +190,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         try:
             modpeptide = apply_mods(peptide, mods, PTMmap)
         except UnknownModification as e:
-            sys.stderr.write("Unknown modification: {}\n".format(e))
+            logger.warn("Unknown modification: %s", e)
             continue
 
         pepid_buf.append(pepid)
@@ -351,7 +353,7 @@ def process_spectra(
                 try:
                     modpeptide = apply_mods(peptide, mods, PTMmap)
                 except UnknownModification as e:
-                    sys.stderr.write("Unknown modification: {}\n".format(e))
+                    logger.warn("Unknown modification: %s", e)
                     continue
 
                 # remove reporter ions
@@ -388,7 +390,7 @@ def process_spectra(
                     try:
                         colen = int(float(ces[title]))
                     except:
-                        sys.stderr.write("Could not parse collision energy!\n")
+                        logger.warn("Could not parse collision energy!")
                         continue
 
                 if vector_file:
@@ -633,7 +635,7 @@ def prepare_titles(titles, num_cpu):
         titles[i * len(titles) // num_cpu : (i + 1) * len(titles) // num_cpu]
         for i in range(num_cpu)
     ]
-    sys.stdout.write(
+    logger.debug(
         "{} spectra (~{:.0f} per cpu)\n".format(
             len(titles), np.mean([len(a) for a in split_titles])
         )
@@ -914,39 +916,34 @@ class MS2PIP:
 
         self._read_peptide_information()
 
-        sys.stdout.write("starting workers...\n")
+        logger.debug("starting workers...")
         self.myPool = multiprocessing.Pool(self.num_cpu)
 
         if self.spec_file:
             results = self._process_spectra()
 
-            sys.stdout.write("\nmerging results ")
+            logger.info("merging results")
             if self.vector_file:
                 self._write_vector_file(results)
             else:
                 all_preds = self._predict_spec(results)
 
-                sys.stdout.write(
-                    "\nwriting file {}_pred_and_emp.csv...\n".format(self.output_filename)
-                )
+                logger.info("writing file %s_pred_and_emp.csv...", self.output_filename)
                 all_preds.to_csv("{}_pred_and_emp.csv".format(self.output_filename), index=False)
 
                 if self.compute_correlations:
-                    sys.stdout.write("computing correlations...\n")
+                    logger.info("computing correlations")
                     correlations = calc_correlations.calc_correlations(all_preds)
                     correlations.to_csv(
                         "{}_correlations.csv".format(self.output_filename), index=True
                     )
-                    sys.stdout.write("median correlations: \n")
-                    sys.stdout.write(
-                        "{}\n".format(correlations.groupby("ion")["pearsonr"].median())
-                    )
-                sys.stdout.write("done! \n")
+                    print("median correlations:")
+                    print(correlations.groupby("ion")["pearsonr"].median())
             self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
 
-            sys.stdout.write("merging results...\n")
+            logger.info("merging results ...")
             all_preds = self._predict_spec(results)
 
             self._remove_amino_accid_masses()
@@ -1000,11 +997,10 @@ class MS2PIP:
         ].copy()
         num_pep_filtered = num_pep - len(data)
         if num_pep_filtered > 0:
-            sys.stdout.write(
+            logger.info(
                 "Removed {} unsupported peptide sequences (< 3, > 99 \
-    amino acids, or containing B, J, O, U, X or Z).\n".format(
-                    num_pep_filtered
-                )
+    amino acids, or containing B, J, O, U, X or Z).",
+                num_pep_filtered
             )
 
         if len(data) == 0:
@@ -1034,6 +1030,7 @@ class MS2PIP:
             # """
         self.myPool.close()
         self.myPool.join()
+        sys.stdout.write('\n')
         return results
 
     def _process_spectra(self):
@@ -1042,7 +1039,7 @@ class MS2PIP:
         train models with or writes a file with the predicted spectra next to
         the empirical one.
         """
-        sys.stdout.write("scanning spectrum file... \n")
+        logger.info("scanning spectrum file...")
         titles = scan_spectrum_file(self.spec_file)
         return self._execute_in_pool(titles, process_spectra, (
                         self.spec_file,
@@ -1058,7 +1055,6 @@ class MS2PIP:
     def _write_vector_file(self, results):
         all_results = []
         for r in results:
-            sys.stdout.write(".")
             psmids, df, dtargets = r.get()
 
             # dtargets is a dict, containing targets for every ion type (keys are int)
@@ -1073,7 +1069,7 @@ class MS2PIP:
         # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
         all_results = pd.concat([df for df in all_results if len(df) != 0])
 
-        sys.stdout.write("\nwriting vector file {}... \n".format(self.vector_file))
+        logger.info("writing vector file %s...", self.vector_file)
         # write result. write format depends on extension:
         ext = self.vector_file.split(".")[-1]
         if ext == "pkl":
@@ -1137,7 +1133,7 @@ class MS2PIP:
         return all_preds
 
     def _process_peptides(self):
-        sys.stdout.write("scanning peptide file... ")
+        logger.info("scanning peptide file...")
         titles = self.data.spec_id.tolist()
         return self._execute_in_pool(titles, process_peptides, (
                         self.afile,
@@ -1148,36 +1144,34 @@ class MS2PIP:
 
     def _write_predictions(self, all_preds):
         if "mgf" in self.out_formats:
-            print("writing MGF file {}_predictions.mgf...".format(self.output_filename))
+            logger.info("writing MGF file %s_predictions.mgf...", self.output_filename)
             spectrum_output.write_mgf(
                 all_preds, peprec=self.data, output_filename=self.output_filename
             )
 
         if "msp" in self.out_formats:
-            print("writing MSP file {}_predictions.msp...".format(self.output_filename))
+            logger.info("writing MSP file %s_predictions.msp...", self.output_filename)
             spectrum_output.write_msp(
                 all_preds, self.data, output_filename=self.output_filename
             )
 
         if "bibliospec" in self.out_formats:
-            print("writing SSL/MS2 files...")
+            logger.info("writing SSL/MS2 files...")
             spectrum_output.write_bibliospec(
                 all_preds, self.data, self.params, output_filename=self.output_filename
             )
 
         if "spectronaut" in self.out_formats:
-            print("writing Spectronaut CSV files...")
+            logger.info("writing Spectronaut CSV files...")
             spectrum_output.write_spectronaut(
                 all_preds, self.data, self.params, output_filename=self.output_filename
             )
 
         if "csv" in self.out_formats:
-            print("writing CSV {}_predictions.csv...".format(self.output_filename))
+            logger.info("writing CSV %s_predictions.csv...".format(self.output_filename))
             all_preds.to_csv(
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
-
-        sys.stdout.write("done!\n")
 
 
 def run(
