@@ -1257,7 +1257,7 @@ class MS2PIP:
         peptides.sort(key=itemgetter(1))
         precursors = [x[1] for x in peptides]
 
-        with pyteomics.mgf.read(self.spec_file) as reader:
+        with pyteomics.mgf.read(self.spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
             for spectrum in reader:
                 if 'pepmass' in spectrum['params']:
                     pepmass = spectrum['params']['pepmass'][0]
