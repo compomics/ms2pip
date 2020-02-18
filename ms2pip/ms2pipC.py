@@ -131,6 +131,14 @@ class UnknownModification(ValueError):
     pass
 
 
+class InvalidPEPREC(Exception):
+    pass
+
+
+class NoValidPeptideSequences(Exception):
+    pass
+
+
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
     Function for each worker to process a list of peptides. The models are
@@ -973,8 +981,7 @@ class MS2PIP:
             with open(self.pep_file, "rt") as f:
                 line = f.readline()
                 if line[:7] != "spec_id":
-                    sys.stdout.write("PEPREC file should start with header column\n")
-                    exit(1)
+                    raise InvalidPEPREC()
                 sep = line[7]
             data = pd.read_csv(
                 self.pep_file,
@@ -1004,11 +1011,7 @@ class MS2PIP:
             )
 
         if len(data) == 0:
-            sys.stdout.write(
-                "No peptides for which to predict intensities. Please \
-    provide at least one valid peptide sequence.\n"
-            )
-            exit(1)
+            raise NoValidPeptideSequences()
 
         self.data = data
 
