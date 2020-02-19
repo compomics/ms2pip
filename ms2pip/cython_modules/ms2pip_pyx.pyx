@@ -33,6 +33,12 @@ cdef extern from "ms2pip_peaks_c.c":
 
 
 def ms2pip_init(amino_masses_fname, modifications_fname, modifications_fname_sptm):
+	if not isinstance(amino_masses_fname, bytearray):
+		amino_masses_fname = bytearray(amino_masses_fname.encode())
+	if not isinstance(modifications_fname, bytearray):
+		modifications_fname = bytearray(modifications_fname.encode())
+	if not isinstance(modifications_fname_sptm, bytearray):
+		modifications_fname_sptm = bytearray(modifications_fname_sptm.encode())
 	init_ms2pip(amino_masses_fname, modifications_fname, modifications_fname_sptm)
 
 

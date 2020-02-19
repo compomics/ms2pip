@@ -22,8 +22,7 @@
 //#include "../models/HCD/model_20190107_HCD_train_Y.c"
 
 #if compile_HCD == 1
-	#include "../models/HCD/model_20190107_HCD_train_B.c"
-	#include "../models/HCD/model_20190107_HCD_train_Y.c"
+	#include "../models/HCD.h"
 #endif
 
 #if compile_HCD_ce == 1
@@ -37,25 +36,12 @@
 #endif
 
 #if compile_ALL == 1
-	#include "../models/CID/model_20190107_CID_train_B.c"
-	#include "../models/CID/model_20190107_CID_train_Y.c"
-
-	#include "../models/HCD/model_20190107_HCD_train_B.c"
-	#include "../models/HCD/model_20190107_HCD_train_Y.c"
-	#include "../models/HCD/model_20190107_HCD_train_B2.c"
-	#include "../models/HCD/model_20190107_HCD_train_Y2.c"
-	
-	#include "../models/TTOF5600/model_20190107_TTOF5600_train_B.c"
-	#include "../models/TTOF5600/model_20190107_TTOF5600_train_Y.c"
-
-	#include "../models/TMT/model_20190107_TMT_train_B.c"
-	#include "../models/TMT/model_20190107_TMT_train_Y.c"
-
-	#include "../models/iTRAQ/model_20190107_iTRAQ_train_B.c"
-	#include "../models/iTRAQ/model_20190107_iTRAQ_train_Y.c"
-	
-	#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_B.c"
-	#include "../models/iTRAQphospho/model_20190107_iTRAQphospho_train_Y.c"
+	#include "../models/CID.h"
+	#include "../models/HCD.h"
+	#include "../models/TTOF5600.h"
+	#include "../models/TMT.h"
+	#include "../models/iTRAQ.h"
+	#include "../models/iTRAQphospho.h"
 #endif
 
 float membuffer[10000];
@@ -64,8 +50,8 @@ float mzs[2000];
 float predictions[1000];
 
 struct annotations{
-   float* peaks;
-   float* msms;
+	float* peaks;
+	float* msms;
 };
 typedef struct annotations annotations;
  
@@ -564,7 +550,7 @@ annotations get_t_ms2pip_all(int peplen, unsigned short* modpeptide, int numpeak
 	
 	//for (i=0; i < 18*(peplen-1); i++) { // 2*9 iontypes: b: a -H2O -NH3 b c y: -H2O z y x 
 	//    fprintf(stderr,"%f ",ions[i]); //HARD CODED!!
-   // }
+	//}
 	//fprintf(stderr,"\n");
 
 	struct annotations r = {ions,mzs};

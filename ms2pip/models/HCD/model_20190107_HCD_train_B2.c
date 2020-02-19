@@ -1,4 +1,6 @@
-static float score_HCD_B2(unsigned int* v){
+#include "../HCD.h"
+
+float score_HCD_B2(unsigned int* v){
 float s = 0.;
 	if (v[78]<201){
 		if (v[45]<2){
