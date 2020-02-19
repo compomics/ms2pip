@@ -63,7 +63,7 @@ _ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
 extensions = [
     Extension(
         "ms2pip.cython_modules.ms2pip_pyx",
-        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"],
+        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/*/*.c"),
         extra_compile_args=[
             "-fno-var-tracking-assignments",
             "-fno-var-tracking",

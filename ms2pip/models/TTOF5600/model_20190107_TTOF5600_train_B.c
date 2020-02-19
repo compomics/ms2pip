@@ -1,4 +1,6 @@
-static float score_TTOF5600_B(unsigned int* v){
+#include "../TTOF5600.h"
+
+float score_TTOF5600_B(unsigned int* v){
 float s = 0.;
 	if (v[27]<8){
 		if (v[27]<2){

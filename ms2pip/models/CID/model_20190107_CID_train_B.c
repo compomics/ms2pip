@@ -1,4 +1,6 @@
-static float score_CID_B(unsigned int* v){
+#include "../CID.h"
+
+float score_CID_B(unsigned int* v){
 float s = 0.;
 	if (v[1]<3){
 		if (v[73]<140){
