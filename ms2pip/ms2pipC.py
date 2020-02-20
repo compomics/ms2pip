@@ -1261,15 +1261,25 @@ class MS2PIP:
             for spectrum in reader:
                 if 'pepmass' in spectrum['params']:
                     pepmass = spectrum['params']['pepmass'][0]
-                    ms_top3 = get_intense_mzs(spectrum['m/z array'],
-                                              spectrum['intensity array'])
 
                     # compare all peptides with a similar precursor m/z
                     i = bisect.bisect_right(precursors, pepmass - max_error)
                     while i < len(precursors) and precursors[i] < pepmass + max_error:
                         pep_top3 = peptides[i][2]
-                        if all(abs(m - p) < max_error for m, p in zip(ms_top3, pep_top3)):
+
+                        # TODO: this could in theory match 3 times to the same
+                        # m/z. Is it possible to have 3 m/z to be "equal",
+                        # taking into account a sufficiently small max_error?
+                        try:
+                            matches = (m for m in  spectrum['m/z array'] if any(abs(m - p) < max_error for p in pep_top3))
+                            next(matches)
+                            next(matches)
+                            next(matches)
                             yield peptides[i][0], spectrum
+                        except StopIteration:
+                            # no match
+                            pass
+
                         i += 1
 
 def run(
