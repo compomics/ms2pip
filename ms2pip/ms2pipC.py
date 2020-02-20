@@ -844,7 +844,8 @@ class MS2PIP:
                  spec_file=None,
                  vector_file=None,
                  config_file=None,
-                 num_cpu=23,
+                 num_cpu=1,
+                 use_billiard=False,
                  params=None,
                  output_filename=None,
                  datasetname=None,
@@ -915,6 +916,13 @@ class MS2PIP:
         else:
             self.output_filename = output_filename
 
+        logger.debug("starting workers (use_billiard=%r, num_cpu=%d) ...", use_billiard, self.num_cpu)
+        if use_billiard:
+            import billiard
+            self.myPool = billiard.Pool(self.num_cpu)
+        else:
+            self.myPool = multiprocessing.Pool(self.num_cpu)
+
     def run(self):
         self._write_amino_accid_masses()
 
@@ -923,9 +931,6 @@ class MS2PIP:
         (self.modfile, self.modfile2, self.PTMmap) = generate_modifications_file(self.params, MASSES, A_MAP)
 
         self._read_peptide_information()
-
-        logger.debug("starting workers...")
-        self.myPool = multiprocessing.Pool(self.num_cpu)
 
         if self.spec_file:
             results = self._process_spectra()
@@ -1183,6 +1188,7 @@ def run(
     vector_file=None,
     config_file=None,
     num_cpu=23,
+    use_billiard=False,
     params=None,
     output_filename=None,
     datasetname=None,
@@ -1196,6 +1202,7 @@ def run(
                   vector_file=vector_file,
                   config_file=config_file,
                   num_cpu=num_cpu,
+                  use_billiard=use_billiard,
                   params=params,
                   output_filename=output_filename,
                   datasetname=datasetname,
