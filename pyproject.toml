@@ -1,0 +1,2 @@
+[build-system]
+requires = ["cython>=0.29"]
