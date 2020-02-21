@@ -127,31 +127,31 @@ MASSES = [
 A_MAP = {a: i for i, a in enumerate(AMINOS)}
 
 
-class UnknownModification(ValueError):
+class UnknownModificationError(ValueError):
     pass
 
 
-class InvalidPEPREC(Exception):
+class InvalidPEPRECError(Exception):
     pass
 
 
-class NoValidPeptideSequences(Exception):
+class NoValidPeptideSequencesError(Exception):
     pass
 
 
-class UnknownOutputFormat(Exception):
+class UnknownOutputFormatError(ValueError):
     pass
 
 
-class UnknownFragmentationMethod(Exception):
+class UnknownFragmentationMethodError(ValueError):
     pass
 
 
-class MissingConfiguration(Exception):
+class MissingConfigurationError(Exception):
     pass
 
 
-class FragmentationModelRequired(Exception):
+class FragmentationModelRequiredError(Exception):
     pass
 
 
@@ -213,7 +213,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         try:
             modpeptide = apply_mods(peptide, mods, PTMmap)
-        except UnknownModification as e:
+        except UnknownModificationError as e:
             logger.warn("Unknown modification: %s", e)
             continue
 
@@ -376,7 +376,7 @@ def process_spectra(
 
                 try:
                     modpeptide = apply_mods(peptide, mods, PTMmap)
-                except UnknownModification as e:
+                except UnknownModificationError as e:
                     logger.warn("Unknown modification: %s", e)
                     continue
 
@@ -683,7 +683,7 @@ def apply_mods(peptide, mods, PTMmap):
             if tl in PTMmap:
                 modpeptide[int(l[i])] = PTMmap[tl]
             else:
-                raise UnknownModification(tl)
+                raise UnknownModificationError(tl)
 
     return modpeptide
 
@@ -877,7 +877,7 @@ class MS2PIP:
         # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
         if params is None:
             if config_file is None:
-                raise MissingConfiguration()
+                raise MissingConfigurationError()
             else:
                 self.params = load_configfile(config_file)
         else:
@@ -888,7 +888,7 @@ class MS2PIP:
         elif "frag_method" in self.params:
             self.model = self.params["frag_method"]
         else:
-            raise FragmentationModelRequired()
+            raise FragmentationModelRequiredError()
         self.fragerror = self.params["frag_error"]
 
         # Validate requested output formats
@@ -896,7 +896,7 @@ class MS2PIP:
             self.out_formats = [o.lower().strip() for o in self.params["out"].split(",")]
             for o in self.out_formats:
                 if o not in SUPPORTED_OUT_FORMATS:
-                    raise UnknownOutputFormat(o)
+                    raise UnknownOutputFormatError(o)
         else:
             if not return_results:
                 logger.debug("No output format specified; defaulting to csv")
@@ -908,7 +908,7 @@ class MS2PIP:
         if self.model in MODELS.keys():
             logger.info("using {} models".format(self.model))
         else:
-            raise UnknownFragmentationMethod(self.model)
+            raise UnknownFragmentationMethodError(self.model)
 
         if output_filename is None and not return_results:
             self.output_filename = "{}_{}".format(".".join(pep_file.split(".")[:-1]), self.model)
@@ -980,7 +980,7 @@ class MS2PIP:
             with open(self.pep_file, "rt") as f:
                 line = f.readline()
                 if line[:7] != "spec_id":
-                    raise InvalidPEPREC()
+                    raise InvalidPEPRECError()
                 sep = line[7]
             data = pd.read_csv(
                 self.pep_file,
@@ -1010,7 +1010,7 @@ class MS2PIP:
             )
 
         if len(data) == 0:
-            raise NoValidPeptideSequences()
+            raise NoValidPeptideSequencesError()
 
         self.data = data
 
