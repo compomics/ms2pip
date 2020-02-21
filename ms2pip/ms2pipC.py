@@ -139,6 +139,22 @@ class NoValidPeptideSequences(Exception):
     pass
 
 
+class UnknownOutputFormat(Exception):
+    pass
+
+
+class UnknownFragmentationMethod(Exception):
+    pass
+
+
+class MissingConfiguration(Exception):
+    pass
+
+
+class FragmentationModelRequired(Exception):
+    pass
+
+
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
     Function for each worker to process a list of peptides. The models are
@@ -861,10 +877,7 @@ class MS2PIP:
         # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
         if params is None:
             if config_file is None:
-                # TODO: what about datasetname? It doesn't seem to be used
-                if datasetname is None:
-                    print("No config file specified")
-                    exit(1)
+                raise MissingConfiguration()
             else:
                 self.params = load_configfile(config_file)
         else:
@@ -875,9 +888,7 @@ class MS2PIP:
         elif "frag_method" in self.params:
             self.model = self.params["frag_method"]
         else:
-            # TODO: exception
-            print("Please specify model in config file or parameters.")
-            exit(1)
+            raise FragmentationModelRequired()
         self.fragerror = self.params["frag_error"]
 
         # Validate requested output formats
@@ -885,27 +896,19 @@ class MS2PIP:
             self.out_formats = [o.lower().strip() for o in self.params["out"].split(",")]
             for o in self.out_formats:
                 if o not in SUPPORTED_OUT_FORMATS:
-                    print("Unknown output format: '{}'".format(o))
-                    print(
-                        "Should be one of the following formats: {}".format(
-                            SUPPORTED_OUT_FORMATS
-                        )
-                    )
-                    exit(1)
+                    raise UnknownOutputFormat(o)
         else:
             if not return_results:
-                print("No output format specified; defaulting to csv")
+                logger.debug("No output format specified; defaulting to csv")
                 self.out_formats = ["csv"]
             else:
                 self.out_formats = []
 
         # Validate requested model
         if self.model in MODELS.keys():
-            print("using {} models".format(self.model))
+            logger.info("using {} models".format(self.model))
         else:
-            print("Unknown fragmentation method: {}".format(self.model))
-            print("Should be one of the following methods: {}".format(MODELS.keys()))
-            exit(1)
+            raise UnknownFragmentationMethod(self.model)
 
         if output_filename is None and not return_results:
             self.output_filename = "{}_{}".format(".".join(pep_file.split(".")[:-1]), self.model)
@@ -942,8 +945,7 @@ class MS2PIP:
                     correlations.to_csv(
                         "{}_correlations.csv".format(self.output_filename), index=True
                     )
-                    print("median correlations:")
-                    print(correlations.groupby("ion")["pearsonr"].median())
+                    logger.info("median correlations: %f", correlations.groupby("ion")["pearsonr"].median())
             self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()

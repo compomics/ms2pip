@@ -1,7 +1,10 @@
 import logging
 
 from ms2pip.ms2pipC import (argument_parser, load_configfile, run,
-                            InvalidPEPREC, NoValidPeptideSequences)
+                            InvalidPEPREC, NoValidPeptideSequences,
+                            UnknownOutputFormat, UnknownFragmentationMethod,
+                            FragmentationModelRequired, SUPPORTED_OUT_FORMATS,
+                            MODELS)
 
 
 def print_logo():
@@ -42,6 +45,12 @@ def main():
     except NoValidPeptideSequences:
         root_logger.error("No peprides for which to predict intensities. \
             please provide at least one valid peptide sequence.")
+    except UnknownOutputFormat as o:
+        root_logger.error("Unknown output format: '%s' (supported formats: %s)", o, SUPPORTED_OUT_FORMATS)
+    except UnknownFragmentationMethod as f:
+        root_logger.error("Unknown fragmentation method: %s (supported methods: %s)", f, MODELS.keys())
+    except FragmentationModelRequired:
+        root_logger.error("Please specify model in config file.")
 
 
 if __name__ == "__main__":
