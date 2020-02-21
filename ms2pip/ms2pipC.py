@@ -781,6 +781,7 @@ def argument_parser():
         "-c",
         metavar="CONFIG_FILE",
         action="store",
+        required=True,
         dest="config_file",
         help="config file",
     )
@@ -820,10 +821,6 @@ def argument_parser():
         help="number of CPUs to use (default: all available)",
     )
     args = parser.parse_args()
-
-    if not args.config_file:
-        print("Please provide a configfile (-c)!")
-        exit(1)
 
     if not args.num_cpu:
         args.num_cpu = multiprocessing.cpu_count()
