@@ -1,7 +1,11 @@
 import logging
 
 from ms2pip.ms2pipC import (argument_parser, load_configfile, run,
-                            InvalidPEPREC, NoValidPeptideSequences)
+                            InvalidPEPRECError, NoValidPeptideSequencesError,
+                            UnknownOutputFormatError,
+                            UnknownFragmentationMethodError,
+                            FragmentationModelRequiredError,
+                            SUPPORTED_OUT_FORMATS, MODELS)
 
 
 def print_logo():
@@ -37,11 +41,17 @@ def main():
             num_cpu=num_cpu,
             compute_correlations=correlations,
             tableau=tableau)
-    except InvalidPEPREC:
+    except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
-    except NoValidPeptideSequences:
+    except NoValidPeptideSequencesError:
         root_logger.error("No peprides for which to predict intensities. \
             please provide at least one valid peptide sequence.")
+    except UnknownOutputFormatError as o:
+        root_logger.error("Unknown output format: '%s' (supported formats: %s)", o, SUPPORTED_OUT_FORMATS)
+    except UnknownFragmentationMethodError as f:
+        root_logger.error("Unknown fragmentation method: %s (supported methods: %s)", f, MODELS.keys())
+    except FragmentationModelRequiredError:
+        root_logger.error("Please specify model in config file.")
 
 
 if __name__ == "__main__":
