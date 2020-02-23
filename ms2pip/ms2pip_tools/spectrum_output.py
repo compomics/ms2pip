@@ -24,172 +24,276 @@ else:
 PROTON_MASS = 1.007825032070059
 
 
-def write_msp(
-    all_preds_in,
-    peprec_in,
-    output_filename="MS2PIP_Predictions",
-    write_mode="wt+",
-    unlog=True,
-    return_stringbuffer=False,
-):
-    """
-    Write MS2PIP predictions to MSP spectral library file.
-    """
+class SpectrumOutput:
+    def __init__(
+        self,
+        all_preds,
+        peprec,
+        params,
+        output_filename="ms2pip_predictions",
+        write_mode="wt+",
+        return_stringbuffer=False,
+        is_log_space=True,
+    ):
+        self.all_preds = all_preds
+        self.peprec = peprec
+        self.params = params
+        self.output_filename = output_filename
+        self.write_mode = write_mode
+        self.return_stringbuffer = return_stringbuffer
+        self.is_log_space = is_log_space
 
-    def write(msp_output):
-        if use_tqdm & len(spec_ids) > 100000:
-            spec_ids_iterator = tqdm(spec_ids)
-        else:
-            spec_ids_iterator = spec_ids
-        for spec_id in spec_ids_iterator:
-            out = []
-            preds = preds_to_slice[spec_id]
-            peprec_sel = peprec_to_slice[spec_id]
+        self.peprec_dict = None
+        self.preds_dict = None
+        self.normalization = None
+        self.mass_shifts = None
 
-            preds = sorted(preds, key=itemgetter(mz_index))
+        self.has_rt = "rt" in self.peprec.columns
+        self.has_protein_list = "protein_list" in self.peprec.columns
 
-            sequence = peprec_sel[peptide_index]
-            charge = peprec_sel[charge_index]
-            mods = peprec_sel[modifications_index]
-            numpeaks = len(preds)
+    def _make_peprec_dict(self, rt_to_seconds=True):
+        """
+        Create easy to access dict from all_preds and peprec dataframes
+        """
+        peprec_tmp = self.peprec.copy()
 
-            # Calculate mass from fragment ions
-            max_ionnumber = max([row[ionnumber_index] for row in preds])
-            mass_b = [
-                row[mz_index]
-                for row in preds
-                if row[ion_index] == "B" and row[ionnumber_index] == 1
-            ][0]
-            mass_y = [
-                row[mz_index]
-                for row in preds
-                if row[ion_index] == "Y" and row[ionnumber_index] == max_ionnumber
-            ][0]
-            pepmass = mass_b + mass_y - 2 * PROTON_MASS
+        if self.has_rt and rt_to_seconds:
+            peprec_tmp["rt"] = peprec_tmp["rt"] * 60
 
-            out.append("Name: {}/{}\n".format(sequence, charge))
-            out.append("MW: {}\n".format(pepmass))
-            out.append("Comment: ")
+        peprec_tmp.index = peprec_tmp["spec_id"]
+        peprec_tmp.drop("spec_id", axis=1, inplace=True)
 
-            if mods == "-":
-                out.append("Mods=0 ")
+        self.peprec_dict = peprec_tmp.to_dict(orient="index")
+        del peprec_tmp
+
+    def _make_preds_dict(self):
+        """
+        Create easy to access dict from peprec dataframes
+        """
+        self.preds_dict = {}
+        preds_list = self.all_preds[
+            ["spec_id", "charge", "ion", "ionnumber", "mz", "prediction"]
+        ].values.tolist()
+
+        for row in preds_list:
+            spec_id = row[0]
+            if spec_id in self.preds_dict.keys():
+                if row[2] in self.preds_dict[spec_id]["peaks"]:
+                    self.preds_dict[spec_id]["peaks"][row[2]].append(tuple(row[3:]))
+                else:
+                    self.preds_dict[spec_id]["peaks"][row[2]] = [tuple(row[3:])]
             else:
-                mods = mods.split("|")
-                mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
-                # Turn MS2PIP mod indexes into actual list indexes (eg 0 for first AA)
-                mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
-                mods = [(str(x), sequence[x], y) for (x, y) in mods]
-                out.append(
-                    "Mods={}/{} ".format(
-                        len(mods), "/".join([",".join(list(x)) for x in mods])
-                    )
-                )
+                self.preds_dict[spec_id] = {
+                    "charge": row[1],
+                    "peaks": {row[2]: [tuple(row[3:])]},
+                }
 
-            out.append("Parent={} ".format((pepmass + charge * PROTON_MASS) / charge))
+    def _get_mass_shifts(self):
+        """
+        Get PTM mass shifts
+        """
+        self.mass_shifts = {
+            ptm.split(",")[0]: float(ptm.split(",")[1]) for ptm in self.params["ptm"]
+        }
 
-            if add_protein:
-                try:
-                    out.append(
-                        'Protein="{}" '.format(
-                            "/".join(literal_eval(peprec_sel[protein_list_index]))
+    def _get_precursor_mz(self, peptide, modifications, charge, mass_shifts=None):
+        """
+        Calculate precursor mass and mz for given peptide and modification list,
+        using Pyteomics.
+        
+        Note: This method does not use the build-in Pyteomics modification handling, as
+        that would require a known atomic composition of the modification.
+
+        Parameters
+        ----------
+        peptide: str
+            stripped peptide sequence
+
+        modifications: str
+            MS2PIP-style formatted modifications list (e.g. `0|Acetyl|2|Oxidation`)
+        
+        charge: int
+            precursor charge
+        
+        mass_shifts: dict(str, float)
+            dictionary with `modification_name -> mass_shift` pairs
+
+        Returns
+        -------
+        prec_mass, prec_mz: tuple(float, float)
+        """
+        if not self.mass_shifts:
+            self._get_mass_shifts()
+
+        charge = int(charge)
+        unmodified_mass = mass.fast_mass(peptide)
+        mods_massses = sum(
+            [self.mass_shifts[mod] for mod in modifications.split("|")[1::2]]
+        )
+        prec_mass = unmodified_mass + mods_massses
+        prec_mz = (prec_mass + charge * PROTON_MASS) / charge
+        return prec_mass, prec_mz
+
+    def _normalize_spectra(self, method="basepeak_10000"):
+        """
+        Normalize spectra
+        """
+        if self.is_log_space:
+            self.all_preds["prediction"] = (
+                (2 ** self.all_preds["prediction"]) - 0.001
+            ).clip(lower=0)
+            self.is_log_space = False
+
+        if method == "basepeak_10000":
+            if self.normalization == "basepeak_10000":
+                pass
+            elif self.normalization == "basepeak_1":
+                self.all_preds["prediction"] *= 10000
+                self.all_preds["prediction"] = self.all_preds["prediction"].astype(int)
+            else:
+                self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
+                    "prediction"
+                ].apply(lambda x: (x / x.max()) * 10000)
+                self.all_preds["prediction"] = self.all_preds["prediction"].astype(int)
+            self.normalization = "basepeak_10000"
+
+        elif method == "basepeak_1":
+            if self.normalization == "basepeak_1":
+                pass
+            elif self.normalization == "basepeak_10000":
+                self.all_preds["prediction"] /= 10000
+            else:
+                self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
+                    "prediction"
+                ].apply(lambda x: (x / x.max()))
+            self.normalization = "basepeak_1"
+
+        elif method == "tic" and not self.normalization == "tic":
+            self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
+                "prediction"
+            ].apply(lambda x: x / x.sum())
+            self.normalization = "tic"
+
+    def _get_peak_string(self, peak_dict, sep="\t", include_annotations=True):
+        """
+        Get MGF/MSP-like peaklist string
+        """
+        all_peaks = []
+        for ion_type, peaks in peak_dict.items():
+            for peak in peaks:
+                if include_annotations:
+                    all_peaks.append(
+                        (
+                            peak[1],
+                            f'{peak[1]:.6f}{sep}{peak[2]}{sep}"{ion_type.lower()}{peak[0]}"',
                         )
                     )
-                except ValueError:
-                    out.append('Protein="{}" '.format(peprec_sel[protein_list_index]))
+                else:
+                    all_peaks.append((peak[1], f"{peak[1]:.6f}{sep}{peak[2]}"))
 
-            if add_rt:
-                out.append("RTINSECONDS={} ".format(peprec_sel[rt_index]))
+        all_peaks = sorted(all_peaks, key=itemgetter(0))
+        peak_string = "\n".join([peak[1] for peak in all_peaks])
+
+        return peak_string
+
+    def _get_msp_modifications(self, sequence, modifications):
+        """
+        Format modifications in MSP-style, e.g. "1/0,E,Glu->pyro-Glu"
+        """
+
+        if isinstance(modifications, str):
+            if modifications == "-":
+                msp_modifications = "0"
+            else:
+                mods = modifications.split("|")
+                mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
+                mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
+                mods = [(str(x), sequence[x], y) for (x, y) in mods]
+                msp_modifications = "/".join([",".join(list(x)) for x in mods])
+                msp_modifications = f"{len(mods)}/{msp_modifications}"
+        else:
+            msp_modifications = "0"
+
+        return msp_modifications
+
+    def _write_msp_core(self, msp_output):
+        """
+        Construct MSP string and write to msp_output object
+        """
+        spec_id_list = sorted(self.peprec_dict.keys())
+
+        for spec_id in spec_id_list:
+            out = []
+
+            seq = self.peprec_dict[spec_id]["peptide"]
+            mods = self.peprec_dict[spec_id]["modifications"]
+            charge = self.peprec_dict[spec_id]["charge"]
+            prec_mass, prec_mz = self._get_precursor_mz(seq, mods, charge)
+            msp_modifications = self._get_msp_modifications(seq, mods)
+            num_peaks = sum(
+                [
+                    len(peaklist)
+                    for _, peaklist in self.preds_dict[spec_id]["peaks"].items()
+                ]
+            )
+
+            out.append(f"Name: {seq}/{charge}\nMW: {prec_mass}\nComment: ")
+            out.append("Mods={} ".format(msp_modifications))
+            out.append("Parent={} ".format(prec_mz))
+
+            if self.has_protein_list:
+                protein_list = self.peprec_dict[spec_id]["protein_list"]
+                try:
+                    out.append(
+                        'Protein="{}" '.format("/".join(literal_eval(protein_list)))
+                    )
+                except ValueError:
+                    out.append('Protein="{}" '.format(protein_list))
+
+            if self.has_rt:
+                rt = self.peprec_dict[spec_id]["rt"]
+                out.append(f"RTINSECONDS={rt} ")
 
             out.append('MS2PIP_ID="{}"'.format(spec_id))
 
-            out.append("\nNum peaks: {}\n".format(numpeaks))
+            out.append("\nNum peaks: {}\n".format(num_peaks))
 
-            lines = list(
-                zip(
-                    [row[mz_index] for row in preds],
-                    [row[prediction_index] for row in preds],
-                    [row[ion_index] for row in preds],
-                    [row[ionnumber_index] for row in preds],
+            out.append(
+                self._get_peak_string(
+                    self.preds_dict[spec_id]["peaks"],
+                    sep="\t",
+                    include_annotations=True,
                 )
             )
-            out.append("".join(['{:.4f}\t{}\t"{}{}"\n'.format(*l) for l in lines]))
-            out.append("\n")
+            out.append("\n\n")
 
             out_string = "".join(out)
-
             msp_output.write(out_string)
 
-    all_preds = all_preds_in.copy()
-    peprec = peprec_in.copy()
-    all_preds.reset_index(drop=True, inplace=True)
-    # If not already normalized, normalize spectra
-    if unlog:
-        if not (
-            all_preds["prediction"].min() == 0
-            and all_preds["prediction"].max() == 10000
-        ):
-            all_preds["prediction"] = ((2 ** all_preds["prediction"]) - 0.001).clip(
-                lower=0
-            )
-            all_preds["prediction"] = all_preds.groupby(["spec_id"])[
-                "prediction"
-            ].apply(lambda x: (x / x.max()) * 10000)
-            all_preds["prediction"] = all_preds["prediction"].astype(int)
+    def write_msp(self):
+        """
+        Write MS2PIP predictions to MSP spectral library file
+        """
 
-    # Check if protein list and rt are present in peprec
-    add_protein = "protein_list" in peprec.columns
-    add_rt = "rt" in peprec.columns
+        # Normalize if necessary and make dicts
+        if not self.normalization == "basepeak_10000":
+            self._normalize_spectra(method="basepeak_10000")
+            self._make_preds_dict()
+        elif not self.preds_dict:
+            self._make_preds_dict()
+        if not self.peprec_dict:
+            self._make_peprec_dict()
 
-    # Convert RT from min to sec
-    if add_rt:
-        peprec["rt"] = peprec["rt"] * 60
-
-    # Split titles (according to MS2PIPc)
-    spec_ids = all_preds["spec_id"].unique().tolist()
-
-    preds_col_names = list(all_preds.columns)
-    preds_to_slice = {}
-    preds_list = all_preds.values.tolist()
-
-    preds_spec_id_index = preds_col_names.index("spec_id")
-    mz_index = preds_col_names.index("mz")
-    prediction_index = preds_col_names.index("prediction")
-    ion_index = preds_col_names.index("ion")
-    ionnumber_index = preds_col_names.index("ionnumber")
-
-    for row in preds_list:
-        spec_id = row[preds_spec_id_index]
-        if spec_id in preds_to_slice.keys():
-            preds_to_slice[spec_id].append(row)
+        # Write to file or stringbuffer
+        if self.return_stringbuffer:
+            msp_output = StringIO()
+            self._write_msp_core(msp_output)
+            return msp_output
         else:
-            preds_to_slice[spec_id] = [row]
-
-    peprec_col_names = list(peprec.columns)
-    peprec_to_slice = {}
-    peprec_list = peprec.values.tolist()
-
-    spec_id_index = peprec_col_names.index("spec_id")
-    peptide_index = peprec_col_names.index("peptide")
-    charge_index = peprec_col_names.index("charge")
-    modifications_index = peprec_col_names.index("modifications")
-    if add_protein:
-        protein_list_index = peprec_col_names.index("protein_list")
-    if add_rt:
-        rt_index = peprec_col_names.index("rt")
-
-    for row in peprec_list:
-        peprec_to_slice[row[spec_id_index]] = row
-
-    # Write to file or stringbuffer
-    if return_stringbuffer:
-        msp_output = StringIO()
-        write(msp_output)
-        return msp_output
-    else:
-        with open(
-            "{}_predictions.msp".format(output_filename), write_mode
-        ) as msp_output:
-            write(msp_output)
+            with open(
+                "{}_predictions.msp".format(self.output_filename), self.write_mode
+            ) as msp_output:
+                self._write_msp_core(msp_output)
 
 
 def dfs_to_dicts(all_preds, peprec=None, rt_to_seconds=True):
@@ -645,3 +749,52 @@ def write_spectronaut(
             header = False
         with open(f_name, write_mode) as output_file:
             write(all_preds, peprec, output_file, header=header)
+
+
+def test():
+    peprec = pd.read_pickle("peprec_prot_test_HCDpeprec.pkl")
+    all_preds = pd.read_pickle("peprec_prot_test_HCDall_preds.pkl")
+
+    params = {
+        "ptm": [
+            "PhosphoS,79.966331,opt,S",
+            "PhosphoT,79.966331,opt,T",
+            "PhosphoY,79.966331,opt,Y",
+            "Oxidation,15.994915,opt,M",
+            "Carbamidomethyl,57.021464,opt,C",
+            "CAM,57.021464,opt,C",
+            "Glu->pyro-Glu,-18.010565,opt,E",
+            "Gln->pyro-Glu,-17.026549,opt,Q",
+            "Pyro-cmC,39.994915,opt,C",
+            "Deamidated,0.984016,opt,N",
+            "iTRAQ,144.102063,opt,N-term",
+            "Acetyl,42.010565,opt,N-term",
+            "TMT6plexN,229.162932,opt,N-term",
+            "TMT6plex,229.162932,opt,K",
+        ],
+        "sptm": [],
+        "gptm": [],
+        "model": "HCD",
+        "frag_error": "0.02",
+        "out": "csv",
+    }
+
+    peprec = peprec.sample(1)
+    all_preds = all_preds[all_preds["spec_id"].isin(peprec["spec_id"])]
+
+    so = SpectrumOutput(
+        all_preds,
+        peprec,
+        params,
+        output_filename="ms2pip_predictions",
+        write_mode="wt+",
+        return_stringbuffer=True,
+    )
+
+    msp = so.write_msp()
+    for i, line in enumerate(msp.getvalue().split("\n")):
+        print(line)
+
+
+if __name__ == "__main__":
+    test()
