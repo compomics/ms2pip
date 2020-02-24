@@ -882,6 +882,15 @@ def get_intense_mzs(mzs, intensity, n=3):
     return [x[0] for x in sorted(zip(mzs, intensity), key=itemgetter(1), reverse=True)[:n]]
 
 
+def match_mzs(mzs, predicted, max_error=0.02):
+    current = 0
+    for pred in predicted:
+        current = bisect.bisect_right(mzs, pred - max_error, lo=current)
+        if current >= len(mzs) or mzs[current] > pred + max_error:
+            return False
+    return current < len(mzs)
+
+
 class MS2PIP:
     def __init__(
         self,
@@ -1241,8 +1250,8 @@ class MS2PIP:
 
         # TODO: predictions and peptides could be done in one run if self.data were indexed
         predictions = dict(zip(itertools.chain.from_iterable(pepid_bufs),
-                               (get_intense_mzs(np.concatenate(mzs[0], axis=None),
-                                                np.concatenate(mzs[1], axis=None))
+                               (sorted(get_intense_mzs(np.concatenate(mzs[0], axis=None),
+                                                       np.concatenate(mzs[1], axis=None)))
                                 for mzs in zip(itertools.chain.from_iterable(mz_bufs),
                                                itertools.chain.from_iterable(prediction_bufs)))))
 
@@ -1266,21 +1275,10 @@ class MS2PIP:
                     i = bisect.bisect_right(precursors, pepmass - max_error)
                     while i < len(precursors) and precursors[i] < pepmass + max_error:
                         pep_top3 = peptides[i][2]
-
-                        # TODO: this could in theory match 3 times to the same
-                        # m/z. Is it possible to have 3 m/z to be "equal",
-                        # taking into account a sufficiently small max_error?
-                        try:
-                            matches = (m for m in  spectrum['m/z array'] if any(abs(m - p) < max_error for p in pep_top3))
-                            next(matches)
-                            next(matches)
-                            next(matches)
+                        if match_mzs(sorted(spectrum['m/z array']), pep_top3, max_error=max_error):
                             yield peptides[i][0], spectrum
-                        except StopIteration:
-                            # no match
-                            pass
-
                         i += 1
+
 
 def run(
     pep_file,
