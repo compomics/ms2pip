@@ -2,6 +2,7 @@
 # Native library
 import os
 import sys
+import glob
 import argparse
 import multiprocessing
 from random import shuffle
@@ -910,7 +911,6 @@ class MS2PIP:
         tableau=False,
     ):
         self.pep_file = pep_file
-        self.spec_file = spec_file
         self.vector_file = vector_file
         self.num_cpu = num_cpu
         self.return_results = return_results
@@ -976,6 +976,17 @@ class MS2PIP:
         else:
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
+        if self.match_spectra:
+            self.spec_file = None
+            if os.path.isdir(spec_file):
+                self.spec_files = glob.glob("{}/*.mgf".format(spec_file))
+            else:
+                self.spec_files = [self.spec_file]
+            logger.debug("use spec files %s", self.spec_files)
+        else:
+            self.spec_file = spec_file
+            self.spec_files = None
+
     def run(self):
         self._write_amino_accid_masses()
 
@@ -987,7 +998,7 @@ class MS2PIP:
 
         self._read_peptide_information()
 
-        if self.spec_file and not self.match_spectra:
+        if self.spec_file:
             results = self._process_spectra()
 
             logger.info("merging results")
@@ -1012,7 +1023,7 @@ class MS2PIP:
                         correlations.groupby("ion")["pearsonr"].median(),
                     )
             self._remove_amino_accid_masses()
-        elif self.spec_file and self.match_spectra:
+        elif self.match_spectra:
             results = self._process_peptides()
             for pep, spec in self._match_spectra(results):
                 print(spec['params']['title'], pep.spec_id)
@@ -1266,9 +1277,11 @@ class MS2PIP:
         peptides.sort(key=itemgetter(1))
         precursors = [x[1] for x in peptides]
 
-        with pyteomics.mgf.read(self.spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
-            for spectrum in reader:
-                if 'pepmass' in spectrum['params']:
+        for spec_file in self.spec_files:
+            with pyteomics.mgf.read(spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
+                for spectrum in reader:
+                    if 'pepmass' not in spectrum['params']:
+                        continue
                     pepmass = spectrum['params']['pepmass'][0]
 
                     # compare all peptides with a similar precursor m/z
