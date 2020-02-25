@@ -1175,7 +1175,7 @@ class MS2PIP:
             )
 
         if "csv" in self.out_formats:
-            logger.info("writing CSV %s_predictions.csv...".format(self.output_filename))
+            logger.info("writing CSV %s_predictions.csv...", self.output_filename)
             all_preds.to_csv(
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
