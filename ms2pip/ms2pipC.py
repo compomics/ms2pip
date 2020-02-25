@@ -1026,7 +1026,7 @@ class MS2PIP:
         elif self.match_spectra:
             results = self._process_peptides()
             for pep, spec in self._match_spectra(results):
-                print(spec['params']['title'], pep.spec_id)
+                print(pep, spec['params']['title'])
             self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
@@ -1272,7 +1272,8 @@ class MS2PIP:
                                             peptide.modifications,
                                             peptide.charge,
                                             self.PTMmap)[1]
-            peptides.append((peptide, mz, predictions[peptide.spec_id]))
+            spec_id = peptide.spec_id
+            peptides.append((spec_id, mz, predictions[spec_id]))
 
         peptides.sort(key=itemgetter(1))
         precursors = [x[1] for x in peptides]
