@@ -18,7 +18,7 @@ from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.cython_modules import ms2pip_pyx
 
-logger = logging.getLogger('ms2pip')
+logger = logging.getLogger("ms2pip")
 
 # Supported output formats
 SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut"]
@@ -853,19 +853,22 @@ def argument_parser():
 
 
 class MS2PIP:
-    def __init__(self, pep_file,
-                 spec_file=None,
-                 vector_file=None,
-                 config_file=None,
-                 num_cpu=1,
-                 use_billiard=False,
-                 params=None,
-                 output_filename=None,
-                 datasetname=None,
-                 return_results=True,
-                 limit=None,
-                 compute_correlations=False,
-                 tableau=False):
+    def __init__(
+        self,
+        pep_file,
+        spec_file=None,
+        vector_file=None,
+        config_file=None,
+        num_cpu=1,
+        use_billiard=False,
+        params=None,
+        output_filename=None,
+        datasetname=None,
+        return_results=True,
+        limit=None,
+        compute_correlations=False,
+        tableau=False,
+    ):
         self.pep_file = pep_file
         self.spec_file = spec_file
         self.vector_file = vector_file
@@ -894,7 +897,9 @@ class MS2PIP:
 
         # Validate requested output formats
         if "out" in self.params:
-            self.out_formats = [o.lower().strip() for o in self.params["out"].split(",")]
+            self.out_formats = [
+                o.lower().strip() for o in self.params["out"].split(",")
+            ]
             for o in self.out_formats:
                 if o not in SUPPORTED_OUT_FORMATS:
                     raise UnknownOutputFormatError(o)
@@ -912,13 +917,20 @@ class MS2PIP:
             raise UnknownFragmentationMethodError(self.model)
 
         if output_filename is None and not return_results:
-            self.output_filename = "{}_{}".format(".".join(pep_file.split(".")[:-1]), self.model)
+            self.output_filename = "{}_{}".format(
+                ".".join(pep_file.split(".")[:-1]), self.model
+            )
         else:
             self.output_filename = output_filename
 
-        logger.debug("starting workers (use_billiard=%r, num_cpu=%d) ...", use_billiard, self.num_cpu)
+        logger.debug(
+            "starting workers (use_billiard=%r, num_cpu=%d) ...",
+            use_billiard,
+            self.num_cpu,
+        )
         if use_billiard:
             import billiard
+
             self.myPool = billiard.Pool(self.num_cpu)
         else:
             self.myPool = multiprocessing.Pool(self.num_cpu)
@@ -928,7 +940,9 @@ class MS2PIP:
 
         # PTMs are loaded the same as in Omega
         # This allows me to use the same C init() function in bot ms2ip and Omega
-        (self.modfile, self.modfile2, self.PTMmap) = generate_modifications_file(self.params, MASSES, A_MAP)
+        (self.modfile, self.modfile2, self.PTMmap) = generate_modifications_file(
+            self.params, MASSES, A_MAP
+        )
 
         self._read_peptide_information()
 
@@ -942,7 +956,9 @@ class MS2PIP:
                 all_preds = self._predict_spec(results)
 
                 logger.info("writing file %s_pred_and_emp.csv...", self.output_filename)
-                all_preds.to_csv("{}_pred_and_emp.csv".format(self.output_filename), index=False)
+                all_preds.to_csv(
+                    "{}_pred_and_emp.csv".format(self.output_filename), index=False
+                )
 
                 if self.compute_correlations:
                     logger.info("computing correlations")
@@ -950,7 +966,10 @@ class MS2PIP:
                     correlations.to_csv(
                         "{}_correlations.csv".format(self.output_filename), index=True
                     )
-                    logger.info("median correlations: %f", correlations.groupby("ion")["pearsonr"].median())
+                    logger.info(
+                        "median correlations: %f",
+                        correlations.groupby("ion")["pearsonr"].median(),
+                    )
             self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
@@ -1011,7 +1030,7 @@ class MS2PIP:
             logger.info(
                 "Removed {} unsupported peptide sequences (< 3, > 99 \
     amino acids, or containing B, J, O, U, X or Z).",
-                num_pep_filtered
+                num_pep_filtered,
             )
 
         if len(data) == 0:
@@ -1026,18 +1045,13 @@ class MS2PIP:
             tmp = split_titles[i]
             results.append(
                 self.myPool.apply_async(
-                    func,
-                    args=(
-                        i,
-                        self.data[self.data.spec_id.isin(tmp)],
-                        *args
-                    ),
+                    func, args=(i, self.data[self.data.spec_id.isin(tmp)], *args),
                 )
             )
             # """
         self.myPool.close()
         self.myPool.join()
-        sys.stdout.write('\n')
+        sys.stdout.write("\n")
         return results
 
     def _process_spectra(self):
@@ -1048,16 +1062,21 @@ class MS2PIP:
         """
         logger.info("scanning spectrum file...")
         titles = scan_spectrum_file(self.spec_file)
-        return self._execute_in_pool(titles, process_spectra, (
-                        self.spec_file,
-                        self.vector_file,
-                        self.afile,
-                        self.modfile,
-                        self.modfile2,
-                        self.PTMmap,
-                        self.model,
-                        self.fragerror,
-                        self.tableau))
+        return self._execute_in_pool(
+            titles,
+            process_spectra,
+            (
+                self.spec_file,
+                self.vector_file,
+                self.afile,
+                self.modfile,
+                self.modfile2,
+                self.PTMmap,
+                self.model,
+                self.fragerror,
+                self.tableau,
+            ),
+        )
 
     def _write_vector_file(self, results):
         all_results = []
@@ -1086,7 +1105,7 @@ class MS2PIP:
         else:
             # "table" is a tag used to read back the .h5
             all_results.to_hdf(self.vector_file, "table")
-        
+
         return all_results
 
     def _predict_spec(self, results):
@@ -1142,40 +1161,42 @@ class MS2PIP:
     def _process_peptides(self):
         logger.info("scanning peptide file...")
         titles = self.data.spec_id.tolist()
-        return self._execute_in_pool(titles, process_peptides, (
-                        self.afile,
-                        self.modfile,
-                        self.modfile2,
-                        self.PTMmap,
-                        self.model))
+        return self._execute_in_pool(
+            titles,
+            process_peptides,
+            (self.afile, self.modfile, self.modfile2, self.PTMmap, self.model),
+        )
 
     def _write_predictions(self, all_preds):
+        spec_out = spectrum_output.SpectrumOutput(
+            all_preds, self.pep_file, params, output_filename=self.output_filename,
+        )
+
         if "mgf" in self.out_formats:
             logger.info("writing MGF file %s_predictions.mgf...", self.output_filename)
-            spectrum_output.write_mgf(
-                all_preds, peprec=self.data, output_filename=self.output_filename
-            )
+            spec_out.write_mgf()
 
         if "msp" in self.out_formats:
             logger.info("writing MSP file %s_predictions.msp...", self.output_filename)
-            spectrum_output.write_msp(
-                all_preds, self.data, output_filename=self.output_filename
-            )
+            spectrum_output.write_msp()
 
         if "bibliospec" in self.out_formats:
-            logger.info("writing SSL/MS2 files...")
-            spectrum_output.write_bibliospec(
-                all_preds, self.data, self.params, output_filename=self.output_filename
+            logger.info(
+                "writing SSL/MS2 files %s_predictions.ssl/.ms2...", self.output_filename
             )
+            spectrum_output.write_bibliospec()
 
         if "spectronaut" in self.out_formats:
-            logger.info("writing Spectronaut CSV files...")
-            spectrum_output.write_spectronaut(
-                all_preds, self.data, self.params, output_filename=self.output_filename
+            logger.info(
+                "writing SSL/MS2 files %s_predictions_spectronaut.csv...",
+                self.output_filename,
             )
+            spectrum_output.write_spectronaut()
 
         if "csv" in self.out_formats:
-            logger.info("writing CSV %s_predictions.csv...".format(self.output_filename))
+            logger.info(
+                "writing CSV %s_predictions.csv...".format(self.output_filename)
+            )
             all_preds.to_csv(
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
@@ -1196,16 +1217,18 @@ def run(
     compute_correlations=False,
     tableau=False,
 ):
-    return MS2PIP(pep_file,
-                  spec_file=spec_file,
-                  vector_file=vector_file,
-                  config_file=config_file,
-                  num_cpu=num_cpu,
-                  use_billiard=use_billiard,
-                  params=params,
-                  output_filename=output_filename,
-                  datasetname=datasetname,
-                  return_results=return_results,
-                  limit=limit,
-                  compute_correlations=compute_correlations,
-                  tableau=tableau).run()
+    return MS2PIP(
+        pep_file,
+        spec_file=spec_file,
+        vector_file=vector_file,
+        config_file=config_file,
+        num_cpu=num_cpu,
+        use_billiard=use_billiard,
+        params=params,
+        output_filename=output_filename,
+        datasetname=datasetname,
+        return_results=return_results,
+        limit=limit,
+        compute_correlations=compute_correlations,
+        tableau=tableau,
+    ).run()
