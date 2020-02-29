@@ -94,8 +94,8 @@ class SpectrumOutput:
 
         self._generate_mass_shifts()
 
-        if self.write_mode not in ["wt+", "wt", "at"]:
-            raise ValueError(self.write_mode)
+        if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
+            raise ValueError("Invalid write_mode: ", self.write_mode)
 
     def _generate_peprec_dict(self, rt_to_seconds=True):
         """
