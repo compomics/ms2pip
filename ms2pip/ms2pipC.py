@@ -1169,7 +1169,7 @@ class MS2PIP:
 
     def _write_predictions(self, all_preds):
         spec_out = spectrum_output.SpectrumOutput(
-            all_preds, self.pep_file, params, output_filename=self.output_filename,
+            all_preds, self.pep_file, self.params, output_filename=self.output_filename,
         )
 
         if "mgf" in self.out_formats:
