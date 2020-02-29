@@ -912,7 +912,7 @@ class MS2PIP:
 
         # Validate requested model
         if self.model in MODELS.keys():
-            logger.info("using {} models".format(self.model))
+            logger.info("using %s models", self.model)
         else:
             raise UnknownFragmentationMethodError(self.model)
 
@@ -1169,7 +1169,7 @@ class MS2PIP:
 
     def _write_predictions(self, all_preds):
         spec_out = spectrum_output.SpectrumOutput(
-            all_preds, self.pep_file, self.params, output_filename=self.output_filename,
+            all_preds, self.data, self.params, output_filename=self.output_filename,
         )
 
         if "mgf" in self.out_formats:
@@ -1194,9 +1194,7 @@ class MS2PIP:
             spectrum_output.write_spectronaut()
 
         if "csv" in self.out_formats:
-            logger.info(
-                "writing CSV %s_predictions.csv...".format(self.output_filename)
-            )
+            logger.info("writing CSV %s_predictions.csv...", self.output_filename)
             all_preds.to_csv(
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
