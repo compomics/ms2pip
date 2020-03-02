@@ -1,3 +1,5 @@
+.pytest_cache/
+
 # Custom MS2PIP stuff
 data/
 *_pyx.c
