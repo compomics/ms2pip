@@ -7,6 +7,9 @@ import functools
 
 class Modifications:
     def __init__(self):
+        """
+        MS2PIP / PEPREC modification handling
+        """
         self.modifications = dict()
 
     def add_from_ms2pip_modstrings(self, modstrings):
