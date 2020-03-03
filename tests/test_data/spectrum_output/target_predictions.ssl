@@ -1,0 +1,6 @@
+file	scan	charge	sequence	score-type	score	retention-time	
+target_predictions.ms2	0	2	LYKMAVGFMLAHPYGFTRVMSSYR			
+target_predictions.ms2	1	2	V[+42.0]WPHKDYPLIPVGK			
+target_predictions.ms2	2	3	E[+42.0]GM[+16.0]LSIM[+16.0]SYR			
+target_predictions.ms2	3	3	EM[+16.0]M[+16.0]QTAMQNTMLINGIAQVTFDSETAVK			
+target_predictions.ms2	4	2	E[-18.0]NAELESRILERSQQQEPLVC[+57.0]PNYQSYFR			
