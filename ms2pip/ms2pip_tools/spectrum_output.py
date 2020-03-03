@@ -113,12 +113,10 @@ class SpectrumOutput:
         self.mass_shifts = mods.get_mass_shifts()
 
         if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
-            raise InvalidWriteModeError("Invalid write_mode: ", self.write_mode)
+            raise InvalidWriteModeError(self.write_mode)
 
         if "a" in self.write_mode and self.return_stringbuffer:
-            raise ValueError(
-                "write_mode cannot be `append` if return_stringbuffer is True"
-            )
+            raise InvalidWriteModeError(self.write_mode)
 
     def _generate_peprec_dict(self, rt_to_seconds=True):
         """
@@ -448,7 +446,7 @@ class SpectrumOutput:
         elif "a" in self.write_mode:
             header = False
         else:
-            raise InvalidWriteModeError("Invalid write_mode: ", self.write_mode)
+            raise InvalidWriteModeError(self.write_mode)
 
         spectronaut_peprec = self.peprec.copy()
 
