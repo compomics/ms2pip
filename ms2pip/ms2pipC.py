@@ -892,6 +892,16 @@ def match_mzs(mzs, predicted, max_error=0.02):
     return current < len(mzs)
 
 
+def get_predicted_peaks(results):
+    mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
+
+    return dict(zip(itertools.chain.from_iterable(pepid_bufs),
+                    (sorted(get_intense_mzs(np.concatenate(mzs[0], axis=None),
+                                            np.concatenate(mzs[1], axis=None)))
+                     for mzs in zip(itertools.chain.from_iterable(mz_bufs),
+                                    itertools.chain.from_iterable(prediction_bufs)))))
+
+
 class MS2PIP:
     def __init__(
         self,
@@ -1025,7 +1035,8 @@ class MS2PIP:
             self._remove_amino_accid_masses()
         elif self.match_spectra:
             results = self._process_peptides()
-            for pep, spec in self._match_spectra(results):
+            self._generate_peptide_list(results)
+            for pep, spec in self._match_spectra():
                 print(pep, spec['params']['title'])
             self._remove_amino_accid_masses()
         else:
@@ -1256,27 +1267,25 @@ class MS2PIP:
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
 
-    def _match_spectra(self, results, max_error=0.02):
-        mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
+    def _generate_peptide_list(self, results):
+        predictions = get_predicted_peaks(results)
 
-        # TODO: predictions and peptides could be done in one run if self.data were indexed
-        predictions = dict(zip(itertools.chain.from_iterable(pepid_bufs),
-                               (sorted(get_intense_mzs(np.concatenate(mzs[0], axis=None),
-                                                       np.concatenate(mzs[1], axis=None)))
-                                for mzs in zip(itertools.chain.from_iterable(mz_bufs),
-                                               itertools.chain.from_iterable(prediction_bufs)))))
-
-        peptides = []
-        for _, peptide in self.data.iterrows():
-            mz = get_precursor_mz_pyteomics(peptide.peptide,
-                                            peptide.modifications,
-                                            peptide.charge,
-                                            self.PTMmap)[1]
-            spec_id = peptide.spec_id
-            peptides.append((spec_id, mz, predictions[spec_id]))
-
+        data_cols = ['spec_id', 'peptide', 'modifications', 'charge']
+        peptides = [
+            (
+                spec_id,
+                get_precursor_mz_pyteomics(peptide,
+                                           modifications,
+                                           charge,
+                                           self.PTMmap)[1],
+                predictions[spec_id]
+            ) for spec_id, peptide, modifications, charge in self.data[data_cols].values
+        ]
         peptides.sort(key=itemgetter(1))
-        precursors = [x[1] for x in peptides]
+        self.peptides = peptides
+
+    def _match_spectra(self, max_error=0.02):
+        precursors = [x[1] for x in self.peptides]
 
         for spec_file in self.spec_files:
             with pyteomics.mgf.read(spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
@@ -1288,9 +1297,9 @@ class MS2PIP:
                     # compare all peptides with a similar precursor m/z
                     i = bisect.bisect_right(precursors, pepmass - max_error)
                     while i < len(precursors) and precursors[i] < pepmass + max_error:
-                        pep_top3 = peptides[i][2]
-                        if match_mzs(sorted(spectrum['m/z array']), pep_top3, max_error=max_error):
-                            yield peptides[i][0], spectrum
+                        spec_id, _, pred_peaks = self.peptides[i]
+                        if match_mzs(sorted(spectrum['m/z array']), pred_peaks, max_error=max_error):
+                            yield spec_id, spectrum
                         i += 1
 
 
