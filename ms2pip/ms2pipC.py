@@ -15,6 +15,7 @@ from scipy.stats import pearsonr
 
 # From project
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
+from ms2pip.config_parser import ConfigParser
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.cython_modules import ms2pip_pyx
 
@@ -688,28 +689,6 @@ def apply_mods(peptide, mods, PTMmap):
     return modpeptide
 
 
-def load_configfile(filepath):
-    params = {}
-    params["ptm"] = []
-    params["sptm"] = []
-    params["gptm"] = []
-    with open(filepath) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line[0] == "#":
-                continue
-            (par, val) = line.split("=")
-            if par == "ptm":
-                params["ptm"].append(val)
-            elif par == "sptm":
-                params["sptm"].append(val)
-            elif par == "gptm":
-                params["gptm"].append(val)
-            else:
-                params[par] = val
-    return params
-
-
 def generate_modifications_file(params, MASSES, A_MAP):
     PTMmap = {}
 
@@ -883,7 +862,9 @@ class MS2PIP:
             if config_file is None:
                 raise MissingConfigurationError()
             else:
-                self.params = load_configfile(config_file)
+                self.config_parser = ConfigParser(file=config_file)
+                self.config = self.config_parser.load()
+                self.params = self.config['ms2pip']
         else:
             self.params = params
 
