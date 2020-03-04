@@ -2,8 +2,10 @@ from subprocess import call
 import pandas as pd
 import numpy as np
 
+from ms2pip.ms2pipC import run
+
 # Run ms2pipC to predict peak intensities from a PEPREC file (HCD model)
-call(["ms2pip", "tests/test_data/test.peprec", "-c", "tests/test_data/config.txt"])
+run("tests/test_data/test.peprec", config_file='tests/test_data/config.txt')
 
 test_data = pd.read_csv("tests/test_data/test_HCD_predictions.csv")
 target_data = pd.read_csv("tests/test_data/target_HCD_predictions.csv")

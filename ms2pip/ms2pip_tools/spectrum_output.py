@@ -2,19 +2,35 @@
 Write spectrum files from MS2PIP predictions.
 """
 
-
-# Native libraries
-from time import localtime, strftime
+# Standard library
 from ast import literal_eval
-from operator import itemgetter
 from io import StringIO
+from operator import itemgetter
+from time import localtime, strftime
 import os
 
 # Third party libraries
-import pandas as pd
 from pyteomics import mass
 
+# Project imports
+from ms2pip.modifications import Modifications
+
+
 PROTON_MASS = 1.007825032070059
+
+
+class InvalidWriteModeError(ValueError):
+    pass
+
+
+# Writer decorator
+def writer(**kwargs):
+    def deco(write_function):
+        def wrapper(self):
+            return self._write_general(write_function, **kwargs)
+        return wrapper
+    return deco
+
 
 
 class SpectrumOutput:
@@ -41,7 +57,7 @@ class SpectrumOutput:
     is_log_space: bool, optional
         Set to true if predicted intensities in `all_preds` are in log-space. In that
         case, intensities will first be transformed to "normal"-space.
-        
+
     Methods
     -------
     write_msp()
@@ -52,7 +68,7 @@ class SpectrumOutput:
         Write predictions to Bibliospec SSL/MS2 files (also for Skyline)
     write_spectronaut()
         Write predictions to Spectronaut CSV file
-    
+
     Example
     -------
     >>> so = ms2pip.spectrum_tools.spectrum_output.SpectrumOutput(
@@ -92,10 +108,15 @@ class SpectrumOutput:
         self.has_rt = "rt" in self.peprec.columns
         self.has_protein_list = "protein_list" in self.peprec.columns
 
-        self._generate_mass_shifts()
+        mods = Modifications()
+        mods.add_from_ms2pip_modstrings(params["ptm"])
+        self.mass_shifts = mods.get_mass_shifts()
 
         if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
-            raise ValueError("Invalid write_mode: ", self.write_mode)
+            raise InvalidWriteModeError(self.write_mode)
+
+        if "a" in self.write_mode and self.return_stringbuffer:
+            raise InvalidWriteModeError(self.write_mode)
 
     def _generate_peprec_dict(self, rt_to_seconds=True):
         """
@@ -133,14 +154,6 @@ class SpectrumOutput:
                     "peaks": {row[2]: [tuple(row[3:])]},
                 }
 
-    def _generate_mass_shifts(self):
-        """
-        Make modification name -> mass shift mapping.
-        """
-        self.mass_shifts = {
-            ptm.split(",")[0]: float(ptm.split(",")[1]) for ptm in self.params["ptm"]
-        }
-
     def _get_precursor_mz(self, peptide, modifications, charge):
         """
         Calculate precursor mass and mz for given peptide and modification list,
@@ -159,9 +172,6 @@ class SpectrumOutput:
 
         charge: int
             precursor charge
-
-        mass_shifts: dict(str, float)
-            dictionary with `modification_name -> mass_shift` pairs
 
         Returns
         -------
@@ -283,7 +293,55 @@ class SpectrumOutput:
             protein_string = ""
         return protein_string
 
-    def _write_msp_core(self, file_object):
+    def _get_last_ssl_scannr(self):
+        """
+        Return scan number of last line in a Bibliospec SSL file.
+        """
+        ssl_filename = "{}_predictions.ssl".format(self.output_filename)
+        with open(ssl_filename, "rt") as ssl:
+            for line in ssl:
+                last_line = line
+            last_scannr = int(last_line.split("\t")[1])
+        return last_scannr
+
+    def _generate_ssl_modification_mapping(self):
+        """
+        Make modification name -> ssl modification name mapping.
+        """
+        self.ssl_modification_mapping = {
+            ptm.split(",")[0]: "{:+.1f}".format(round(float(ptm.split(",")[1]), 1))
+            for ptm in self.params["ptm"]
+        }
+
+    def _get_ssl_modified_sequence(self, sequence, modifications):
+        """
+        Build BiblioSpec SSL modified sequence string.
+        """
+        pep = list(sequence)
+
+        for loc, name in zip(
+            modifications.split("|")[::2], modifications.split("|")[1::2]
+        ):
+            # C-term mod
+            if loc == "-1":
+                pep[-1] = pep[-1] + "[{}]".format(self.ssl_modification_mapping[name])
+            # N-term mod
+            elif loc == "0":
+                pep[0] = pep[0] + "[{}]".format(self.ssl_modification_mapping[name])
+            # Normal mod
+            else:
+                pep[int(loc) - 1] = pep[int(loc) - 1] + "[{}]".format(
+                    self.ssl_modification_mapping[name]
+                )
+        return "".join(pep)
+
+    @writer(
+        file_suffix="_predictions.msp",
+        normalization_method="basepeak_10000",
+        requires_dicts=True,
+        requires_ssl_modifications=False,
+    )
+    def write_msp(self, file_object):
         """
         Construct MSP string and write to file_object.
         """
@@ -329,32 +387,13 @@ class SpectrumOutput:
 
             file_object.writelines([line + "\n" for line in out] + ["\n"])
 
-    def write_msp(self):
-        """
-        Write MS2PIP predictions to MSP spectral library file.
-        """
-
-        # Normalize if necessary and make dicts
-        if not self.normalization == "basepeak_10000":
-            self._normalize_spectra(method="basepeak_10000")
-            self._generate_preds_dict()
-        elif not self.preds_dict:
-            self._generate_preds_dict()
-        if not self.peprec_dict:
-            self._generate_peprec_dict()
-
-        # Write to file or stringbuffer
-        if self.return_stringbuffer:
-            file_object = StringIO()
-            self._write_msp_core(file_object)
-            return file_object
-        else:
-            with open(
-                "{}_predictions.msp".format(self.output_filename), self.write_mode
-            ) as file_object:
-                self._write_msp_core(file_object)
-
-    def _write_mgf_core(self, file_object):
+    @writer(
+        file_suffix="_predictions.mgf",
+        normalization_method="basepeak_10000",
+        requires_dicts=True,
+        requires_ssl_modifications=False,
+    )
+    def write_mgf(self, file_object):
         """
         Construct MGF string and write to file_object
         """
@@ -392,180 +431,13 @@ class SpectrumOutput:
             out.append("END IONS\n")
             file_object.writelines([line + "\n" for line in out])
 
-    def write_mgf(self):
-        """
-        Write MS2PIP predictions to MGF spectrum file.
-        """
-
-        # Normalize if necessary and make dicts
-        if not self.normalization == "basepeak_10000":
-            self._normalize_spectra(method="basepeak_10000")
-            self._generate_preds_dict()
-        elif not self.preds_dict:
-            self._generate_preds_dict()
-        if not self.peprec_dict:
-            self._generate_peprec_dict()
-
-        if self.return_stringbuffer:
-            file_object = StringIO()
-            self._write_mgf_core(file_object)
-            return file_object
-        else:
-            with open(
-                "{}_predictions.mgf".format(self.output_filename), self.write_mode
-            ) as file_object:
-                self._write_mgf_core(file_object)
-
-    def _get_last_ssl_scannr(self):
-        """
-        Return scan number of last line in a Bibliospec SSL file.
-        """
-        ssl_filename = "{}_predictions.ssl".format(self.output_filename)
-        with open(ssl_filename, "rt") as ssl:
-            for line in ssl:
-                last_line = line
-            last_scannr = int(last_line.split("\t")[1])
-        return last_scannr
-
-    def _generate_ssl_modification_mapping(self):
-        """
-        Make modification name -> ssl modification name mapping.
-        """
-        self.ssl_modification_mapping = {
-            ptm.split(",")[0]: "{:+.1f}".format(round(float(ptm.split(",")[1]), 1))
-            for ptm in self.params["ptm"]
-        }
-
-    def _get_ssl_modified_sequence(self, sequence, modifications):
-        """
-        Build BiblioSpec SSL modified sequence string.
-        """
-        pep = list(sequence)
-
-        for loc, name in zip(
-            modifications.split("|")[::2], modifications.split("|")[1::2]
-        ):
-            # C-term mod
-            if loc == "-1":
-                pep[-1] = pep[-1] + "[{}]".format(self.ssl_modification_mapping[name])
-            # N-term mod
-            elif loc == "0":
-                pep[0] = pep[0] + "[{}]".format(self.ssl_modification_mapping[name])
-            # Normal mod
-            else:
-                pep[int(loc) - 1] = pep[int(loc) - 1] + "[{}]".format(
-                    self.ssl_modification_mapping[name]
-                )
-        return "".join(pep)
-
-    def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
-        """
-        Construct Bibliospec SSL/MS2 strings and write to file_objects.
-        """
-
-        for i, spec_id in enumerate(sorted(self.preds_dict.keys())):
-            scannr = i + start_scannr
-            seq = self.peprec_dict[spec_id]["peptide"]
-            mods = self.peprec_dict[spec_id]["modifications"]
-            charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self._get_precursor_mz(seq, mods, charge)
-            ms2_filename = os.path.basename(self.output_filename) + "_predictions.ms2"
-
-            peaks = self._get_peak_string(
-                self.preds_dict[spec_id]["peaks"], sep="\t", include_annotations=False,
-            )
-
-            if isinstance(mods, str):
-                if mods != "-" and mods != "":
-                    mod_seq = self._get_ssl_modified_sequence(seq, mods)
-                else:
-                    mod_seq = seq
-            else:
-                mod_seq = seq
-
-            rt = self.peprec_dict[spec_id]["rt"] if self.has_rt else ""
-
-            file_obj_ssl.write(
-                "\t".join(
-                    [ms2_filename, str(scannr), str(charge), mod_seq, "", "", str(rt)]
-                )
-                + "\n"
-            )
-            file_obj_ms2.write(
-                "\n".join(
-                    [
-                        f"S\t{scannr}\t{prec_mz}",
-                        f"Z\t{charge}\t{prec_mass}",
-                        f"D\tseq\t{seq}",
-                        f"D\tmodified seq\t{mod_seq}",
-                        peaks,
-                    ]
-                )
-                + "\n"
-            )
-
-    def write_bibliospec(self):
-        """
-        Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
-        (For example for use in Skyline).
-        """
-
-        if not self.ssl_modification_mapping:
-            self._generate_ssl_modification_mapping()
-
-        # Normalize if necessary and make dicts
-        if not self.normalization == "basepeak_10000":
-            self._normalize_spectra(method="basepeak_10000")
-            self._generate_preds_dict()
-        elif not self.preds_dict:
-            self._generate_preds_dict()
-        if not self.peprec_dict:
-            self._generate_peprec_dict()
-
-        if self.return_stringbuffer:
-            file_obj_ssl = StringIO()
-            file_obj_ms2 = StringIO()
-        else:
-            file_obj_ssl = open(
-                "{}_predictions.ssl".format(self.output_filename), self.write_mode
-            )
-            file_obj_ms2 = open(
-                "{}_predictions.ms2".format(self.output_filename), self.write_mode
-            )
-
-        # If a new file is written, write headers
-        if "w" in self.write_mode:
-            start_scannr = 0
-            ssl_header = [
-                "file",
-                "scan",
-                "charge",
-                "sequence",
-                "score-type",
-                "score",
-                "retention-time",
-                "\n",
-            ]
-            file_obj_ssl.write("\t".join(ssl_header))
-            file_obj_ms2.write(
-                "H\tCreationDate\t{}\n".format(
-                    strftime("%Y-%m-%d %H:%M:%S", localtime())
-                )
-            )
-            file_obj_ms2.write("H\tExtractor\tMS2PIP predictions\n")
-        else:
-            # Get last scan number of ssl file, to continue indexing from there
-            # because Bibliospec speclib scan numbers can only be integers
-            start_scannr = self._get_last_ssl_scannr() + 1
-
-        self._write_bibliospec_core(
-            file_obj_ssl, file_obj_ms2, start_scannr=start_scannr
-        )
-
-        if self.return_stringbuffer:
-            return file_obj_ssl, file_obj_ms2
-
-    def _write_spectronaut_core(self, file_obj):
+    @writer(
+        file_suffix="_predictions_spectronaut.csv",
+        normalization_method="tic",
+        requires_dicts=False,
+        requires_ssl_modifications=True,
+    )
+    def write_spectronaut(self, file_obj):
         """
         Construct spectronaut DataFrame and write to file_object.
         """
@@ -574,7 +446,7 @@ class SpectrumOutput:
         elif "a" in self.write_mode:
             header = False
         else:
-            raise ValueError(self.write_mode)
+            raise InvalidWriteModeError(self.write_mode)
 
         spectronaut_peprec = self.peprec.copy()
 
@@ -656,25 +528,144 @@ class SpectrumOutput:
 
         spectronaut_df.to_csv(file_obj, index=False, header=header)
 
-    def write_spectronaut(self):
+    def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
         """
-        Write to Spectronaut library import format.
+        Construct Bibliospec SSL/MS2 strings and write to file_objects.
+        """
 
-        Reference: https://biognosys.com/media.ashx/spectronautmanual.pdf
+        for i, spec_id in enumerate(sorted(self.preds_dict.keys())):
+            scannr = i + start_scannr
+            seq = self.peprec_dict[spec_id]["peptide"]
+            mods = self.peprec_dict[spec_id]["modifications"]
+            charge = self.peprec_dict[spec_id]["charge"]
+            prec_mass, prec_mz = self._get_precursor_mz(seq, mods, charge)
+            ms2_filename = os.path.basename(self.output_filename) + "_predictions.ms2"
+
+            peaks = self._get_peak_string(
+                self.preds_dict[spec_id]["peaks"], sep="\t", include_annotations=False,
+            )
+
+            if isinstance(mods, str) and mods != "-" and mods != "":
+                mod_seq = self._get_ssl_modified_sequence(seq, mods)
+            else:
+                mod_seq = seq
+
+            rt = self.peprec_dict[spec_id]["rt"] if self.has_rt else ""
+
+            # TODO: implement csv instead of manual writing
+            file_obj_ssl.write(
+                "\t".join(
+                    [ms2_filename, str(scannr), str(charge), mod_seq, "", "", str(rt)]
+                )
+                + "\n"
+            )
+            file_obj_ms2.write(
+                "\n".join(
+                    [
+                        f"S\t{scannr}\t{prec_mz}",
+                        f"Z\t{charge}\t{prec_mass}",
+                        f"D\tseq\t{seq}",
+                        f"D\tmodified seq\t{mod_seq}",
+                        peaks,
+                    ]
+                )
+                + "\n"
+            )
+
+    def _write_general(
+        self,
+        write_function,
+        file_suffix,
+        normalization_method,
+        requires_dicts,
+        requires_ssl_modifications,
+    ):
+        """
+        General write function to call core write functions.
+
+        Note: Does not work for write_bibliospec function.
+        """
+
+        # Normalize if necessary and make dicts
+        if not self.normalization == normalization_method:
+            self._normalize_spectra(method=normalization_method)
+            if requires_dicts:
+                self._generate_preds_dict()
+        elif requires_dicts and not self.preds_dict:
+            self._generate_preds_dict()
+        if requires_dicts and not self.peprec_dict:
+            self._generate_peprec_dict()
+
+        if requires_ssl_modifications and not self.ssl_modification_mapping:
+            self._generate_ssl_modification_mapping()
+
+        # Write to file or stringbuffer
+        if self.return_stringbuffer:
+            file_object = StringIO()
+        else:
+            f_name = self.output_filename + file_suffix
+            file_object = open(f_name, self.write_mode)
+
+        write_function(self, file_object)
+
+        return file_object
+
+    def write_bibliospec(self):
+        """
+        Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
+        (For example for use in Skyline).
         """
 
         if not self.ssl_modification_mapping:
             self._generate_ssl_modification_mapping()
 
-        # Normalize if necessary
-        if not self.normalization == "tic":
-            self._normalize_spectra(method="tic")
+        # Normalize if necessary and make dicts
+        if not self.normalization == "basepeak_10000":
+            self._normalize_spectra(method="basepeak_10000")
+            self._generate_preds_dict()
+        elif not self.preds_dict:
+            self._generate_preds_dict()
+        if not self.peprec_dict:
+            self._generate_peprec_dict()
 
         if self.return_stringbuffer:
-            file_obj = StringIO()
-            self._write_spectronaut_core(file_obj)
-            return file_obj
+            file_obj_ssl = StringIO()
+            file_obj_ms2 = StringIO()
         else:
-            f_name = "{}_predictions_spectronaut.csv".format(self.output_filename)
-            with open(f_name, self.write_mode) as file_obj:
-                self._write_spectronaut_core(file_obj)
+            file_obj_ssl = open(
+                "{}_predictions.ssl".format(self.output_filename), self.write_mode
+            )
+            file_obj_ms2 = open(
+                "{}_predictions.ms2".format(self.output_filename), self.write_mode
+            )
+
+        # If a new file is written, write headers
+        if "w" in self.write_mode:
+            start_scannr = 0
+            ssl_header = [
+                "file",
+                "scan",
+                "charge",
+                "sequence",
+                "score-type",
+                "score",
+                "retention-time",
+                "\n",
+            ]
+            file_obj_ssl.write("\t".join(ssl_header))
+            file_obj_ms2.write(
+                "H\tCreationDate\t{}\n".format(
+                    strftime("%Y-%m-%d %H:%M:%S", localtime())
+                )
+            )
+            file_obj_ms2.write("H\tExtractor\tMS2PIP predictions\n")
+        else:
+            # Get last scan number of ssl file, to continue indexing from there
+            # because Bibliospec speclib scan numbers can only be integers
+            start_scannr = self._get_last_ssl_scannr() + 1
+
+        self._write_bibliospec_core(
+            file_obj_ssl, file_obj_ms2, start_scannr=start_scannr
+        )
+
+        return file_obj_ssl, file_obj_ms2

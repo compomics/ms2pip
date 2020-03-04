@@ -1,4 +1,4 @@
-VERSION = "3.4.2"
+VERSION = "3.5.1"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
@@ -44,9 +44,9 @@ PYTHON_REQUIRES = ">=3.6,<4"
 
 import os
 from glob import glob
+
 from setuptools import setup
 from setuptools.extension import Extension
-
 from Cython.Distutils import build_ext
 import numpy
 
