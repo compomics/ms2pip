@@ -862,9 +862,9 @@ class MS2PIP:
             if config_file is None:
                 raise MissingConfigurationError()
             else:
-                self.config_parser = ConfigParser(file=config_file)
-                self.config = self.config_parser.load()
-                self.params = self.config['ms2pip']
+                self.config_parser = ConfigParser(filepath=config_file)
+                self.config_parser.load()
+                self.params = self.config_parser.config['ms2pip']
         else:
             self.params = params
 
