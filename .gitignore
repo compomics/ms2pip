@@ -3,6 +3,9 @@ data/
 *_pyx.c
 *_pyx_*.c
 
+# Pytest
+.pytest_cache/
+
 # Remote Sync for Atom
 .remote-sync.json
 

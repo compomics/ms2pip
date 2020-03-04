@@ -1,12 +1,13 @@
 [<img src="https://github.com/compomics/ms2pip_c/raw/releases/img/ms2pip_logo_1000px.png" width="150" height="150" />](https://iomics.ugent.be/ms2pip/)
 <br/><br/>
 
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
-[![PyPI](https://img.shields.io/pypi/v/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
-[![PyPI - Wheel](https://img.shields.io/pypi/wheel/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
-[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/compomics/ms2pip_c/Tests?style=flat-square)](https://github.com/compomics/ms2pip_c/actions)
-[![GitHub issues](https://img.shields.io/github/issues/compomics/ms2pip_c?style=flat-square)](https://github.com/compomics/ms2pip_c/issues)
-[![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c.svg?style=flat-square)](https://www.apache.org/licenses/LICENSE-2.0)
+[![GitHub release](https://flat.badgen.net/github/release/compomics/ms2pip_c/stable)](https://github.com/compomics/ms2pip_c/releases/latest/)
+[![PyPI](https://flat.badgen.net/pypi/v/ms2pip)](https://pypi.org/project/ms2pip/)
+[![GitHub Workflow Status](https://flat.badgen.net/github/checks/compomics/ms2pip_c/releases)](https://github.com/compomics/ms2pip_c/actions/)
+[![Last commit](https://flat.badgen.net/github/open-issues/compomics/ms2pip_c)](https://github.com/compomics/ms2pip_c/issues/)
+[![Last commit](https://flat.badgen.net/github/last-commit/compomics/ms2pip_c/releases)](https://github.com/compomics/ms2pip_c/commits/releases/)
+[![GitHub](https://flat.badgen.net/github/license/compomics/ms2pip_c)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Twitter](https://flat.badgen.net/twitter/follow/compomics?icon=twitter)](https://twitter.com/compomics)
 
 MS²PIP: MS² Peak Intensity Prediction - Fast and accurate peptide fragmention
 spectrum prediction for multiple fragmentation methods, instruments and labeling techniques.
