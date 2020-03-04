@@ -1,0 +1,7 @@
+[ms2pip]
+frag_error = 0.02
+frag_method = "HCD"
+gptm = []
+out = "csv"
+ptm = ["Oxidation,15.994915,opt,M", "Carbamidomethyl,57.021464,opt,C", "Acetyl,42.010565,opt,N-term"]
+sptm = []

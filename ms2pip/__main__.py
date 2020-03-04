@@ -1,11 +1,12 @@
 import logging
 
-from ms2pip.ms2pipC import (argument_parser, load_configfile, run,
+from ms2pip.ms2pipC import (argument_parser, run,
                             InvalidPEPRECError, NoValidPeptideSequencesError,
                             UnknownOutputFormatError,
                             UnknownFragmentationMethodError,
                             FragmentationModelRequiredError,
                             SUPPORTED_OUT_FORMATS, MODELS)
+from ms2pip.config_parser import ConfigParser 
 
 
 def print_logo():
@@ -32,7 +33,11 @@ def main():
 
     print_logo()
     pep_file, spec_file, vector_file, config_file, num_cpu, correlations, tableau = argument_parser()
-    params = load_configfile(config_file)
+
+    config_parser = ConfigParser(filepath=config_file)
+    config_parser.load()
+    params = config_parser.config['ms2pip']
+
     try:
         run(pep_file,
             spec_file=spec_file,
