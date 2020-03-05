@@ -717,76 +717,51 @@ def load_configfile(filepath):
     return params
 
 
-def generate_modifications_file(params, MASSES, A_MAP):
-    PTMmap = {}
-
-    ptmnum = 38  # Omega compatibility (mutations)
-    spbuffer = []
-    for v in params["sptm"]:
-        l = v.split(",")
-        tmpf = float(l[1])
-        if l[2] == "opt":
-            if l[3] == "N-term":
-                spbuffer.append([tmpf, -1, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if l[3] == "C-term":
-                spbuffer.append([tmpf, -2, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if not l[3] in A_MAP:
-                continue
-            spbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
-            PTMmap[l[0]] = ptmnum
-            ptmnum += 1
+def _parse_modifications(ptms, PTMmap):
+    ptmnum = 38 + len(PTMmap)  # Omega compatibility (mutations)
     pbuffer = []
-    for v in params["ptm"]:
-        l = v.split(",")
-        tmpf = float(l[1])
-        if l[2] == "opt":
-            if l[3] == "N-term":
-                pbuffer.append([tmpf, -1, ptmnum])
-                # PTMmap[l[0].lower()] = ptmnum
-                PTMmap[l[0]] = ptmnum
+    for v in ptms:
+        mod_name, mass_shift, opt, amino_acid = v.split(",")
+        mass_shift = float(mass_shift)
+        if opt == "opt":
+            if amino_acid == "N-term":
+                pbuffer.append([mass_shift, -1, ptmnum])
+                PTMmap[mod_name] = ptmnum
                 ptmnum += 1
                 continue
-            if l[3] == "C-term":
-                pbuffer.append([tmpf, -2, ptmnum])
-                # PTMmap[l[0].lower()] = ptmnum
-                PTMmap[l[0]] = ptmnum
+            if amino_acid == "C-term":
+                pbuffer.append([mass_shift, -2, ptmnum])
+                PTMmap[mod_name] = ptmnum
                 ptmnum += 1
                 continue
-            if not l[3] in A_MAP:
+            if amino_acid not in A_MAP:
                 continue
-            pbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
-            # PTMmap[l[0].lower()] = ptmnum
-            # print("%i %s"%(ptmnum,l[0]))
-            PTMmap[l[0]] = ptmnum
+            pbuffer.append([mass_shift, A_MAP[amino_acid], ptmnum])
+            PTMmap[mod_name] = ptmnum
             ptmnum += 1
+    return pbuffer
 
+
+def _write_modifications_file(pbuffer):
     f = tempfile.NamedTemporaryFile(delete=False, mode="wb")
     f.write(str.encode("{}\n".format(len(pbuffer))))
     for i, _ in enumerate(pbuffer):
         f.write(
-            str.encode(
-                "{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2])
-            )
+            "{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2]).encode()
         )
     f.close()
+    return f.name
 
-    f2 = tempfile.NamedTemporaryFile(delete=False, mode="wb")
-    f2.write(str.encode("{}\n".format(len(spbuffer))))
-    for i, _ in enumerate(spbuffer):
-        f2.write(
-            str.encode(
-                "{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])
-            )
-        )
-    f2.close()
 
-    return f.name, f2.name, PTMmap
+def generate_modifications_file(params, MASSES, A_MAP):
+    PTMmap = {}
+    spbuffer = _parse_modifications(params['sptm'], PTMmap)
+    pbuffer = _parse_modifications(params['ptm'], PTMmap)
+
+    f_name = _write_modifications_file(pbuffer)
+    sf_name = _write_modifications_file(spbuffer)
+
+    return f_name, sf_name, PTMmap
 
 
 def peakcount(x):
