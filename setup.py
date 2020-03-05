@@ -39,6 +39,7 @@ INSTALL_REQUIRES = [
     "scipy>=1.2,<2",
     "tqdm>=4,<5",
     "tables>=3.4",
+    "tomlkit>=0.5.11,<1"
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
