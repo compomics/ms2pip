@@ -1,26 +1,23 @@
 #!/usr/bin/env python
-# Native library
 import os
 import sys
 import glob
 import argparse
 import multiprocessing
-from random import shuffle
-import tempfile
 import logging
 import bisect
 import itertools
 from operator import itemgetter
+from random import shuffle
 
-# Third party
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 import pyteomics.mgf
 
-# From project
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.feature_names import get_feature_names_new
+from ms2pip.peptides import Modifications, AMINO_ACID_IDS, write_amino_accid_masses
 from ms2pip.cython_modules import ms2pip_pyx
 
 logger = logging.getLogger("ms2pip")
@@ -83,55 +80,6 @@ MODELS = {
         "features_version": "normal",
     },
 }
-
-# Create A_MAP:
-# A_MAP converts the peptide amino acids to integers, note how "L" is removed
-AMINOS = [
-    "A",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G",
-    "H",
-    "I",
-    "K",
-    "M",
-    "N",
-    "P",
-    "Q",
-    "R",
-    "S",
-    "T",
-    "V",
-    "W",
-    "Y",
-]
-MASSES = [
-    71.037114,
-    103.00919,
-    115.026943,
-    129.042593,
-    147.068414,
-    57.021464,
-    137.058912,
-    113.084064,
-    128.094963,
-    131.040485,
-    114.042927,
-    97.052764,
-    128.058578,
-    156.101111,
-    87.032028,
-    101.047679,
-    99.068414,
-    186.079313,
-    163.063329,
-    # 147.0354  # iTRAQ fixed N-term modification (gets written to amino acid masses file)
-]
-A_MAP = {a: i for i, a in enumerate(AMINOS)}
-
-PROTON_MASS = 1.007236
 
 
 class UnknownModificationError(ValueError):
@@ -216,7 +164,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
             continue
 
         # convert peptide string to integer list to speed up C code
-        peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
+        peptide = np.array([0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16)
 
         try:
             modpeptide = apply_mods(peptide, mods, PTMmap)
@@ -378,7 +326,7 @@ def process_spectra(
 
                 # convert peptide string to integer list to speed up C code
                 peptide = np.array(
-                    [0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16
+                    [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
                 )
 
                 try:
@@ -717,53 +665,6 @@ def load_configfile(filepath):
     return params
 
 
-def _parse_modifications(ptms, PTMmap):
-    ptmnum = 38 + len(PTMmap)  # Omega compatibility (mutations)
-    pbuffer = []
-    for v in ptms:
-        mod_name, mass_shift, opt, amino_acid = v.split(",")
-        mass_shift = float(mass_shift)
-        if opt == "opt":
-            if amino_acid == "N-term":
-                pbuffer.append([mass_shift, -1, ptmnum])
-                PTMmap[mod_name] = ptmnum
-                ptmnum += 1
-                continue
-            if amino_acid == "C-term":
-                pbuffer.append([mass_shift, -2, ptmnum])
-                PTMmap[mod_name] = ptmnum
-                ptmnum += 1
-                continue
-            if amino_acid not in A_MAP:
-                continue
-            pbuffer.append([mass_shift, A_MAP[amino_acid], ptmnum])
-            PTMmap[mod_name] = ptmnum
-            ptmnum += 1
-    return pbuffer
-
-
-def _write_modifications_file(pbuffer):
-    f = tempfile.NamedTemporaryFile(delete=False, mode="wb")
-    f.write(str.encode("{}\n".format(len(pbuffer))))
-    for i, _ in enumerate(pbuffer):
-        f.write(
-            "{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2]).encode()
-        )
-    f.close()
-    return f.name
-
-
-def generate_modifications_file(params, MASSES, A_MAP):
-    PTMmap = {}
-    spbuffer = _parse_modifications(params['sptm'], PTMmap)
-    pbuffer = _parse_modifications(params['ptm'], PTMmap)
-
-    f_name = _write_modifications_file(pbuffer)
-    sf_name = _write_modifications_file(spbuffer)
-
-    return f_name, sf_name, PTMmap
-
-
 def peakcount(x):
     c = 0.0
     for i in x:
@@ -831,27 +732,6 @@ def argument_parser():
         args.num_cpu = multiprocessing.cpu_count()
 
     return args
-
-
-# NOTE: taken from ms2pip server
-def get_precursor_mz_pyteomics(peptide, modifications, charge, mass_shifts):
-    """
-    Calculate precursor mass and mz for given peptide and modification list,
-    using Pyteomics.
-    peptide: stripped peptide sequence
-    modifications: MS2PIP-style formatted modifications list (e.g.
-    `0|Acetyl|2|Oxidation`)
-    mass_shifts: dictionary with `modification_name -> mass_shift` pairs
-    Returns: tuple(prec_mass, prec_mz)
-    Note: This method does not use the build-in Pyteomics modification handling, as
-    that would require a known atomic composition of the modification.
-    """
-    charge = int(charge)
-    unmodified_mass = pyteomics.mass.fast_mass(peptide)
-    mods_massses = sum([mass_shifts[mod] for mod in modifications.split('|')[1::2]])
-    prec_mass = unmodified_mass + mods_massses
-    prec_mz = (prec_mass + charge * PROTON_MASS) / charge
-    return prec_mass, prec_mz
 
 
 def get_intense_mzs(mzs, intensity, n=3):
@@ -972,14 +852,14 @@ class MS2PIP:
             self.spec_file = spec_file
             self.spec_files = None
 
-    def run(self):
-        self._write_amino_accid_masses()
+        self.mods = Modifications()
+        for mod_type in ('sptm', 'ptm'):
+            self.mods.add_from_ms2pip_modstrings(self.params[mod_type], mod_type=mod_type)
 
-        # PTMs are loaded the same as in Omega
-        # This allows me to use the same C init() function in bot ms2ip and Omega
-        (self.modfile, self.modfile2, self.PTMmap) = generate_modifications_file(
-            self.params, MASSES, A_MAP
-        )
+    def run(self):
+        self.afile = write_amino_accid_masses()
+        self.modfile = self.mods.write_modifications_file(mod_type='ptm')
+        self.modfile2 = self.mods.write_modifications_file(mod_type='sptm')
 
         self._read_peptide_information()
 
@@ -1025,17 +905,6 @@ class MS2PIP:
                 self._write_predictions(all_preds)
             else:
                 return all_preds
-
-    def _write_amino_accid_masses(self):
-        # Create amino acid MASSES file
-        # to be compatible with Omega
-        # that might have fixed modifications
-        f = tempfile.NamedTemporaryFile(delete=False)
-        for m in MASSES:
-            f.write(str.encode("{}\n".format(m)))
-        f.write(str.encode("0\n"))
-        f.close()
-        self.afile = f.name
 
     def _remove_amino_accid_masses(self):
         os.remove(self.afile)
@@ -1114,7 +983,7 @@ class MS2PIP:
                 self.afile,
                 self.modfile,
                 self.modfile2,
-                self.PTMmap,
+                self.mods.ptm_ids,
                 self.model,
                 self.fragerror,
                 self.tableau,
@@ -1207,7 +1076,7 @@ class MS2PIP:
         return self._execute_in_pool(
             titles,
             process_peptides,
-            (self.afile, self.modfile, self.modfile2, self.PTMmap, self.model),
+            (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
         )
 
     def _write_predictions(self, all_preds):
@@ -1249,10 +1118,9 @@ class MS2PIP:
         peptides = [
             (
                 spec_id,
-                get_precursor_mz_pyteomics(peptide,
-                                           modifications,
-                                           charge,
-                                           self.PTMmap)[1],
+                self.mods.calc_precursor_mz(peptide,
+                                            modifications,
+                                            charge)[1],
                 predictions[spec_id]
             ) for spec_id, peptide, modifications, charge in self.data[data_cols].values
         ]
