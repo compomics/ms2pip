@@ -2,8 +2,6 @@
 import os
 import sys
 import glob
-import argparse
-import multiprocessing
 import logging
 import bisect
 import itertools
@@ -673,67 +671,6 @@ def peakcount(x):
     return c / len(x)
 
 
-def argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pep_file", metavar="<PEPREC file>", help="list of peptides")
-    parser.add_argument(
-        "-c",
-        metavar="CONFIG_FILE",
-        action="store",
-        required=True,
-        dest="config_file",
-        help="config file",
-    )
-    parser.add_argument(
-        "-s",
-        metavar="MGF_FILE",
-        action="store",
-        dest="spec_file",
-        help=".mgf MS2 spectrum file (optional)",
-    )
-    parser.add_argument(
-        "-w",
-        metavar="FEATURE_VECTOR_OUTPUT",
-        action="store",
-        dest="vector_file",
-        help="write feature vectors to FILE.{pkl,h5} (optional)",
-    )
-    parser.add_argument(
-        "-x",
-        action="store_true",
-        default=False,
-        dest="correlations",
-        help="calculate correlations (if MGF is given)",
-    )
-    parser.add_argument(
-        "-p",
-        action="store_true",
-        default=False,
-        dest="match_spectra",
-        help="match peptides to spectra based on predicted spectra (if MGF is given)",
-    )
-    parser.add_argument(
-        "-t",
-        action="store_true",
-        default=False,
-        dest="tableau",
-        help="create Tableau Reader file",
-    )
-    parser.add_argument(
-        "-m",
-        metavar="NUM_CPU",
-        action="store",
-        dest="num_cpu",
-        help="number of CPUs to use (default: all available)",
-    )
-    args = parser.parse_args()
-
-    if not args.num_cpu:
-        args.num_cpu = multiprocessing.cpu_count()
-
-    return args
-
-
 def get_intense_mzs(mzs, intensity, n=3):
     return [x[0] for x in sorted(zip(mzs, intensity), key=itemgetter(1), reverse=True)[:n]]
 
@@ -836,9 +773,9 @@ class MS2PIP:
         )
         if use_billiard:
             import billiard
-
             self.myPool = billiard.Pool(self.num_cpu)
         else:
+            import multiprocessing
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
         if self.match_spectra:
