@@ -25,7 +25,8 @@ from ms2pip.exceptions import (
     NoValidPeptideSequencesError,
     UnknownOutputFormatError,
     UnknownFragmentationMethodError,
-    FragmentationModelRequiredError
+    FragmentationModelRequiredError,
+    MissingConfigurationError,
 )
 
 logger = logging.getLogger("ms2pip")
