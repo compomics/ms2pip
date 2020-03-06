@@ -1,6 +1,6 @@
 import logging
 
-from ms2pip.ms2pipC import (argument_parser, run,
+from ms2pip.ms2pipC import (MS2PIP, argument_parser,
                             InvalidPEPRECError, NoValidPeptideSequencesError,
                             UnknownOutputFormatError,
                             UnknownFragmentationMethodError,
@@ -29,23 +29,24 @@ def main():
     root_logger = logging.getLogger()
     handler = logging.StreamHandler()
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)
 
     print_logo()
-    pep_file, spec_file, vector_file, config_file, num_cpu, correlations, tableau = argument_parser()
+    pep_file, spec_file, vector_file, config_file, num_cpu, add_retention_time, correlations, tableau = argument_parser()
 
-    config_parser = ConfigParser(filepath=config_file)
-    config_parser.load()
-    params = config_parser.config['ms2pip']
+    ms2pip = MS2PIP(
+        pep_file,
+        spec_file=spec_file,
+        vector_file=vector_file,
+        config_file=config_file,
+        num_cpu=num_cpu,
+        add_retention_time=add_retention_time,
+        compute_correlations=correlations,
+        tableau=tableau
+    )
 
     try:
-        run(pep_file,
-            spec_file=spec_file,
-            vector_file=vector_file,
-            params=params,
-            num_cpu=num_cpu,
-            compute_correlations=correlations,
-            tableau=tableau)
+        ms2pip.run()
     except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
     except NoValidPeptideSequencesError:

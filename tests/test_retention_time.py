@@ -18,7 +18,8 @@ class TestRetentionTime:
             }
         }
 
-        rt_predictor = RetentionTime(peprec, config)
+        rt_predictor = RetentionTime(config=config)
+        rt_predictor.peprec = peprec
         rt_predictor._prepare_deeplc_peptide_df()
         dlc_df = rt_predictor.deeplc_pep_df
 

@@ -4,24 +4,29 @@ import pandas as pd
 
 
 class RetentionTime:
-    def __init__(self, peprec, config=None):
+    def __init__(self, predictor="deeplc", config=None):
         """
-        Add peptide retention time predictions to peprec.
+        Initialize peptide retention time predictor
 
         Parameters
         ----------
-        peprec: pd.DataFrame
-            MS2PIP-style peprec DataFrame with peptides for which to predict retention
-            times
+        predictor: str, optional
+            Retention time predictor to employ. Currently only 'deeplc' is supported.
         config: dict, optional
             Dictionary with configuration. E.g. requires 'deeplc' top-level key for
             DeepLC predictions.
         """
-        self.peprec = peprec
+        self.predictor = predictor
+
         if not config:
             self.config = dict()
         else:
             self.config = config
+
+        if self.predictor == "deeplc":
+            self._init_deeplc()
+        else:
+            raise NotImplementedError(predictor)
 
     def _get_irt_peptides(self):
         """
@@ -48,12 +53,10 @@ class RetentionTime:
 
         return irt_df
 
-    def _prepare_deeplc_peptide_df(self):
-        column_map = {"peptide": "seq", "modifications": "modifications"}
-        self.deeplc_pep_df = self.peprec[column_map.keys()].copy()
-        self.deeplc_pep_df.rename(columns=column_map, inplace=True)
-
-    def _run_deeplc(self):
+    def _init_deeplc(self):
+        """
+        Initialize DeepLC: import, configurate and calibrate
+        """
         # Only import if DeepLC will be used, otherwise lot's of extra heavy
         # dependencies (e.g. Tensorflow) are imported as well
         from deeplc import DeepLC
@@ -70,25 +73,56 @@ class RetentionTime:
         if not calibration_file:
             deeplc_params["split_cal"] = 9
 
-        dlc = DeepLC(**deeplc_params)
+        self.deeplc_predictor = DeepLC(**deeplc_params)
 
         if calibration_file:
             cal_df = pd.read_csv(calibration_file, sep=",")
         else:
-            dlc.calibrate_preds(seq_df=self._get_irt_peptides())
+            cal_df = self._get_irt_peptides()
 
-        self.deeplc_preds = dlc.make_preds(seq_df=self.deeplc_pep_df.fillna(""))
+        self.deeplc_predictor.calibrate_preds(seq_df=cal_df)
+
+    def _prepare_deeplc_peptide_df(self):
+        """
+        Prepare DeepLC peptide DataFrame
+        """
+        column_map = {"peptide": "seq", "modifications": "modifications"}
+        self.deeplc_pep_df = self.peprec[column_map.keys()].copy()
+        self.deeplc_pep_df.rename(columns=column_map, inplace=True)
+
+    def _run_deeplc(self):
+        """
+        Run DeepLC
+        """
+        self.deeplc_preds = self.deeplc_predictor.make_preds(
+            seq_df=self.deeplc_pep_df.fillna("")
+        )
 
     def _parse_deeplc_preds(self):
+        """
+        Add DeepLC predictions to peprec DataFrame
+        """
         self.peprec["rt"] = self.deeplc_preds
 
     def _predict_deeplc(self):
+        """
+        Predict retention times using DeepLC
+        """
         self._prepare_deeplc_peptide_df()
         self._run_deeplc()
         self._parse_deeplc_preds()
 
-    def add_rt_predictions(self, predictor="deeplc"):
-        if predictor == "deeplc":
+    def add_rt_predictions(self, peprec):
+        """
+        Run RT predictor and add predictions to peprec DataFrame.
+
+        peprec: pd.DataFrame
+            MS2PIP-style peprec DataFrame with peptides for which to predict retention
+            times
+        """
+        self.peprec = peprec
+
+        if self.predictor == "deeplc":
             self._predict_deeplc()
         else:
             raise NotImplementedError(predictor)

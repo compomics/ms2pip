@@ -16,6 +16,7 @@ from scipy.stats import pearsonr
 # From project
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.config_parser import ConfigParser
+from ms2pip.retention_time import RetentionTime
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.cython_modules import ms2pip_pyx
 
@@ -795,6 +796,13 @@ def argument_parser():
         help="write feature vectors to FILE.{pkl,h5} (optional)",
     )
     parser.add_argument(
+        "--retention_time",
+        action="store_true",
+        default=False,
+        dest="add_retention_time",
+        help="add retention time predictions (requires DeepLC python package)",
+    )
+    parser.add_argument(
         "-x",
         action="store_true",
         default=False,
@@ -826,6 +834,7 @@ def argument_parser():
         args.vector_file,
         args.config_file,
         int(args.num_cpu),
+        args.add_retention_time,
         args.correlations,
         args.tableau,
     )
@@ -843,8 +852,9 @@ class MS2PIP:
         params=None,
         output_filename=None,
         datasetname=None,
-        return_results=True,
+        return_results=False,
         limit=None,
+        add_retention_time=False,
         compute_correlations=False,
         tableau=False,
     ):
@@ -854,6 +864,7 @@ class MS2PIP:
         self.num_cpu = num_cpu
         self.return_results = return_results
         self.limit = limit
+        self.add_retention_time = add_retention_time
         self.compute_correlations = compute_correlations
         self.tableau = tableau
 
@@ -866,6 +877,7 @@ class MS2PIP:
                 self.config_parser.load()
                 self.params = self.config_parser.config['ms2pip']
         else:
+            self.config_parser = None
             self.params = params
 
         if "model" in self.params:
@@ -927,10 +939,18 @@ class MS2PIP:
 
         self._read_peptide_information()
 
+        if self.add_retention_time:
+            logging.info("Adding retention time predictions")
+            if self.config_parser:
+                rt_predictor = RetentionTime(config=self.config_parser.config)
+            else:
+                rt_predictor = RetentionTime()
+            rt_predictor.add_rt_predictions(self.data)
+
         if self.spec_file:
             results = self._process_spectra()
 
-            logger.info("merging results")
+            logger.debug("Merging results")
             if self.vector_file:
                 self._write_vector_file(results)
             else:
@@ -1176,38 +1196,8 @@ class MS2PIP:
 
         if "csv" in self.out_formats:
             logger.info("writing CSV %s_predictions.csv...", self.output_filename)
+            if self.add_retention_time:
+                all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on='spec_id')
             all_preds.to_csv(
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
-
-
-def run(
-    pep_file,
-    spec_file=None,
-    vector_file=None,
-    config_file=None,
-    num_cpu=23,
-    use_billiard=False,
-    params=None,
-    output_filename=None,
-    datasetname=None,
-    return_results=False,
-    limit=None,
-    compute_correlations=False,
-    tableau=False,
-):
-    return MS2PIP(
-        pep_file,
-        spec_file=spec_file,
-        vector_file=vector_file,
-        config_file=config_file,
-        num_cpu=num_cpu,
-        use_billiard=use_billiard,
-        params=params,
-        output_filename=output_filename,
-        datasetname=datasetname,
-        return_results=return_results,
-        limit=limit,
-        compute_correlations=compute_correlations,
-        tableau=tableau,
-    ).run()

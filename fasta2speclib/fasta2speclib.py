@@ -18,12 +18,12 @@ __email__ = "Ralf.Gabriels@ugent.be"
 
 
 # Native libraries
+import argparse
 import json
 import logging
-import argparse
-from math import ceil
-from multiprocessing import Pool
+import multiprocessing
 from itertools import combinations
+from math import ceil
 
 # Third party libraries
 import numpy as np
@@ -33,7 +33,8 @@ from pyteomics.parser import cleave, expasy_rules
 from Bio import SeqIO
 
 # MS2PIP
-from ms2pip.ms2pipC import run
+from ms2pip.ms2pipC import MS2PIP
+from ms2pip.retention_time import RetentionTime
 from ms2pip.ms2pip_tools import spectrum_output
 from ms2pip.ms2pip_tools.get_elude_predictions import get_elude_predictions
 
@@ -86,35 +87,52 @@ def get_params():
             params["fasta_filename"].split("\\")[-1].split(".")[:-1]
         )
 
+    if not params["num_cpu"]:
+        params["num_cpu"] = multiprocessing.cpu_count()
+
     return params
 
 
 def prot_to_peprec(protein):
+    def validate_peptide(peptide, min_length, max_length):
+        """
+        Validate peptide by length and amino acids
+        """
+        peplen = len(peptide)
+        if (
+            (peplen < min_length)
+            or (peplen > max_length)
+            or any(aa in peptide for aa in ["B", "J", "O", "U", "X", "Z"])
+        ):
+            is_valid = False
+        else:
+            is_valid = True
+        return is_valid
+
     params = get_params()
-    # Calculate longest and shortest possible peptide with given max_pepmass
-    max_pepmass_min_len = int(params["max_pepmass"] / 186.08 + 2)
-    max_pepmass_max_len = int(params["max_pepmass"] / 57.02 + 2)
-    tmp = pd.DataFrame(columns=["spec_id", "peptide", "modifications", "charge"])
+
     pep_count = 0
+    spec_ids = []
+    peptides = []
+
     for peptide in cleave(
         str(protein.seq), expasy_rules["trypsin"], params["missed_cleavages"]
     ):
-        if False not in [aa not in peptide for aa in ["B", "J", "O", "U", "X", "Z"]]:
-            if params["min_peplen"] <= len(peptide) <= max_pepmass_max_len:
-                # Skip peptide if it's mass is larger than allowed
-                # Only calculate if longer than shortest possible peptide with max_pepmass
-                if len(peptide) > max_pepmass_min_len:
-                    if mass.calculate_mass(sequence=peptide) > params["max_pepmass"]:
-                        continue
-                pep_count += 1
-                row = {
-                    "spec_id": "{}_{:03d}".format(protein.id, pep_count),
-                    "peptide": peptide,
-                    "modifications": "-",
-                    "charge": np.nan,
-                }
-                tmp = tmp.append(row, ignore_index=True)
-    return tmp
+        pep_count += 1
+        if validate_peptide(peptide, params["min_peplen"], params["max_peplen"]):
+            spec_ids.append("{}_{:03d}".format(protein.id, pep_count))
+            peptides.append(peptide)
+
+    tmp_peprec = pd.DataFrame(
+        {
+            "spec_id": spec_ids,
+            "peptide": peptides,
+            "modifications": "-",
+            "charge": np.nan,
+        }
+    )
+
+    return tmp_peprec
 
 
 def get_protein_list(df):
@@ -322,6 +340,11 @@ def run_batches(peprec, decoy=False):
         "gptm": [],
     }
 
+    # If add_retention_time, initiate DeepLC (and calibrate once)
+    if params["add_retention_time"]:
+        logging.debug("Initializing DeepLC predictor")
+        rt_predictor = RetentionTime()
+
     # Split up into batches to save memory:
     b_size = params["batch_size"]
     b_count = 0
@@ -341,13 +364,16 @@ def run_batches(peprec, decoy=False):
 
         logging.debug("Adding all modification combinations")
         peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
-        with Pool(params["num_cpu"]) as p:
+        with multiprocessing.Pool(params["num_cpu"]) as p:
             peprec_mods = peprec_mods.append(
                 p.map(add_mods, peprec_batch.iterrows()), ignore_index=True
             )
         peprec_batch = peprec_mods
 
-        if type(params["elude_model_file"]) == str:
+        if params["add_retention_time"]:
+            logging.info("Adding DeepLC predicted retention times")
+            rt_predictor.add_rt_predictions(peprec_batch)
+        elif type(params["elude_model_file"]) == str:
             logging.debug("Adding ELUDE predicted retention times")
             peprec_batch["rt"] = get_elude_predictions(
                 peprec_batch,
@@ -381,23 +407,24 @@ def run_batches(peprec, decoy=False):
             peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
 
         # Write ptm/charge-extended peprec from this batch to H5 file:
-        peprec_batch.astype(str).to_hdf(
-            "{}_expanded.peprec.hdf".format(params["output_filename"]),
-            key="table",
-            format="table",
-            complevel=3,
-            complib="zlib",
-            mode="a",
-        )
+        #peprec_batch.astype(str).to_hdf(
+        #    "{}_expanded.peprec.hdf".format(params["output_filename"]),
+        #    key="table",
+        #    format="table",
+        #    complevel=3,
+        #    complib="zlib",
+        #    mode="a",
+        #)
 
-        logging.info("Running MS2PIPc for %d peptides", len(peprec_batch))
-        all_preds = run(
+        logging.info("Running MS2PIP for %d peptides", len(peprec_batch))
+        ms2pip = MS2PIP(
             peprec_batch,
             num_cpu=params["num_cpu"],
             output_filename=params["output_filename"],
             params=ms2pip_params,
             return_results=True,
         )
+        all_preds = ms2pip.run()
 
         if b_count == 1:
             write_mode = "w"
@@ -459,7 +486,7 @@ def main():
     peprec = pd.DataFrame(columns=["spec_id", "peptide", "modifications", "charge"])
 
     logging.info("Cleaving proteins, adding peptides to peprec")
-    with Pool(params["num_cpu"]) as p:
+    with multiprocessing.Pool(params["num_cpu"]) as p:
         peprec = peprec.append(
             p.map(prot_to_peprec, SeqIO.parse(params["fasta_filename"], "fasta")),
             ignore_index=True,

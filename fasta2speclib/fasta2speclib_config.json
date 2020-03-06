@@ -2,7 +2,7 @@
     "output_filetype":["msp", "mgf", "bibliospec", "spectronaut", "hdf"],
     "charges":[2, 3],
     "min_peplen":8,
-    "max_pepmass":5000,
+    "max_peplen":30,
     "missed_cleavages":2,
     "modifications":[
         {"name":"Glu->pyro-Glu", "unimod_accession":27, "mass_shift":-18.0153, "amino_acid":"E", "n_term":true, "fixed":false},
@@ -13,9 +13,10 @@
     ],
     "ms2pip_model":"HCD",
     "decoy":true,
+    "add_retention_time":true,
     "elude_model_file":null,
     "rt_predictions_file":null,
     "peprec_filter":null,
-    "batch_size":5000,
+    "batch_size":10000,
     "num_cpu":24
 }
