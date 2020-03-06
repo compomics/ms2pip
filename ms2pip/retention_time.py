@@ -125,4 +125,4 @@ class RetentionTime:
         if self.predictor == "deeplc":
             self._predict_deeplc()
         else:
-            raise NotImplementedError(predictor)
+            raise NotImplementedError(self.predictor)
