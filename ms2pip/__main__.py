@@ -2,12 +2,13 @@ import argparse
 import logging
 import multiprocessing
 
-from ms2pip.ms2pipC import (load_configfile, run,
-                            InvalidPEPRECError, NoValidPeptideSequencesError,
-                            UnknownOutputFormatError,
-                            UnknownFragmentationMethodError,
-                            FragmentationModelRequiredError,
-                            SUPPORTED_OUT_FORMATS, MODELS)
+from ms2pip.exceptions import (
+    InvalidPEPRECError,
+    NoValidPeptideSequencesError,
+    UnknownOutputFormatError,
+    UnknownFragmentationMethodError,
+    FragmentationModelRequiredError)
+from ms2pip.ms2pipC import load_configfile, run, SUPPORTED_OUT_FORMATS, MODELS
 
 
 def print_logo():

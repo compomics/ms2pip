@@ -15,8 +15,18 @@ import pyteomics.mgf
 
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.feature_names import get_feature_names_new
-from ms2pip.peptides import Modifications, AMINO_ACID_IDS, write_amino_accid_masses
+from ms2pip.peptides import (
+    Modifications, AMINO_ACID_IDS, write_amino_accid_masses
+)
 from ms2pip.cython_modules import ms2pip_pyx
+from ms2pip.exceptions import (
+    UnknownModificationError,
+    InvalidPEPRECError,
+    NoValidPeptideSequencesError,
+    UnknownOutputFormatError,
+    UnknownFragmentationMethodError,
+    FragmentationModelRequiredError
+)
 
 logger = logging.getLogger("ms2pip")
 
@@ -78,34 +88,6 @@ MODELS = {
         "features_version": "normal",
     },
 }
-
-
-class UnknownModificationError(ValueError):
-    pass
-
-
-class InvalidPEPRECError(Exception):
-    pass
-
-
-class NoValidPeptideSequencesError(Exception):
-    pass
-
-
-class UnknownOutputFormatError(ValueError):
-    pass
-
-
-class UnknownFragmentationMethodError(ValueError):
-    pass
-
-
-class MissingConfigurationError(Exception):
-    pass
-
-
-class FragmentationModelRequiredError(Exception):
-    pass
 
 
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
