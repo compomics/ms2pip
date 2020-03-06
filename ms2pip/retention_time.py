@@ -17,16 +17,12 @@ class RetentionTime:
             DeepLC predictions.
         """
         self.predictor = predictor
+        self.deeplc_predictor = None
 
         if not config:
             self.config = dict()
         else:
             self.config = config
-
-        if self.predictor == "deeplc":
-            self._init_deeplc()
-        else:
-            raise NotImplementedError(predictor)
 
     def _get_irt_peptides(self):
         """
@@ -108,6 +104,8 @@ class RetentionTime:
         """
         Predict retention times using DeepLC
         """
+        if not self.deeplc_predictor:
+            self._init_deeplc()
         self._prepare_deeplc_peptide_df()
         self._run_deeplc()
         self._parse_deeplc_preds()
