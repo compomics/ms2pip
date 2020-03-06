@@ -27,7 +27,7 @@ jobs:
         flake8 ./ms2pip ./fasta2speclib --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Build manylinux wheels
-      uses: RalfG/python-wheels-manylinux-build@v0.1
+      uses: RalfG/python-wheels-manylinux-build@v0.2.2-manylinux1_x86_64
       with:
         python-versions: 'cp36-cp36m cp37-cp37m cp38-cp38'
         build-requirements: 'setuptools numpy cython'
@@ -48,3 +48,8 @@ jobs:
       run: |
         twine upload wheelhouse/ms2pip*-manylinux1_x86_64.whl
         twine upload dist/*.tar.gz
+
+    - uses: actions/upload-artifact@v1
+      with:
+        name: wheels
+        path: wheelhouse/ms2pip*-manylinux1_x86_64.whl
