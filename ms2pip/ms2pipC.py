@@ -774,7 +774,7 @@ def argument_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("pep_file", metavar="<PEPREC file>", help="list of peptides")
     parser.add_argument(
-        "-c",
+        "-c", "--config-file",
         metavar="CONFIG_FILE",
         action="store",
         required=True,
@@ -782,42 +782,42 @@ def argument_parser():
         help="config file",
     )
     parser.add_argument(
-        "-s",
+        "-s", "--spectrum-file",
         metavar="MGF_FILE",
         action="store",
         dest="spec_file",
         help=".mgf MS2 spectrum file (optional)",
     )
     parser.add_argument(
-        "-w",
+        "-w", "--vector-file",
         metavar="FEATURE_VECTOR_OUTPUT",
         action="store",
         dest="vector_file",
         help="write feature vectors to FILE.{pkl,h5} (optional)",
     )
     parser.add_argument(
-        "--retention_time",
+        "-r", "--retention-time",
         action="store_true",
         default=False,
         dest="add_retention_time",
         help="add retention time predictions (requires DeepLC python package)",
     )
     parser.add_argument(
-        "-x",
+        "-x", "--correlations",
         action="store_true",
         default=False,
         dest="correlations",
         help="calculate correlations (if MGF is given)",
     )
     parser.add_argument(
-        "-t",
+        "-t", "--tableau",
         action="store_true",
         default=False,
         dest="tableau",
         help="create Tableau Reader file",
     )
     parser.add_argument(
-        "-m",
+        "-n", "--num-cpu",
         metavar="NUM_CPU",
         action="store",
         dest="num_cpu",

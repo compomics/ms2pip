@@ -87,7 +87,7 @@ MS²PIP predictions can be compared to spectra in an
 ### Command line interface
 ```
 usage: ms2pip [-h] -c CONFIG_FILE [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
-              [--retention_time] [-x] [-t] [-m NUM_CPU]
+              [-r] [-x] [-t] [-n NUM_CPU]
               <PEPREC file>
 
 positional arguments:
@@ -95,15 +95,18 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -c CONFIG_FILE        config file
-  -s MGF_FILE           .mgf MS2 spectrum file (optional)
-  -w FEATURE_VECTOR_OUTPUT
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        config file
+  -s MGF_FILE, --spectrum-file MGF_FILE
+                        .mgf MS2 spectrum file (optional)
+  -w FEATURE_VECTOR_OUTPUT, --vector-file FEATURE_VECTOR_OUTPUT
                         write feature vectors to FILE.{pkl,h5} (optional)
-  --retention_time      add retention time predictions (requires DeepLC python
+  -r, --retention-time  add retention time predictions (requires DeepLC python
                         package)
-  -x                    calculate correlations (if MGF is given)
-  -t                    create Tableau Reader file
-  -m NUM_CPU            number of CPUs to use (default: all available)
+  -x, --correlations    calculate correlations (if MGF is given)
+  -t, --tableau         create Tableau Reader file
+  -n NUM_CPU, --num-cpu NUM_CPU
+                        number of CPUs to use (default: all available)
 ```
 
 ### Input files
