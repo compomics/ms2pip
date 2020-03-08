@@ -62,7 +62,7 @@ def test_real_spectra():
             "tests/test_data/massivekb_selected_500.mgf",
             "-w",
             "tests/test_data/massivekb_selected_500_test.h5",
-            "-m1",
+            "-n1",
             "tests/test_data/massivekb_selected_500.peprec",
         ]
     )
