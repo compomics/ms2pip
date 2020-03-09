@@ -1,5 +1,6 @@
 """
 Create a spectral library starting from a proteome in fasta format.
+
 The script runs through the following steps:
 - In silico cleavage of proteins from the fasta file
 - Remove peptide redundancy
@@ -94,17 +95,15 @@ def get_params():
 
 
 def prot_to_peprec(protein):
+    """Cleave protein and return pd.DataFrame with valid peptides."""
     def validate_peptide(peptide, min_length, max_length):
-        """
-        Validate peptide by length and amino acids
-        """
+        """Validate peptide by length and amino acids."""
         peplen = len(peptide)
-        is_valid = (
+        return (
             (peplen >= min_length)
             and (peplen <= max_length)
             and not any(aa in peptide for aa in ["B", "J", "O", "U", "X", "Z"])
         )
-        return is_valid
 
     params = get_params()
 
@@ -120,7 +119,7 @@ def prot_to_peprec(protein):
             spec_ids.append("{}_{:03d}".format(protein.id, pep_count))
             peptides.append(peptide)
 
-    tmp_peprec = pd.DataFrame(
+    return pd.DataFrame(
         {
             "spec_id": spec_ids,
             "peptide": peptides,
@@ -128,8 +127,6 @@ def prot_to_peprec(protein):
             "charge": np.nan,
         }
     )
-
-    return tmp_peprec
 
 
 def get_protein_list(df):
