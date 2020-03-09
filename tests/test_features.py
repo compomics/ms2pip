@@ -1,4 +1,5 @@
-from subprocess import call
+import os
+
 import pandas as pd
 import numpy as np
 
@@ -96,4 +97,4 @@ class TestFeatureExtraction:
         self._assert_get_targetsY(test_data, target_data)
         self._assert_get_psmid(test_data, target_data)
 
-        os.remove("rm", "tests/test_data/massivekb_selected_500_test.h5")
+        os.remove("tests/test_data/massivekb_selected_500_test.h5")
