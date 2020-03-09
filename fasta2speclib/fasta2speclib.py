@@ -99,14 +99,11 @@ def prot_to_peprec(protein):
         Validate peptide by length and amino acids
         """
         peplen = len(peptide)
-        if (
-            (peplen < min_length)
-            or (peplen > max_length)
-            or any(aa in peptide for aa in ["B", "J", "O", "U", "X", "Z"])
-        ):
-            is_valid = False
-        else:
-            is_valid = True
+        is_valid = (
+            (peplen >= min_length)
+            and (peplen <= max_length)
+            and not any(aa in peptide for aa in ["B", "J", "O", "U", "X", "Z"])
+        )
         return is_valid
 
     params = get_params()
@@ -405,16 +402,6 @@ def run_batches(peprec, decoy=False):
             logging.debug("Removing peptides present in peprec filter")
             peprec_filter = pd.read_csv(params["peprec_filter"], sep=" ")
             peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
-
-        # Write ptm/charge-extended peprec from this batch to H5 file:
-        #peprec_batch.astype(str).to_hdf(
-        #    "{}_expanded.peprec.hdf".format(params["output_filename"]),
-        #    key="table",
-        #    format="table",
-        #    complevel=3,
-        #    complib="zlib",
-        #    mode="a",
-        #)
 
         logging.info("Running MS2PIP for %d peptides", len(peprec_batch))
         ms2pip = MS2PIP(

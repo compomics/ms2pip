@@ -8,7 +8,8 @@ from ms2pip.exceptions import (
     UnknownOutputFormatError,
     UnknownFragmentationMethodError,
     FragmentationModelRequiredError)
-from ms2pip.ms2pipC import load_configfile, MS2PIP, SUPPORTED_OUT_FORMATS, MODELS
+from ms2pip.ms2pipC import MS2PIP, SUPPORTED_OUT_FORMATS, MODELS
+from ms2pip.config_parser import ConfigParser
 
 
 def print_logo():
@@ -103,9 +104,11 @@ def main():
     root_logger.setLevel(logging.DEBUG)
 
     print_logo()
+
     args = argument_parser()
-    params = load_configfile(args.config_file)
-    
+    config_parser = ConfigParser(filepath=args.config_file)
+    params = config_parser.config()
+
     try:
         ms2pip = MS2PIP(
             args.pep_file,
@@ -122,7 +125,7 @@ def main():
     except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
     except NoValidPeptideSequencesError:
-        root_logger.error("No peprides for which to predict intensities. \
+        root_logger.error("No peptides for which to predict intensities. \
             please provide at least one valid peptide sequence.")
     except UnknownOutputFormatError as o:
         root_logger.error("Unknown output format: '%s' (supported formats: %s)", o, SUPPORTED_OUT_FORMATS)

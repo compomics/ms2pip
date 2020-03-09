@@ -13,7 +13,7 @@ class RetentionTime:
         predictor: str, optional
             Retention time predictor to employ. Currently only 'deeplc' is supported.
         config: dict, optional
-            Dictionary with configuration. E.g. requires 'deeplc' top-level key for
+            Dictionary with configuration. Requires 'deeplc' top-level key for
             DeepLC predictions.
         """
         self.predictor = predictor

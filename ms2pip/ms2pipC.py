@@ -14,7 +14,6 @@ from scipy.stats import pearsonr
 import pyteomics.mgf
 
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
-from ms2pip.config_parser import ConfigParser
 from ms2pip.retention_time import RetentionTime
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.peptides import (
@@ -626,28 +625,6 @@ def apply_mods(peptide, mods, PTMmap):
     return modpeptide
 
 
-def load_configfile(filepath):
-    params = {}
-    params["ptm"] = []
-    params["sptm"] = []
-    params["gptm"] = []
-    with open(filepath) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line[0] == "#":
-                continue
-            (par, val) = line.split("=")
-            if par == "ptm":
-                params["ptm"].append(val)
-            elif par == "sptm":
-                params["sptm"].append(val)
-            elif par == "gptm":
-                params["gptm"].append(val)
-            else:
-                params[par] = val
-    return params
-
-
 def peakcount(x):
     c = 0.0
     for i in x:
@@ -685,7 +662,6 @@ class MS2PIP:
         pep_file,
         spec_file=None,
         vector_file=None,
-        config_file=None,
         num_cpu=1,
         use_billiard=False,
         params=None,
@@ -701,6 +677,7 @@ class MS2PIP:
         self.pep_file = pep_file
         self.vector_file = vector_file
         self.num_cpu = num_cpu
+        self.params = params
         self.return_results = return_results
         self.limit = limit
         self.add_retention_time = add_retention_time
@@ -708,30 +685,21 @@ class MS2PIP:
         self.match_spectra = match_spectra
         self.tableau = tableau
 
-        # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
         if params is None:
-            if config_file is None:
-                raise MissingConfigurationError()
-            else:
-                self.config_parser = ConfigParser(filepath=config_file)
-                self.config_parser.load()
-                self.params = self.config_parser.config['ms2pip']
-        else:
-            self.config_parser = None
-            self.params = params
+            raise MissingConfigurationError()
 
-        if "model" in self.params:
-            self.model = self.params["model"]
-        elif "frag_method" in self.params:
-            self.model = self.params["frag_method"]
+        if "model" in self.params["ms2pip"]:
+            self.model = self.params["ms2pip"]["model"]
+        elif "frag_method" in self.params["ms2pip"]:
+            self.model = self.params["ms2pip"]["frag_method"]
         else:
             raise FragmentationModelRequiredError()
-        self.fragerror = self.params["frag_error"]
+        self.fragerror = self.params["ms2pip"]["frag_error"]
 
         # Validate requested output formats
-        if "out" in self.params:
+        if "out" in self.params["ms2pip"]:
             self.out_formats = [
-                o.lower().strip() for o in self.params["out"].split(",")
+                o.lower().strip() for o in self.params["ms2pip"]["out"].split(",")
             ]
             for o in self.out_formats:
                 if o not in SUPPORTED_OUT_FORMATS:
@@ -781,7 +749,7 @@ class MS2PIP:
 
         self.mods = Modifications()
         for mod_type in ('sptm', 'ptm'):
-            self.mods.add_from_ms2pip_modstrings(self.params[mod_type], mod_type=mod_type)
+            self.mods.add_from_ms2pip_modstrings(self.params["ms2pip"][mod_type], mod_type=mod_type)
 
     def run(self):
         self.afile = write_amino_accid_masses()
@@ -792,10 +760,7 @@ class MS2PIP:
 
         if self.add_retention_time:
             logging.info("Adding retention time predictions")
-            if self.config_parser:
-                rt_predictor = RetentionTime(config=self.config_parser.config)
-            else:
-                rt_predictor = RetentionTime()
+            rt_predictor = RetentionTime(config=self.params)
             rt_predictor.add_rt_predictions(self.data)
 
         if self.spec_file:
@@ -1016,7 +981,7 @@ class MS2PIP:
 
     def _write_predictions(self, all_preds):
         spec_out = spectrum_output.SpectrumOutput(
-            all_preds, self.data, self.params, output_filename=self.output_filename,
+            all_preds, self.data, self.params["ms2pip"], output_filename=self.output_filename,
         )
 
         if "mgf" in self.out_formats:

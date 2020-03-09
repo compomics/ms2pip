@@ -22,8 +22,8 @@ ptm = [
 # Only applicable if --retention-time option is used
 # deeplc settings are passed to DeepLC() object as keyword arguments
 [deeplc]
-calibration_file=false
-verbose=false
-path_model=false # Path to DeepLC model
-split_cal=25 # Can maximally be number of calibration peptides - 1
-batch_num=350000 # Reduce to limit memory consumption
+calibration_file = false
+verbose = false
+path_model = false # Path to DeepLC model
+split_cal = 25 # Can maximally be number of calibration peptides - 1
+batch_num = 350000 # Reduce to limit memory consumption
