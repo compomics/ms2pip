@@ -1,3 +1,5 @@
+.pytest_cache/
+
 # Custom MS2PIP stuff
 data/
 *_pyx.c
@@ -18,6 +20,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+pip-wheel-metadata/
 .Python
 env/
 build/
