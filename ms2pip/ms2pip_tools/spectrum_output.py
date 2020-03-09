@@ -309,7 +309,7 @@ class SpectrumOutput:
             mods = self.peprec_dict[spec_id]["modifications"]
             charge = self.peprec_dict[spec_id]["charge"]
             prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-            msp_modifications = self.mods.calc_msp_modifications(seq, mods)
+            msp_modifications = self._get_msp_modifications(seq, mods)
             num_peaks = sum(
                 [
                     len(peaklist)

@@ -73,11 +73,13 @@ def argument_parser():
         dest="tableau",
         help="create Tableau Reader file",
     )
+    # TODO: check if positive number
     parser.add_argument(
         "-m",
         metavar="NUM_CPU",
         action="store",
         dest="num_cpu",
+        type=int,
         help="number of CPUs to use (default: all available)",
     )
     args = parser.parse_args()
