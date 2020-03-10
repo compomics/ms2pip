@@ -46,7 +46,7 @@ class TestConfigParser:
 
     def test_write_toml(self):
         test_config_file = "tests/test_data/config_test.toml"
-        config_parser = ConfigParser(test_config_file)
+        config_parser = ConfigParser()
         target_config = {
             "ms2pip": {
                 "ptm": [
@@ -62,7 +62,7 @@ class TestConfigParser:
             }
         }
         config_parser.config = target_config
-        config_parser.write()
+        config_parser.write(test_config_file)
         config_parser.load()
         os.remove(test_config_file)
         assert config_parser.config == target_config

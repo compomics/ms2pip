@@ -26,10 +26,7 @@ class ConfigParser:
         self.config = dict()
 
         if self.filepath:
-            try:
-                self.load()
-            except FileNotFoundError:
-                pass
+            self.load()
 
     def _set_filepath(self, filepath):
         """
