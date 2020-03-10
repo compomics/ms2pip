@@ -3,14 +3,18 @@ Write spectrum files from MS2PIP predictions.
 """
 
 # Standard library
+import os
+import logging
 from ast import literal_eval
 from io import StringIO
 from operator import itemgetter
 from time import localtime, strftime
-import os
 
 # Project imports
 from ms2pip.peptides import Modifications
+
+
+logger = logging.getLogger("ms2pip.spectrum_output")
 
 
 class InvalidWriteModeError(ValueError):
@@ -24,6 +28,17 @@ def writer(**kwargs):
             return self._write_general(write_function, **kwargs)
         return wrapper
     return deco
+
+
+def output_format(output_format):
+    class OutputFormat:
+        def __init__(self, fn):
+            self.fn = fn
+            self.output_format = output_format
+
+        def __set_name__(self, owner, name):
+            owner.OUTPUT_FORMATS[self.output_format] = self.fn
+    return OutputFormat
 
 
 class SpectrumOutput:
@@ -61,6 +76,8 @@ class SpectrumOutput:
         Write predictions to Bibliospec SSL/MS2 files (also for Skyline)
     write_spectronaut()
         Write predictions to Spectronaut CSV file
+    write_csv()
+        Write predictions to CSV file
 
     Example
     -------
@@ -73,6 +90,8 @@ class SpectrumOutput:
     >>> so.write_spectronaut()
 
     """
+
+    OUTPUT_FORMATS = {}
 
     def __init__(
         self,
@@ -293,6 +312,7 @@ class SpectrumOutput:
                 )
         return "".join(pep)
 
+    @output_format('msp')
     @writer(
         file_suffix="_predictions.msp",
         normalization_method="basepeak_10000",
@@ -345,6 +365,7 @@ class SpectrumOutput:
 
             file_object.writelines([line + "\n" for line in out] + ["\n"])
 
+    @output_format('mgf')
     @writer(
         file_suffix="_predictions.mgf",
         normalization_method="basepeak_10000",
@@ -389,6 +410,7 @@ class SpectrumOutput:
             out.append("END IONS\n")
             file_object.writelines([line + "\n" for line in out])
 
+    @output_format('spectronaut')
     @writer(
         file_suffix="_predictions_spectronaut.csv",
         normalization_method="tic",
@@ -560,14 +582,17 @@ class SpectrumOutput:
         # Write to file or stringbuffer
         if self.return_stringbuffer:
             file_object = StringIO()
+            logger.info("writing results to StringIO using %s", write_function.__name__)
         else:
             f_name = self.output_filename + file_suffix
             file_object = open(f_name, self.write_mode)
+            logger.info("writing results to %s", f_name)
 
         write_function(self, file_object)
 
         return file_object
 
+    @output_format('bibliospec')
     def write_bibliospec(self):
         """
         Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
@@ -627,3 +652,23 @@ class SpectrumOutput:
         )
 
         return file_obj_ssl, file_obj_ms2
+
+    @output_format('csv')
+    def write_csv(self):
+        # Write to file or stringbuffer
+        if self.return_stringbuffer:
+            file_object = StringIO()
+            logger.info("writing results to StringIO using %s", "write_csv")
+        else:
+            f_name = "{}_predictions.csv".format(self.output_filename)
+            file_object = open(f_name, self.write_mode)
+            logger.info("writing results to %s", f_name)
+
+        self.all_preds.to_csv(file_object, index=False)
+
+    def write_results(self, output_formats):
+        results = {}
+        for output_format in output_formats:
+            writer = self.OUTPUT_FORMATS[output_format]
+            results[output_format] = writer(self)
+        return results
