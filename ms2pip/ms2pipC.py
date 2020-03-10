@@ -990,20 +990,20 @@ class MS2PIP:
 
         if "msp" in self.out_formats:
             logger.info("writing MSP file %s_predictions.msp...", self.output_filename)
-            spectrum_output.write_msp()
+            spec_out.write_msp()
 
         if "bibliospec" in self.out_formats:
             logger.info(
                 "writing SSL/MS2 files %s_predictions.ssl/.ms2...", self.output_filename
             )
-            spectrum_output.write_bibliospec()
+            spec_out.write_bibliospec()
 
         if "spectronaut" in self.out_formats:
             logger.info(
                 "writing SSL/MS2 files %s_predictions_spectronaut.csv...",
                 self.output_filename,
             )
-            spectrum_output.write_spectronaut()
+            spec_out.write_spectronaut()
 
         if "csv" in self.out_formats:
             logger.info("writing CSV %s_predictions.csv...", self.output_filename)
