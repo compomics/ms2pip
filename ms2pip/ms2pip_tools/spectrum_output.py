@@ -9,6 +9,7 @@ from ast import literal_eval
 from io import StringIO
 from operator import itemgetter
 from time import localtime, strftime
+from functools import wraps
 
 # Project imports
 from ms2pip.peptides import Modifications
@@ -24,6 +25,7 @@ class InvalidWriteModeError(ValueError):
 # Writer decorator
 def writer(**kwargs):
     def deco(write_function):
+        @wraps(write_function)
         def wrapper(self):
             return self._write_general(write_function, **kwargs)
         return wrapper
@@ -38,6 +40,8 @@ def output_format(output_format):
 
         def __set_name__(self, owner, name):
             owner.OUTPUT_FORMATS[self.output_format] = self.fn
+            setattr(owner, name, self.fn)
+
     return OutputFormat
 
 
