@@ -512,8 +512,9 @@ class SpectrumOutput:
             "FragmentNumber",
         ]
         spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
-
         spectronaut_df.to_csv(file_obj, index=False, header=header)
+
+        return file_obj
 
     def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
         """
