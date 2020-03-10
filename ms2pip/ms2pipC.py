@@ -1,22 +1,34 @@
 #!/usr/bin/env python
-# Native library
 import os
 import sys
-import argparse
-import multiprocessing
-from random import shuffle
-import tempfile
+import glob
 import logging
+import bisect
+import itertools
+from operator import itemgetter
+from random import shuffle
 
-# Third party
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
+import pyteomics.mgf
 
-# From project
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
+from ms2pip.retention_time import RetentionTime
 from ms2pip.feature_names import get_feature_names_new
+from ms2pip.peptides import (
+    Modifications, AMINO_ACID_IDS, write_amino_accid_masses
+)
 from ms2pip.cython_modules import ms2pip_pyx
+from ms2pip.exceptions import (
+    UnknownModificationError,
+    InvalidPEPRECError,
+    NoValidPeptideSequencesError,
+    UnknownOutputFormatError,
+    UnknownFragmentationMethodError,
+    FragmentationModelRequiredError,
+    MissingConfigurationError,
+)
 
 logger = logging.getLogger("ms2pip")
 
@@ -79,81 +91,6 @@ MODELS = {
     },
 }
 
-# Create A_MAP:
-# A_MAP converts the peptide amino acids to integers, note how "L" is removed
-AMINOS = [
-    "A",
-    "C",
-    "D",
-    "E",
-    "F",
-    "G",
-    "H",
-    "I",
-    "K",
-    "M",
-    "N",
-    "P",
-    "Q",
-    "R",
-    "S",
-    "T",
-    "V",
-    "W",
-    "Y",
-]
-MASSES = [
-    71.037114,
-    103.00919,
-    115.026943,
-    129.042593,
-    147.068414,
-    57.021464,
-    137.058912,
-    113.084064,
-    128.094963,
-    131.040485,
-    114.042927,
-    97.052764,
-    128.058578,
-    156.101111,
-    87.032028,
-    101.047679,
-    99.068414,
-    186.079313,
-    163.063329,
-    # 147.0354  # iTRAQ fixed N-term modification (gets written to amino acid masses file)
-]
-A_MAP = {a: i for i, a in enumerate(AMINOS)}
-
-
-class UnknownModificationError(ValueError):
-    pass
-
-
-class InvalidPEPRECError(Exception):
-    pass
-
-
-class NoValidPeptideSequencesError(Exception):
-    pass
-
-
-class UnknownOutputFormatError(ValueError):
-    pass
-
-
-class UnknownFragmentationMethodError(ValueError):
-    pass
-
-
-class MissingConfigurationError(Exception):
-    pass
-
-
-class FragmentationModelRequiredError(Exception):
-    pass
-
 
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
@@ -209,7 +146,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
             continue
 
         # convert peptide string to integer list to speed up C code
-        peptide = np.array([0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16)
+        peptide = np.array([0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16)
 
         try:
             modpeptide = apply_mods(peptide, mods, PTMmap)
@@ -371,7 +308,7 @@ def process_spectra(
 
                 # convert peptide string to integer list to speed up C code
                 peptide = np.array(
-                    [0] + [A_MAP[x] for x in peptide] + [0], dtype=np.uint16
+                    [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
                 )
 
                 try:
@@ -688,100 +625,6 @@ def apply_mods(peptide, mods, PTMmap):
     return modpeptide
 
 
-def load_configfile(filepath):
-    params = {}
-    params["ptm"] = []
-    params["sptm"] = []
-    params["gptm"] = []
-    with open(filepath) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line[0] == "#":
-                continue
-            (par, val) = line.split("=")
-            if par == "ptm":
-                params["ptm"].append(val)
-            elif par == "sptm":
-                params["sptm"].append(val)
-            elif par == "gptm":
-                params["gptm"].append(val)
-            else:
-                params[par] = val
-    return params
-
-
-def generate_modifications_file(params, MASSES, A_MAP):
-    PTMmap = {}
-
-    ptmnum = 38  # Omega compatibility (mutations)
-    spbuffer = []
-    for v in params["sptm"]:
-        l = v.split(",")
-        tmpf = float(l[1])
-        if l[2] == "opt":
-            if l[3] == "N-term":
-                spbuffer.append([tmpf, -1, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if l[3] == "C-term":
-                spbuffer.append([tmpf, -2, ptmnum])
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if not l[3] in A_MAP:
-                continue
-            spbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
-            PTMmap[l[0]] = ptmnum
-            ptmnum += 1
-    pbuffer = []
-    for v in params["ptm"]:
-        l = v.split(",")
-        tmpf = float(l[1])
-        if l[2] == "opt":
-            if l[3] == "N-term":
-                pbuffer.append([tmpf, -1, ptmnum])
-                # PTMmap[l[0].lower()] = ptmnum
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if l[3] == "C-term":
-                pbuffer.append([tmpf, -2, ptmnum])
-                # PTMmap[l[0].lower()] = ptmnum
-                PTMmap[l[0]] = ptmnum
-                ptmnum += 1
-                continue
-            if not l[3] in A_MAP:
-                continue
-            pbuffer.append([tmpf, A_MAP[l[3]], ptmnum])
-            # PTMmap[l[0].lower()] = ptmnum
-            # print("%i %s"%(ptmnum,l[0]))
-            PTMmap[l[0]] = ptmnum
-            ptmnum += 1
-
-    f = tempfile.NamedTemporaryFile(delete=False, mode="wb")
-    f.write(str.encode("{}\n".format(len(pbuffer))))
-    for i, _ in enumerate(pbuffer):
-        f.write(
-            str.encode(
-                "{},1,{},{}\n".format(pbuffer[i][0], pbuffer[i][1], pbuffer[i][2])
-            )
-        )
-    f.close()
-
-    f2 = tempfile.NamedTemporaryFile(delete=False, mode="wb")
-    f2.write(str.encode("{}\n".format(len(spbuffer))))
-    for i, _ in enumerate(spbuffer):
-        f2.write(
-            str.encode(
-                "{},1,{},{}\n".format(spbuffer[i][0], spbuffer[i][1], spbuffer[i][2])
-            )
-        )
-    f2.close()
-
-    return f.name, f2.name, PTMmap
-
-
 def peakcount(x):
     c = 0.0
     for i in x:
@@ -790,66 +633,27 @@ def peakcount(x):
     return c / len(x)
 
 
-def argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pep_file", metavar="<PEPREC file>", help="list of peptides")
-    parser.add_argument(
-        "-c",
-        metavar="CONFIG_FILE",
-        action="store",
-        required=True,
-        dest="config_file",
-        help="config file",
-    )
-    parser.add_argument(
-        "-s",
-        metavar="MGF_FILE",
-        action="store",
-        dest="spec_file",
-        help=".mgf MS2 spectrum file (optional)",
-    )
-    parser.add_argument(
-        "-w",
-        metavar="FEATURE_VECTOR_OUTPUT",
-        action="store",
-        dest="vector_file",
-        help="write feature vectors to FILE.{pkl,h5} (optional)",
-    )
-    parser.add_argument(
-        "-x",
-        action="store_true",
-        default=False,
-        dest="correlations",
-        help="calculate correlations (if MGF is given)",
-    )
-    parser.add_argument(
-        "-t",
-        action="store_true",
-        default=False,
-        dest="tableau",
-        help="create Tableau Reader file",
-    )
-    parser.add_argument(
-        "-m",
-        metavar="NUM_CPU",
-        action="store",
-        dest="num_cpu",
-        help="number of CPUs to use (default: all available)",
-    )
-    args = parser.parse_args()
+def get_intense_mzs(mzs, intensity, n=3):
+    return [x[0] for x in sorted(zip(mzs, intensity), key=itemgetter(1), reverse=True)[:n]]
 
-    if not args.num_cpu:
-        args.num_cpu = multiprocessing.cpu_count()
 
-    return (
-        args.pep_file,
-        args.spec_file,
-        args.vector_file,
-        args.config_file,
-        int(args.num_cpu),
-        args.correlations,
-        args.tableau,
-    )
+def match_mzs(mzs, predicted, max_error=0.02):
+    current = 0
+    for pred in predicted:
+        current = bisect.bisect_right(mzs, pred - max_error, lo=current)
+        if current >= len(mzs) or mzs[current] > pred + max_error:
+            return False
+    return current < len(mzs)
+
+
+def get_predicted_peaks(results):
+    mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
+
+    return dict(zip(itertools.chain.from_iterable(pepid_bufs),
+                    (sorted(get_intense_mzs(np.concatenate(mzs[0], axis=None),
+                                            np.concatenate(mzs[1], axis=None)))
+                     for mzs in zip(itertools.chain.from_iterable(mz_bufs),
+                                    itertools.chain.from_iterable(prediction_bufs)))))
 
 
 class MS2PIP:
@@ -858,47 +662,44 @@ class MS2PIP:
         pep_file,
         spec_file=None,
         vector_file=None,
-        config_file=None,
         num_cpu=1,
         use_billiard=False,
         params=None,
         output_filename=None,
         datasetname=None,
-        return_results=True,
+        return_results=False,
         limit=None,
+        add_retention_time=False,
         compute_correlations=False,
+        match_spectra=False,
         tableau=False,
     ):
         self.pep_file = pep_file
-        self.spec_file = spec_file
         self.vector_file = vector_file
         self.num_cpu = num_cpu
+        self.params = params
         self.return_results = return_results
         self.limit = limit
+        self.add_retention_time = add_retention_time
         self.compute_correlations = compute_correlations
+        self.match_spectra = match_spectra
         self.tableau = tableau
 
-        # datasetname is needed for Omega compatibility. This can be set to None if a config_file is provided
         if params is None:
-            if config_file is None:
-                raise MissingConfigurationError()
-            else:
-                self.params = load_configfile(config_file)
-        else:
-            self.params = params
+            raise MissingConfigurationError()
 
-        if "model" in self.params:
-            self.model = self.params["model"]
-        elif "frag_method" in self.params:
-            self.model = self.params["frag_method"]
+        if "model" in self.params["ms2pip"]:
+            self.model = self.params["ms2pip"]["model"]
+        elif "frag_method" in self.params["ms2pip"]:
+            self.model = self.params["ms2pip"]["frag_method"]
         else:
             raise FragmentationModelRequiredError()
-        self.fragerror = self.params["frag_error"]
+        self.fragerror = self.params["ms2pip"]["frag_error"]
 
         # Validate requested output formats
-        if "out" in self.params:
+        if "out" in self.params["ms2pip"]:
             self.out_formats = [
-                o.lower().strip() for o in self.params["out"].split(",")
+                o.lower().strip() for o in self.params["ms2pip"]["out"].split(",")
             ]
             for o in self.out_formats:
                 if o not in SUPPORTED_OUT_FORMATS:
@@ -930,26 +731,42 @@ class MS2PIP:
         )
         if use_billiard:
             import billiard
-
             self.myPool = billiard.Pool(self.num_cpu)
         else:
+            import multiprocessing
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
-    def run(self):
-        self._write_amino_accid_masses()
+        if self.match_spectra:
+            self.spec_file = None
+            if os.path.isdir(spec_file):
+                self.spec_files = glob.glob("{}/*.mgf".format(spec_file))
+            else:
+                self.spec_files = [self.spec_file]
+            logger.debug("use spec files %s", self.spec_files)
+        else:
+            self.spec_file = spec_file
+            self.spec_files = None
 
-        # PTMs are loaded the same as in Omega
-        # This allows me to use the same C init() function in bot ms2ip and Omega
-        (self.modfile, self.modfile2, self.PTMmap) = generate_modifications_file(
-            self.params, MASSES, A_MAP
-        )
+        self.mods = Modifications()
+        for mod_type in ('sptm', 'ptm'):
+            self.mods.add_from_ms2pip_modstrings(self.params["ms2pip"][mod_type], mod_type=mod_type)
+
+    def run(self):
+        self.afile = write_amino_accid_masses()
+        self.modfile = self.mods.write_modifications_file(mod_type='ptm')
+        self.modfile2 = self.mods.write_modifications_file(mod_type='sptm')
 
         self._read_peptide_information()
+
+        if self.add_retention_time:
+            logging.info("Adding retention time predictions")
+            rt_predictor = RetentionTime(config=self.params)
+            rt_predictor.add_rt_predictions(self.data)
 
         if self.spec_file:
             results = self._process_spectra()
 
-            logger.info("merging results")
+            logger.debug("Merging results")
             if self.vector_file:
                 self._write_vector_file(results)
             else:
@@ -971,6 +788,12 @@ class MS2PIP:
                         correlations.groupby("ion")["pearsonr"].median(),
                     )
             self._remove_amino_accid_masses()
+        elif self.match_spectra:
+            results = self._process_peptides()
+            self._generate_peptide_list(results)
+            for pep, spec in self._match_spectra():
+                print(pep, spec['params']['title'])
+            self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
 
@@ -982,17 +805,6 @@ class MS2PIP:
                 self._write_predictions(all_preds)
             else:
                 return all_preds
-
-    def _write_amino_accid_masses(self):
-        # Create amino acid MASSES file
-        # to be compatible with Omega
-        # that might have fixed modifications
-        f = tempfile.NamedTemporaryFile(delete=False)
-        for m in MASSES:
-            f.write(str.encode("{}\n".format(m)))
-        f.write(str.encode("0\n"))
-        f.close()
-        self.afile = f.name
 
     def _remove_amino_accid_masses(self):
         os.remove(self.afile)
@@ -1071,7 +883,7 @@ class MS2PIP:
                 self.afile,
                 self.modfile,
                 self.modfile2,
-                self.PTMmap,
+                self.mods.ptm_ids,
                 self.model,
                 self.fragerror,
                 self.tableau,
@@ -1164,12 +976,12 @@ class MS2PIP:
         return self._execute_in_pool(
             titles,
             process_peptides,
-            (self.afile, self.modfile, self.modfile2, self.PTMmap, self.model),
+            (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
         )
 
     def _write_predictions(self, all_preds):
         spec_out = spectrum_output.SpectrumOutput(
-            all_preds, self.data, self.params, output_filename=self.output_filename,
+            all_preds, self.data, self.params["ms2pip"], output_filename=self.output_filename,
         )
 
         if "mgf" in self.out_formats:
@@ -1195,38 +1007,42 @@ class MS2PIP:
 
         if "csv" in self.out_formats:
             logger.info("writing CSV %s_predictions.csv...", self.output_filename)
+            if self.add_retention_time:
+                all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on='spec_id')
             all_preds.to_csv(
                 "{}_predictions.csv".format(self.output_filename), index=False
             )
 
+    def _generate_peptide_list(self, results):
+        predictions = get_predicted_peaks(results)
 
-def run(
-    pep_file,
-    spec_file=None,
-    vector_file=None,
-    config_file=None,
-    num_cpu=23,
-    use_billiard=False,
-    params=None,
-    output_filename=None,
-    datasetname=None,
-    return_results=False,
-    limit=None,
-    compute_correlations=False,
-    tableau=False,
-):
-    return MS2PIP(
-        pep_file,
-        spec_file=spec_file,
-        vector_file=vector_file,
-        config_file=config_file,
-        num_cpu=num_cpu,
-        use_billiard=use_billiard,
-        params=params,
-        output_filename=output_filename,
-        datasetname=datasetname,
-        return_results=return_results,
-        limit=limit,
-        compute_correlations=compute_correlations,
-        tableau=tableau,
-    ).run()
+        data_cols = ['spec_id', 'peptide', 'modifications', 'charge']
+        peptides = [
+            (
+                spec_id,
+                self.mods.calc_precursor_mz(peptide,
+                                            modifications,
+                                            charge)[1],
+                predictions[spec_id]
+            ) for spec_id, peptide, modifications, charge in self.data[data_cols].values
+        ]
+        peptides.sort(key=itemgetter(1))
+        self.peptides = peptides
+
+    def _match_spectra(self, max_error=0.02):
+        precursors = [x[1] for x in self.peptides]
+
+        for spec_file in self.spec_files:
+            with pyteomics.mgf.read(spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
+                for spectrum in reader:
+                    if 'pepmass' not in spectrum['params']:
+                        continue
+                    pepmass = spectrum['params']['pepmass'][0]
+
+                    # compare all peptides with a similar precursor m/z
+                    i = bisect.bisect_right(precursors, pepmass - max_error)
+                    while i < len(precursors) and precursors[i] < pepmass + max_error:
+                        spec_id, _, pred_peaks = self.peptides[i]
+                        if match_mzs(sorted(spectrum['m/z array']), pred_peaks, max_error=max_error):
+                            yield spec_id, spectrum
+                        i += 1

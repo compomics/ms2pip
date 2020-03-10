@@ -1,0 +1,29 @@
+[ms2pip]
+model = "HCD"
+frag_error = "0.02"
+out = "csv"
+ptm = [
+    "PhosphoS,79.966331,opt,S",
+    "PhosphoT,79.966331,opt,T",
+    "PhosphoY,79.966331,opt,Y",
+    "Oxidation,15.994915,opt,M",
+    "Carbamidomethyl,57.021464,opt,C",
+    "CAM,57.021464,opt,C",
+    "Glu->pyro-Glu,-18.010565,opt,E",
+    "Gln->pyro-Glu,-17.026549,opt,Q",
+    "Pyro-cmC,39.994915,opt,C",
+    "Deamidated,0.984016,opt,N",
+    "iTRAQ,144.102063,opt,N-term",
+    "Acetyl,42.010565,opt,N-term",
+    "TMT6plexN,229.162932,opt,N-term",
+    "TMT6plex,229.162932,opt,K"
+]
+
+# Only applicable if --retention-time option is used
+# deeplc settings are passed to DeepLC() object as keyword arguments
+[deeplc]
+calibration_file = false
+verbose = false
+path_model = false # Path to DeepLC model
+split_cal = 25 # Can maximally be number of calibration peptides - 1
+batch_num = 350000 # Reduce to limit memory consumption

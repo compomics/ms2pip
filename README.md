@@ -86,8 +86,8 @@ MS²PIP predictions can be compared to spectra in an
 
 ### Command line interface
 ```
-usage: ms2pip [-h] [-c CONFIG_FILE] [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
-              [-x] [-t] [-m NUM_CPU]
+usage: ms2pip [-h] -c CONFIG_FILE [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
+              [-r] [-x] [-t] [-n NUM_CPU]
               <PEPREC file>
 
 positional arguments:
@@ -95,13 +95,18 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -c CONFIG_FILE        config file
-  -s MGF_FILE           .mgf MS2 spectrum file (optional)
-  -w FEATURE_VECTOR_OUTPUT
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        config file
+  -s MGF_FILE, --spectrum-file MGF_FILE
+                        .mgf MS2 spectrum file (optional)
+  -w FEATURE_VECTOR_OUTPUT, --vector-file FEATURE_VECTOR_OUTPUT
                         write feature vectors to FILE.{pkl,h5} (optional)
-  -x                    calculate correlations (if MGF is given)
-  -t                    create Tableau Reader file
-  -m NUM_CPU            number of CPUs to use (default: all available)
+  -r, --retention-time  add retention time predictions (requires DeepLC python
+                        package)
+  -x, --correlations    calculate correlations (if MGF is given)
+  -t, --tableau         create Tableau Reader file
+  -n NUM_CPU, --num-cpu NUM_CPU
+                        number of CPUs to use (default: all available)
 ```
 
 ### Input files
@@ -115,8 +120,10 @@ Several MS²PIP options need to be set in this config file.
 supported output file formats: `csv`, `mgf`, `msp`, `spectronaut`, or 
 `bibliospec` (SSL/MS2, also for Skyline). For example: `out=csv,msp`.
 - `ptm=X,Y,opt,Z` for every peptide modification where:
-  - `X` is a string that represents the 
-PTM name (needs to match the names in the [PEPREC file](#peprec-file)).
+  - `X` is the PTM name and needs to match the names that are used in the
+  [PEPREC file](#peprec-file)). If the `--retention_time` option is used, PTM names must
+  match the PSI-MOD/Unimod names embedded in DeepLC (see
+  [DeepLC documentation](https://github.com/compomics/DeepLC)).
   - `Y` is the mass shift in Da associated with the PTM.
   - `Z` is the one-letter code of the amino acid AA that is modified by the PTM.
 For N- and C-terminal modifications, `Z` should be `N-term` or `C-term`,

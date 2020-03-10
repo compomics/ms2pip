@@ -9,14 +9,8 @@ from operator import itemgetter
 from time import localtime, strftime
 import os
 
-# Third party libraries
-from pyteomics import mass
-
 # Project imports
-from ms2pip.modifications import Modifications
-
-
-PROTON_MASS = 1.007825032070059
+from ms2pip.peptides import Modifications
 
 
 class InvalidWriteModeError(ValueError):
@@ -30,7 +24,6 @@ def writer(**kwargs):
             return self._write_general(write_function, **kwargs)
         return wrapper
     return deco
-
 
 
 class SpectrumOutput:
@@ -102,15 +95,13 @@ class SpectrumOutput:
         self.peprec_dict = None
         self.preds_dict = None
         self.normalization = None
-        self.mass_shifts = None
         self.ssl_modification_mapping = None
 
         self.has_rt = "rt" in self.peprec.columns
         self.has_protein_list = "protein_list" in self.peprec.columns
 
-        mods = Modifications()
-        mods.add_from_ms2pip_modstrings(params["ptm"])
-        self.mass_shifts = mods.get_mass_shifts()
+        self.mods = Modifications()
+        self.mods.add_from_ms2pip_modstrings(params["ptm"])
 
         if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
             raise InvalidWriteModeError(self.write_mode)
@@ -153,39 +144,6 @@ class SpectrumOutput:
                     "charge": row[1],
                     "peaks": {row[2]: [tuple(row[3:])]},
                 }
-
-    def _get_precursor_mz(self, peptide, modifications, charge):
-        """
-        Calculate precursor mass and mz for given peptide and modification list,
-        using Pyteomics.
-
-        Note: This method does not use the build-in Pyteomics modification handling, as
-        that would require a known atomic composition of the modification.
-
-        Parameters
-        ----------
-        peptide: str
-            stripped peptide sequence
-
-        modifications: str
-            MS2PIP-style formatted modifications list (e.g. `0|Acetyl|2|Oxidation`)
-
-        charge: int
-            precursor charge
-
-        Returns
-        -------
-        prec_mass, prec_mz: tuple(float, float)
-        """
-
-        charge = int(charge)
-        unmodified_mass = mass.fast_mass(peptide)
-        mods_massses = sum(
-            [self.mass_shifts[mod] for mod in modifications.split("|")[1::2]]
-        )
-        prec_mass = unmodified_mass + mods_massses
-        prec_mz = (prec_mass + charge * PROTON_MASS) / charge
-        return prec_mass, prec_mz
 
     def _normalize_spectra(self, method="basepeak_10000"):
         """
@@ -350,7 +308,7 @@ class SpectrumOutput:
             seq = self.peprec_dict[spec_id]["peptide"]
             mods = self.peprec_dict[spec_id]["modifications"]
             charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self._get_precursor_mz(seq, mods, charge)
+            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
             msp_modifications = self._get_msp_modifications(seq, mods)
             num_peaks = sum(
                 [
@@ -401,7 +359,7 @@ class SpectrumOutput:
             seq = self.peprec_dict[spec_id]["peptide"]
             mods = self.peprec_dict[spec_id]["modifications"]
             charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self._get_precursor_mz(seq, mods, charge)
+            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
             msp_modifications = self._get_msp_modifications(seq, mods)
 
             if self.has_protein_list:
@@ -458,7 +416,7 @@ class SpectrumOutput:
             axis=1,
         )
         spectronaut_peprec["PrecursorMz"] = spectronaut_peprec.apply(
-            lambda row: self._get_precursor_mz(
+            lambda row: self.mods.calc_precursor_mz(
                 row["peptide"], row["modifications"], row["charge"]
             )[1],
             axis=1,
@@ -538,7 +496,7 @@ class SpectrumOutput:
             seq = self.peprec_dict[spec_id]["peptide"]
             mods = self.peprec_dict[spec_id]["modifications"]
             charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self._get_precursor_mz(seq, mods, charge)
+            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
             ms2_filename = os.path.basename(self.output_filename) + "_predictions.ms2"
 
             peaks = self._get_peak_string(
