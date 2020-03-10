@@ -685,6 +685,7 @@ class SpectrumOutput:
         """
         results = {}
         for output_format in output_formats:
+            output_format = output_format.lower()
             writer = self.OUTPUT_FORMATS[output_format]
             results[output_format] = writer(self)
         return results
