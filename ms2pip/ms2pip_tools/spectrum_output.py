@@ -10,6 +10,7 @@ from io import StringIO
 from operator import itemgetter
 from time import localtime, strftime
 from functools import wraps
+from typing import List, Dict, Any
 
 # Project imports
 from ms2pip.peptides import Modifications
@@ -82,6 +83,8 @@ class SpectrumOutput:
         Write predictions to Spectronaut CSV file
     write_csv()
         Write predictions to CSV file
+    write_results(output_formats)
+        Write MS2PIP predictions in output formats defined by output_formats.
 
     Example
     -------
@@ -659,6 +662,10 @@ class SpectrumOutput:
 
     @output_format('csv')
     def write_csv(self):
+        """
+        Write MS2PIP predictions to CSV.
+        """
+
         # Write to file or stringbuffer
         if self.return_stringbuffer:
             file_object = StringIO()
@@ -669,8 +676,12 @@ class SpectrumOutput:
             logger.info("writing results to %s", f_name)
 
         self.all_preds.to_csv(file_object, index=False)
+        return file_object
 
-    def write_results(self, output_formats):
+    def write_results(self, output_formats: List[str]) -> Dict[str, Any]:
+        """
+        Write MS2PIP predictions in output formats defined by output_formats.
+        """
         results = {}
         for output_format in output_formats:
             writer = self.OUTPUT_FORMATS[output_format]
