@@ -26,10 +26,7 @@ class ConfigParser:
         self.config = dict()
 
         if self.filepath:
-            try:
-                self.load()
-            except FileNotFoundError:
-                pass
+            self.load()
 
     def _set_filepath(self, filepath):
         """
@@ -108,7 +105,7 @@ class ConfigParser:
 
         if config_format == "toml":
             self._load_toml()
-        elif config_format == "txt":
+        elif config_format in ("txt", "config"):
             self._load_ms2pip_txt()
         else:
             raise UnsupportedConfigFormatError(config_format)

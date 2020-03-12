@@ -107,14 +107,13 @@ def main():
 
     args = argument_parser()
     config_parser = ConfigParser(filepath=args.config_file)
-    params = config_parser.config()
 
     try:
         ms2pip = MS2PIP(
             args.pep_file,
             spec_file=args.spec_file,
             vector_file=args.vector_file,
-            params=params,
+            params=config_parser.config,
             num_cpu=args.num_cpu,
             add_retention_time=args.add_retention_time,
             compute_correlations=args.correlations,

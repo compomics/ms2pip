@@ -980,38 +980,13 @@ class MS2PIP:
         )
 
     def _write_predictions(self, all_preds):
+        if self.add_retention_time:
+            all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on='spec_id')
+
         spec_out = spectrum_output.SpectrumOutput(
             all_preds, self.data, self.params["ms2pip"], output_filename=self.output_filename,
         )
-
-        if "mgf" in self.out_formats:
-            logger.info("writing MGF file %s_predictions.mgf...", self.output_filename)
-            spec_out.write_mgf()
-
-        if "msp" in self.out_formats:
-            logger.info("writing MSP file %s_predictions.msp...", self.output_filename)
-            spec_out.write_msp()
-
-        if "bibliospec" in self.out_formats:
-            logger.info(
-                "writing SSL/MS2 files %s_predictions.ssl/.ms2...", self.output_filename
-            )
-            spec_out.write_bibliospec()
-
-        if "spectronaut" in self.out_formats:
-            logger.info(
-                "writing SSL/MS2 files %s_predictions_spectronaut.csv...",
-                self.output_filename,
-            )
-            spec_out.write_spectronaut()
-
-        if "csv" in self.out_formats:
-            logger.info("writing CSV %s_predictions.csv...", self.output_filename)
-            if self.add_retention_time:
-                all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on='spec_id')
-            all_preds.to_csv(
-                "{}_predictions.csv".format(self.output_filename), index=False
-            )
+        spec_out.write_results(self.out_formats)
 
     def _generate_peptide_list(self, results):
         predictions = get_predicted_peaks(results)
