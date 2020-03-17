@@ -762,11 +762,6 @@ class MS2PIP:
 
         self._read_peptide_information()
 
-        if self.add_retention_time:
-            logging.info("Adding retention time predictions")
-            rt_predictor = RetentionTime(config=self.params)
-            rt_predictor.add_rt_predictions(self.data)
-
         if self.spec_file:
             results = self._process_spectra()
 
@@ -798,6 +793,9 @@ class MS2PIP:
                 print(pep, spec['params']['title'])
         else:
             results = self._process_peptides()
+
+            if self.add_retention_time:
+                self._predict_retention_times()
 
             logger.info("merging results ...")
             all_preds = self._predict_spec(results)
@@ -973,8 +971,15 @@ class MS2PIP:
         all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
         if target_bufs:
             all_preds["target"] = np.concatenate(target_bufs, axis=None)
+        if "rt" in self.data:
+            all_preds["rt"] = self.data["rt"]
 
         return all_preds
+
+    def _predict_retention_times(self):
+        logging.info("Adding retention time predictions")
+        rt_predictor = RetentionTime(config=self.params)
+        rt_predictor.add_rt_predictions(self.data)
 
     def _process_peptides(self):
         logger.info("scanning peptide file...")
@@ -986,9 +991,6 @@ class MS2PIP:
         )
 
     def _write_predictions(self, all_preds):
-        if self.add_retention_time:
-            all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on='spec_id')
-
         spec_out = spectrum_output.SpectrumOutput(
             all_preds, self.data, self.params["ms2pip"], output_filename=self.output_filename,
         )
