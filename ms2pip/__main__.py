@@ -120,7 +120,10 @@ def main():
             match_spectra=args.match_spectra,
             tableau=args.tableau
         )
-        ms2pip.run()
+        try:
+            ms2pip.run()
+        finally:
+            ms2pip.cleanup()
     except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
     except NoValidPeptideSequencesError:

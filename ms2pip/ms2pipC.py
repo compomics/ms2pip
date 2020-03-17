@@ -685,6 +685,10 @@ class MS2PIP:
         self.match_spectra = match_spectra
         self.tableau = tableau
 
+        self.afile = None
+        self.modfile = None
+        self.modfile2 = None
+
         if params is None:
             raise MissingConfigurationError()
 
@@ -787,27 +791,29 @@ class MS2PIP:
                         "median correlations: %f",
                         correlations.groupby("ion")["pearsonr"].median(),
                     )
-            self._remove_amino_accid_masses()
         elif self.match_spectra:
             results = self._process_peptides()
             self._generate_peptide_list(results)
             for pep, spec in self._match_spectra():
                 print(pep, spec['params']['title'])
-            self._remove_amino_accid_masses()
         else:
             results = self._process_peptides()
 
             logger.info("merging results ...")
             all_preds = self._predict_spec(results)
 
-            self._remove_amino_accid_masses()
             if not self.return_results:
                 self._write_predictions(all_preds)
             else:
                 return all_preds
 
-    def _remove_amino_accid_masses(self):
-        os.remove(self.afile)
+    def cleanup(self):
+        if self.afile:
+            os.remove(self.afile)
+        if self.modfile:
+            os.remove(self.modfile)
+        if self.modfile2:
+            os.remove(self.modfile2)
 
     def _read_peptide_information(self):
         # read peptide information
