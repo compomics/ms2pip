@@ -972,7 +972,8 @@ class MS2PIP:
         if target_bufs:
             all_preds["target"] = np.concatenate(target_bufs, axis=None)
         if "rt" in self.data:
-            all_preds["rt"] = self.data["rt"]
+            # TODO: might be a good idea to index the dataframes on spec_id
+            all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on="spec_id", copy=False)
 
         return all_preds
 
