@@ -5,6 +5,8 @@ import glob
 import logging
 import bisect
 import itertools
+import multiprocessing
+import multiprocessing.dummy
 from operator import itemgetter
 from random import shuffle
 
@@ -663,7 +665,6 @@ class MS2PIP:
         spec_file=None,
         vector_file=None,
         num_cpu=1,
-        use_billiard=False,
         params=None,
         output_filename=None,
         datasetname=None,
@@ -729,15 +730,13 @@ class MS2PIP:
             self.output_filename = output_filename
 
         logger.debug(
-            "starting workers (use_billiard=%r, num_cpu=%d) ...",
-            use_billiard,
+            "starting workers (num_cpu=%d) ...",
             self.num_cpu,
         )
-        if use_billiard:
-            import billiard
-            self.myPool = billiard.Pool(self.num_cpu)
+        if multiprocessing.current_process().daemon:
+            logger.warn("MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children.")
+            self.myPool = multiprocessing.dummy.Pool(1)
         else:
-            import multiprocessing
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
         if self.match_spectra:
