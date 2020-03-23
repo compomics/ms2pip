@@ -744,7 +744,7 @@ class MS2PIP:
             if os.path.isdir(spec_file):
                 self.spec_files = glob.glob("{}/*.mgf".format(spec_file))
             else:
-                self.spec_files = [self.spec_file]
+                self.spec_files = [spec_file]
             logger.debug("use spec files %s", self.spec_files)
         else:
             self.spec_file = spec_file
