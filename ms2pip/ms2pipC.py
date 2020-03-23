@@ -2,21 +2,19 @@
 import os
 import sys
 import glob
-import logging
-import bisect
 import itertools
+import logging
 import multiprocessing
 import multiprocessing.dummy
-from operator import itemgetter
 from random import shuffle
 
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
-import pyteomics.mgf
 
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.retention_time import RetentionTime
+from ms2pip.match_spectra import MatchSpectra
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.peptides import (
     Modifications, AMINO_ACID_IDS, write_amino_accid_masses
@@ -635,29 +633,6 @@ def peakcount(x):
     return c / len(x)
 
 
-def get_intense_mzs(mzs, intensity, n=3):
-    return [x[0] for x in sorted(zip(mzs, intensity), key=itemgetter(1), reverse=True)[:n]]
-
-
-def match_mzs(mzs, predicted, max_error=0.02):
-    current = 0
-    for pred in predicted:
-        current = bisect.bisect_right(mzs, pred - max_error, lo=current)
-        if current >= len(mzs) or mzs[current] > pred + max_error:
-            return False
-    return current < len(mzs)
-
-
-def get_predicted_peaks(results):
-    mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
-
-    return dict(zip(itertools.chain.from_iterable(pepid_bufs),
-                    (sorted(get_intense_mzs(np.concatenate(mzs[0], axis=None),
-                                            np.concatenate(mzs[1], axis=None)))
-                     for mzs in zip(itertools.chain.from_iterable(mz_bufs),
-                                    itertools.chain.from_iterable(prediction_bufs)))))
-
-
 class MS2PIP:
     def __init__(
         self,
@@ -787,8 +762,7 @@ class MS2PIP:
                     )
         elif self.match_spectra:
             results = self._process_peptides()
-            self._generate_peptide_list(results)
-            for pep, spec in self._match_spectra():
+            for pep, spec in self._match_spectra(results):
                 print(pep, spec['params']['title'])
         else:
             results = self._process_peptides()
@@ -996,36 +970,12 @@ class MS2PIP:
         )
         spec_out.write_results(self.out_formats)
 
-    def _generate_peptide_list(self, results):
-        predictions = get_predicted_peaks(results)
+    def _match_spectra(self, results):
+        mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
 
-        data_cols = ['spec_id', 'peptide', 'modifications', 'charge']
-        peptides = [
-            (
-                spec_id,
-                self.mods.calc_precursor_mz(peptide,
-                                            modifications,
-                                            charge)[1],
-                predictions[spec_id]
-            ) for spec_id, peptide, modifications, charge in self.data[data_cols].values
-        ]
-        peptides.sort(key=itemgetter(1))
-        self.peptides = peptides
-
-    def _match_spectra(self, max_error=0.02):
-        precursors = [x[1] for x in self.peptides]
-
-        for spec_file in self.spec_files:
-            with pyteomics.mgf.read(spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
-                for spectrum in reader:
-                    if 'pepmass' not in spectrum['params']:
-                        continue
-                    pepmass = spectrum['params']['pepmass'][0]
-
-                    # compare all peptides with a similar precursor m/z
-                    i = bisect.bisect_right(precursors, pepmass - max_error)
-                    while i < len(precursors) and precursors[i] < pepmass + max_error:
-                        spec_id, _, pred_peaks = self.peptides[i]
-                        if match_mzs(sorted(spectrum['m/z array']), pred_peaks, max_error=max_error):
-                            yield spec_id, spectrum
-                        i += 1
+        match_spectra = MatchSpectra(self.data,
+                                     self.mods,
+                                     itertools.chain.from_iterable(pepid_bufs),
+                                     itertools.chain.from_iterable(mz_bufs),
+                                     itertools.chain.from_iterable(prediction_bufs))
+        return match_spectra.match_mgfs(self.spec_files)
