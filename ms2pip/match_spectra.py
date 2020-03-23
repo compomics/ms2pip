@@ -69,3 +69,30 @@ class MatchSpectra:
                         if match_mzs(sorted(spectrum['m/z array']), pred_peaks, max_error=max_error):
                             yield spec_id, spectrum
                         i += 1
+
+    def match_sqldb(self, sqldb_uri="postgresql:///ms2pip", max_error=0.02):
+        from ms2pip.sqldb import tables
+
+        engine = tables.create_engine(sqldb_uri)
+        precursors = np.fromiter((x[1] for x in self.peptides), dtype=np.float, count=len(self.peprec))
+        gaps = np.where(np.diff(precursors) >= max_error)[0]
+
+        with engine.connect() as connection:
+            start = 0
+            for end in gaps:
+                for spec in connection.execute(
+                        tables.spec.select().where(
+                            tables.spec.c.pepmass > self.peptides[start][1] - max_error
+                        ).where(
+                            tables.spec.c.pepmass < self.peptides[end][1] + max_error
+                        ).order_by(tables.spec.c.pepmass)):
+                    for spec_id, mz, pred_peaks in self.peptides[start:end+1]:
+                        if mz > spec.pepmass + max_error:
+                            break
+                        if mz < spec.pepmass - max_error:
+                            start += 1
+                            continue
+                        if match_mzs(spec.mzs, pred_peaks, max_error=max_error):
+                            yield spec_id, {'params': {'title': spec.spec_id},
+                                            'm/z array': spec.mzs}
+                start = end + 1

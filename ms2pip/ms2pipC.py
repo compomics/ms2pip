@@ -648,6 +648,7 @@ class MS2PIP:
         add_retention_time=False,
         compute_correlations=False,
         match_spectra=False,
+        sqldb_uri=None,
         tableau=False,
     ):
         self.pep_file = pep_file
@@ -659,6 +660,7 @@ class MS2PIP:
         self.add_retention_time = add_retention_time
         self.compute_correlations = compute_correlations
         self.match_spectra = match_spectra
+        self.sqldb_uri = sqldb_uri
         self.tableau = tableau
 
         self.afile = None
@@ -716,7 +718,9 @@ class MS2PIP:
 
         if self.match_spectra:
             self.spec_file = None
-            if os.path.isdir(spec_file):
+            if self.sqldb_uri:
+                self.spec_files = None
+            elif os.path.isdir(spec_file):
                 self.spec_files = glob.glob("{}/*.mgf".format(spec_file))
             else:
                 self.spec_files = [spec_file]
@@ -978,4 +982,9 @@ class MS2PIP:
                                      itertools.chain.from_iterable(pepid_bufs),
                                      itertools.chain.from_iterable(mz_bufs),
                                      itertools.chain.from_iterable(prediction_bufs))
-        return match_spectra.match_mgfs(self.spec_files)
+        if self.spec_files:
+            return match_spectra.match_mgfs(self.spec_files)
+        elif self.sqldb_uri:
+            return match_spectra.match_sqldb(self.sqldb_uri)
+        else:
+            raise NotImplementedError
