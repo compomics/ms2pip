@@ -16,11 +16,8 @@ from sqlalchemy.dialects.sqlite import BLOB
 
 
 class CompressedArray(TypeDecorator):
-    """ Sqlite-like does not support arrays.
-        Let's use a custom type decorator.
+    """Compressed binary arrays stored as BLOB in SQLite."""
 
-        See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
-    """
     impl = BLOB
 
     def __init__(self, dtype, *args, **kwargs):
@@ -28,7 +25,8 @@ class CompressedArray(TypeDecorator):
         self.dtype = dtype
 
     def process_bind_param(self, value, dialect):
-        return zlib.compress(value.tobytes(), 6)
+        # TODO: allow configuration of compression level
+        return zlib.compress(value.tobytes(), 3)
 
     def process_result_value(self, value, dialect):
         decompressed = zlib.decompress(value)
