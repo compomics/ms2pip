@@ -1,4 +1,4 @@
-VERSION = "3.5.1"
+VERSION = "3.6.0"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
