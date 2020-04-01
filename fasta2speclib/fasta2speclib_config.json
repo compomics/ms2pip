@@ -17,6 +17,7 @@
     "elude_model_file":null,
     "rt_predictions_file":null,
     "peprec_filter":null,
+    "save_peprec":false,
     "batch_size":10000,
     "num_cpu":24
 }

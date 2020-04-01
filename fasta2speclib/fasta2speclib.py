@@ -321,17 +321,19 @@ def run_batches(peprec, decoy=False):
         params["output_filename"] += "_decoy"
 
     ms2pip_params = {
-        "model": params["ms2pip_model"],
-        "frag_error": 0.02,
-        # Modify fasta2speclib modifications dict to MS2PIP params PTMs entry
-        "ptm": [
-            "{},{},opt,{}".format(mods["name"], mods["mass_shift"], mods["amino_acid"])
-            if not mods["n_term"]
-            else "{},{},opt,N-term".format(mods["name"], mods["mass_shift"])
-            for mods in params["modifications"]
-        ],
-        "sptm": [],
-        "gptm": [],
+        "ms2pip": {
+            "model": params["ms2pip_model"],
+            "frag_error": 0.02,
+            # Modify fasta2speclib modifications dict to MS2PIP params PTMs entry
+            "ptm": [
+                "{},{},opt,{}".format(mods["name"], mods["mass_shift"], mods["amino_acid"])
+                if not mods["n_term"]
+                else "{},{},opt,N-term".format(mods["name"], mods["mass_shift"])
+                for mods in params["modifications"]
+            ],
+            "sptm": [],
+            "gptm": [],
+        }
     }
 
     # If add_retention_time, initiate DeepLC (and calibrate once)
@@ -400,6 +402,9 @@ def run_batches(peprec, decoy=False):
             peprec_filter = pd.read_csv(params["peprec_filter"], sep=" ")
             peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
 
+        if params["save_peprec"]:
+            peprec_batch.to_csv(params["output_filename"] + "_" + str(b_count) + ".csv")
+
         logging.info("Running MS2PIP for %d peptides", len(peprec_batch))
         ms2pip = MS2PIP(
             peprec_batch,
@@ -435,7 +440,7 @@ def run_batches(peprec, decoy=False):
         spec_out = spectrum_output.SpectrumOutput(
             all_preds,
             peprec_batch,
-            ms2pip_params,
+            ms2pip_params["ms2pip"],
             output_filename="{}".format(params["output_filename"]),
             write_mode=write_mode,
         )
