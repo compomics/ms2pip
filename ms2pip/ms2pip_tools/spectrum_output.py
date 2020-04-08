@@ -205,11 +205,15 @@ class SpectrumOutput:
                 ].apply(lambda x: (x / x.max()))
             self.normalization = "basepeak_1"
 
-        elif method == "tic" and not self.normalization == "tic":
-            self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
-                "prediction"
-            ].apply(lambda x: x / x.sum())
+        elif method == "tic":
+            if self.normalization != "tic":
+                self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
+                    "prediction"
+                ].apply(lambda x: x / x.sum())
             self.normalization = "tic"
+
+        else:
+            raise NotImplementedError
 
     def _get_peak_string(
         self,
@@ -661,11 +665,20 @@ class SpectrumOutput:
 
         return file_obj_ssl, file_obj_ms2
 
+    def get_normalized_predictions(self, normalization_method='tic'):
+        """
+        Return normalized copy of predictions.
+        """
+        self._normalize_spectra(method=normalization_method)
+        return self.all_preds.copy()
+
     @output_format('csv')
     def write_csv(self):
         """
         Write MS2PIP predictions to CSV.
         """
+
+        self._normalize_spectra(method='tic')
 
         # Write to file or stringbuffer
         if self.return_stringbuffer:
