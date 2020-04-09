@@ -29,12 +29,12 @@ typedef struct annotations annotations;
 //compute feature vector from peptide + predict intensities
 float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id, int ce)
 	{
+	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+	int fnum = v[0]/(peplen-1);
 	int i;
 
 	// CID
 	if (model_id == 0) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
@@ -42,9 +42,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// HCD
-	if (model_id == 1) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 1) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
@@ -52,9 +50,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// TTOF5600
-	if (model_id == 2) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 2) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_TTOF5600_Y(v+1+(i*fnum))+0.5;
@@ -62,9 +58,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// TMT with integer intentities
-	if (model_id == 3) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 3) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = (((float)score_TMT_B(v+1+(i*fnum)))/1000)+0.5;
 			predictions[2*(peplen-1)-i-1] = (((float)score_TMT_Y(v+1+(i*fnum)))/1000)+0.5;
@@ -72,9 +66,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// iTRAQ
-	if (model_id == 4) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 4) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_iTRAQ_Y(v+1+(i*fnum))+0.5;
@@ -82,9 +74,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// iTRAQphospho
-	if (model_id == 5) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 5) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_iTRAQphospho_Y(v+1+(i*fnum))+0.5;
@@ -92,9 +82,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 	
 	// EThcD
-	// if (model_id == 6) {
-	// 	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-	// 	int fnum = v[0]/(peplen-1);
+	// else if (model_id == 6) {
 	// 	for (i=0; i < peplen-1; i++) {
 	// 		predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;
 	// 		predictions[2*(peplen-1)-i-1] = score_EThcD_Y(v+1+(i*fnum))+0.5;
@@ -104,9 +92,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	// }
 
 	// HCDch2
-	if (model_id == 7) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 7) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
@@ -116,15 +102,16 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// CIDch2
-	if (model_id == 8) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 8) {
 		for (i=0; i < peplen-1; i++) {
 		    predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
 		    predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
 		    predictions[2*(peplen-1)+i] = score_CID_B2(v+1+(i*fnum))+0.5;
 		    predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
 		}
+	}
+	else {
+		return NULL;
 	}
 	return predictions;
 }
