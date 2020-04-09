@@ -186,12 +186,10 @@ class SpectrumOutput:
                 pass
             elif self.normalization == "basepeak_1":
                 self.all_preds["prediction"] *= 10000
-                self.all_preds["prediction"] = self.all_preds["prediction"]
             else:
                 self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
                     "prediction"
                 ].apply(lambda x: (x / x.max()) * 10000)
-                self.all_preds["prediction"] = self.all_preds["prediction"]
             self.normalization = "basepeak_10000"
 
         elif method == "basepeak_1":
