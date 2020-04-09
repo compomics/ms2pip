@@ -1,4 +1,6 @@
-static int score_TMT_B(unsigned int* v){
+#include "../TMT.h"
+
+int score_TMT_B(unsigned int* v){
 int s = 0;
 	if (v[73]<603){
 		if (v[132]<35){

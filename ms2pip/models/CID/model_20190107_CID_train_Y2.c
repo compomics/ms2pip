@@ -1,7 +1,7 @@
 #include "../CID.h"
 
 float score_CID_Y2(unsigned int* v){
-float s = 0.;
+	float s = 0.;
 	if (v[79]<810){
 		if (v[27]<3){
 			if (v[1]<2){
