@@ -25,6 +25,7 @@ import logging
 import multiprocessing
 from itertools import combinations
 from math import ceil
+from ast import literal_eval
 
 # Third party libraries
 import numpy as np
@@ -38,7 +39,7 @@ from ms2pip.ms2pipC import MS2PIP
 from ms2pip.retention_time import RetentionTime
 from ms2pip.ms2pip_tools import spectrum_output
 from ms2pip.ms2pip_tools.get_elude_predictions import get_elude_predictions
-
+from ms2pip.peptides import Modifications
 
 def ArgParse():
     parser = argparse.ArgumentParser(
@@ -78,7 +79,7 @@ def get_params():
         params = json.load(config_file)
 
     params.update(
-        {"fasta_filename": args.fasta_filename, "log_level": logging.INFO,}
+        {"fasta_filename": args.fasta_filename, "log_level": logging.DEBUG,}
     )
 
     if args.output_filename:
@@ -142,11 +143,41 @@ def get_protein_list(df):
     return df
 
 
-def add_mods(tup):
+def expand_df_by_list_column(df, list_column):
+    """Expand DataFrame by column of lists."""
+    if df.empty:
+        raise ValueError("Empty DataFrame")
+    tmp_series = (pd.DataFrame(df[list_column].tolist())
+            .stack()
+            .reset_index(level=1, drop=True)
+            .rename(list_column))
+
+    expanded_df = (df.drop(list_column, axis=1)
+              .join(tmp_series)
+              .reset_index(drop=True)[df.columns])
+
+    return expanded_df
+
+
+def duplicates_get_suffix(duplicate_series, str_format="_{:03d}"):
+    """Get ordinal suffixes for duplicates in Series."""
+    bool_list = duplicate_series.duplicated().values
+    
+    x = 0
+    suffixes = []
+    for b in bool_list:
+        if not b:
+            x = 0
+        suffixes.append(x)
+        x += 1
+    
+    return pd.Series([str_format.format(s) for s in suffixes])
+
+
+def add_mods(peptide):
     """
-    See fasta2speclib_config.md for more information.
+    Get list of all modified versions of a given peptide and set of modifications.
     """
-    _, row = tup
     params = get_params()
     mod_versions = [dict()]
 
@@ -157,73 +188,64 @@ def add_mods(tup):
                 mod_versions[0].update(
                     {
                         i: mod["name"]
-                        for i, aa in enumerate(row["peptide"])
+                        for i, aa in enumerate(peptide)
                         if aa == mod["amino_acid"]
                     }
                 )
             elif mod["n_term"]:
                 if mod["amino_acid"]:
-                    if row["peptide"][0] == mod["amino_acid"]:
+                    if peptide[0] == mod["amino_acid"]:
                         mod_versions[0]["N"] = mod["name"]
                 else:
                     mod_versions[0]["N"] = mod["name"]
 
     # Continue with variable modifications
     for mod in params["modifications"]:
-        if mod["fixed"]:
-            continue
+        if not mod["fixed"]:
+            # List all positions with specific amino acid
+            # Limit to 4 positions to avoid combinatorial explotion
+            all_pos = [i for i, aa in enumerate(peptide) if aa == mod["amino_acid"]]
+            if len(all_pos) > 4:
+                all_pos = all_pos[:4]
+            
+            for version in mod_versions.copy():
+                # For non-position-specific mods:
+                if not mod["n_term"]:
+                    pos = [p for p in all_pos if p not in version.keys()]
+                    combos = [
+                        x for l in range(1, len(pos) + 1) for x in combinations(pos, l)
+                    ]
+                    for combo in combos:
+                        new_version = version.copy()
+                        for pos in combo:
+                            new_version[pos] = mod["name"]
+                        mod_versions.append(new_version)
 
-        # List all positions with specific amino acid, to avoid combinatorial explotion,
-        # limit to 4 positions
-        all_pos = [i for i, aa in enumerate(row["peptide"]) if aa == mod["amino_acid"]]
-        if len(all_pos) > 4:
-            all_pos = all_pos[:4]
-        for version in mod_versions:
-            # For non-position-specific mods:
-            if not mod["n_term"]:
-                pos = [p for p in all_pos if p not in version.keys()]
-                combos = [
-                    x for l in range(1, len(pos) + 1) for x in combinations(pos, l)
-                ]
-                for combo in combos:
-                    new_version = version.copy()
-                    for pos in combo:
-                        new_version[pos] = mod["name"]
-                    mod_versions.append(new_version)
-
-            # For N-term mods and N-term is not yet modified:
-            elif mod["n_term"] and "N" not in version.keys():
-                # N-term with specific first AA:
-                if mod["amino_acid"]:
-                    if row["peptide"][0] == mod["amino_acid"]:
+                # For N-term mods and N-term is not yet modified:
+                elif mod["n_term"] and "N" not in version.keys():
+                    # N-term with specific first AA:
+                    if mod["amino_acid"]:
+                        if peptide[0] == mod["amino_acid"]:
+                            new_version = version.copy()
+                            new_version["N"] = mod["name"]
+                            mod_versions.append(new_version)
+                    # N-term without specific first AA:
+                    else:
                         new_version = version.copy()
                         new_version["N"] = mod["name"]
                         mod_versions.append(new_version)
-                # N-term without specific first AA:
-                else:
-                    new_version = version.copy()
-                    new_version["N"] = mod["name"]
-                    mod_versions.append(new_version)
-
-    df_out = pd.DataFrame(columns=row.index)
-    df_out["modifications"] = [
+                        
+    mod_versions_formatted = [
         "|".join(
-            "{}|{}".format(0, value) if key == "N" else "{}|{}".format(key + 1, value)
-            for key, value in version.items()
+            # TODO: fix sorting for e.g. 21|... and 2|...
+            sorted("{}|{}".format(0, value) if key == "N" else "{}|{}".format(key + 1, value)
+            for key, value in version.items())
         )
         for version in mod_versions
     ]
-    df_out["modifications"] = [
-        "-" if not mods else mods for mods in df_out["modifications"]
-    ]
-    df_out["spec_id"] = [
-        "{}_{:03d}".format(row["spec_id"], i) for i in range(len(mod_versions))
-    ]
-    df_out["charge"] = row["charge"]
-    df_out["peptide"] = row["peptide"]
-    if "protein_list" in row.index:
-        df_out["protein_list"] = str(row["protein_list"])
-    return df_out
+    mod_versions_formatted = ["-" if not mod else mod for mod in mod_versions_formatted]
+    
+    return mod_versions_formatted
 
 
 def add_charges(df_in):
@@ -315,6 +337,16 @@ def remove_from_peprec_filter(peprec_pred, peprec_filter):
     return peprec_pred[~peprec_pred_comb.isin(peprec_filter_comb)].copy()
 
 
+def parse_species(protein_list):
+    """Parse species out of protein list."""
+    if isinstance(protein_list, str):
+        protein_list = literal_eval(protein_list)
+    species = ';'.join(
+        sorted(set([prot.split("_")[-1] for prot in protein_list]))
+    )
+    return species
+
+
 def run_batches(peprec, decoy=False):
     params = get_params()
     if decoy:
@@ -359,12 +391,11 @@ def run_batches(peprec, decoy=False):
         )
 
         logging.debug("Adding all modification combinations")
-        peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
         with multiprocessing.Pool(params["num_cpu"]) as p:
-            peprec_mods = peprec_mods.append(
-                p.map(add_mods, peprec_batch.iterrows()), ignore_index=True
-            )
-        peprec_batch = peprec_mods
+            peprec_batch["modifications"] = p.map(add_mods, peprec_batch["peptide"].values)
+        peprec_batch = expand_df_by_list_column(peprec_batch.reset_index().copy(), "modifications")
+        peprec_batch["spec_id"] = peprec_batch["spec_id"] + duplicates_get_suffix(peprec_batch["spec_id"])
+        logging.debug("Batch contains %i modified peptides", len(peprec_batch))
 
         if params["add_retention_time"]:
             logging.info("Adding DeepLC predicted retention times")
@@ -396,6 +427,35 @@ def run_batches(peprec, decoy=False):
 
         logging.debug("Adding charge states %s", str(params["charges"]))
         peprec_batch = add_charges(peprec_batch)
+
+        add_prec_mz = False
+        if add_prec_mz:
+            logging.debug("Adding precursor mz")
+
+            modifications = Modifications()
+            # TODO: Add modifications from config json file
+            modifications.add_from_ms2pip_modstrings(modstrings=[
+                "Oxidation,15.994915,opt,M",
+                "Oxidation,15.994915,opt,P",
+                "OxidationP,15.994915,opt,P",
+                "Carbamidomethyl,57.021464,opt,C",
+                "Gln->pyro-Glu,-17.026549,opt,Q",
+                "Acetyl,42.010565,opt,N-term",
+            ])
+
+            with multiprocessing.Pool(params["num_cpu"]) as p:
+                peprec_slice = peprec_batch[["peptide", "modifications", "charge"]]
+                mzs = p.starmap(modifications.calc_precursor_mz, peprec_slice.values)
+                peprec_batch["precursor_mz"] = [x[1] for x in mzs]
+
+        add_species = False
+        if add_species:
+            logging.debug("Adding species")
+            with multiprocessing.Pool(params["num_cpu"]) as p:
+                peprec_batch["species"] = p.map(
+                    parse_species,
+                    peprec_batch["protein_list"].values
+                )
 
         if type(params["peprec_filter"]) == str:
             logging.debug("Removing peptides present in peprec filter")
@@ -502,14 +562,12 @@ def main():
             complib="zlib",
             mode="w",
         )
+        #peprec_nonmod.to_csv("{}_nonexpanded.peprec".format(params["output_filename"]))
 
     if not params["decoy"]:
         del peprec_nonmod
 
     run_batches(peprec, decoy=False)
-
-    # For testing
-    # peprec_nonmod = pd.read_hdf('data/uniprot_proteome_yeast_head_nonexpanded.peprec.hdf', key='table')
 
     if params["decoy"]:
         logging.info("Reversing sequences for decoy peptides")
