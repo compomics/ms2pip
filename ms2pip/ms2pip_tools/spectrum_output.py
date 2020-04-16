@@ -687,7 +687,7 @@ class SpectrumOutput:
             file_object = open(f_name, self.write_mode)
             logger.info("writing results to %s", f_name)
 
-        self.all_preds.to_csv(file_object, index=False)
+        self.all_preds.to_csv(file_object, float_format="%.6g", index=False)
         return file_object
 
     def write_results(self, output_formats: List[str]) -> Dict[str, Any]:
