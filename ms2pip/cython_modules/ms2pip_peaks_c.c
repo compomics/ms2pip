@@ -57,11 +57,11 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 		}
 	}
 
-	// TMT with integer intentities
+	// TMT
 	else if (model_id == 3) {
 		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = (((float)score_TMT_B(v+1+(i*fnum)))/1000)+0.5;
-			predictions[2*(peplen-1)-i-1] = (((float)score_TMT_Y(v+1+(i*fnum)))/1000)+0.5;
+		    predictions[0*(peplen-1)+i] = score_TMT_B(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)-i-1] = score_TMT_Y(v+1+(i*fnum))+0.5;
 		}
 	}
 
