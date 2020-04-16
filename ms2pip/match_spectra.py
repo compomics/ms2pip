@@ -22,6 +22,7 @@ def match_mzs(mzs, predicted, max_error=0.02):
 
 
 def get_predicted_peaks(pepids, mzs, intensities):
+    # NOTE: we need to concatenate the predictions for b and y ions
     return dict(zip(pepids,
                     (sorted(get_intense_mzs(np.concatenate(_mzs, axis=None),
                                             np.concatenate(_intensities, axis=None)))
@@ -32,6 +33,22 @@ class MatchSpectra:
     DATA_COLS = ['spec_id', 'peptide', 'modifications', 'charge']
 
     def __init__(self, peprec, mods, pepids, predicted_mzs, predicted_intensities):
+        """
+        Initialise spectra matcher
+
+        Parameters:
+        -----------
+        peprec: pandas.DataFrame
+            PEPREC formatted input peptides
+        mods: ms2pip.peptides.Modifications
+            Modifications used in PEPREC file
+        pepids: Iterable[str]
+            Iterable of spec_id's from peprec input ordered matching the predictions
+        predicted_mzs: Iterable[list[numpy.array[float32]]]
+            Iterable of predicted m/z values
+        predicted_mzs: Iterable[list[numpy.array[float32]]]
+            Iterable of predicted intensities
+        """
         self.peprec = peprec
         self.mods = mods
         self.predictions = get_predicted_peaks(pepids, predicted_mzs, predicted_intensities)
@@ -51,6 +68,16 @@ class MatchSpectra:
         self.peptides = peptides
 
     def match_mgfs(self, mgf_files, max_error=0.02):
+        """
+        Match predicted spectra to spectra in given MGF files.
+
+        Paramters:
+        ----------
+        mgf_files: list[str]
+            List of filenames of MGF files
+        max_error: float, optional
+            Maximum error for masses
+        """
         logger.info("match predicted spectra to spectra in mgf files (%s)", mgf_files)
         precursors = [x[1] for x in self.peptides]
 
@@ -71,6 +98,16 @@ class MatchSpectra:
                         i += 1
 
     def match_sqldb(self, sqldb_uri="postgresql:///ms2pip", max_error=0.02):
+        """
+        Match predicted spectra to given database of observed spectra.
+
+        Paramters:
+        ----------
+        sqldb_uri: str
+            URI of database to connect to
+        max_error: float, optional
+            Maximum error for masses
+        """
         from ms2pip.sqldb import tables
         from sqlalchemy import select
 

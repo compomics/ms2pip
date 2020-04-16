@@ -114,7 +114,7 @@ class RetentionTime:
         """
         Run RT predictor and add predictions to peprec DataFrame.
 
-        peprec: pd.DataFrame
+        peprec: pandas.DataFrame
             MS2PIP-style peprec DataFrame with peptides for which to predict retention
             times
         """
