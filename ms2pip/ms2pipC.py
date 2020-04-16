@@ -6,6 +6,7 @@ import itertools
 import logging
 import multiprocessing
 import multiprocessing.dummy
+import csv
 from random import shuffle
 
 import numpy as np
@@ -766,8 +767,8 @@ class MS2PIP:
                     )
         elif self.match_spectra:
             results = self._process_peptides()
-            for pep, spec in self._match_spectra(results):
-                print(pep, spec['params']['title'])
+            matched_spectra = self._match_spectra(results)
+            self._write_matched_spectra(matched_spectra)
         else:
             results = self._process_peptides()
 
@@ -988,3 +989,13 @@ class MS2PIP:
             return match_spectra.match_sqldb(self.sqldb_uri)
         else:
             raise NotImplementedError
+
+    def _write_matched_spectra(self, matched_spectra):
+        filename = f"{self.output_filename}_matched_spectra.csv"
+        logger.info("writing file %s...", filename)
+
+        with open(filename, mode="w") as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow(('spec_id', 'matched_file' 'matched_title'))
+            for pep, spec_file, spec in matched_spectra:
+                csv_writer.writerow((pep, spec_file, spec['params']['title']))

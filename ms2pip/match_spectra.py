@@ -67,11 +67,12 @@ class MatchSpectra:
                     while i < len(precursors) and precursors[i] < pepmass + max_error:
                         spec_id, _, pred_peaks = self.peptides[i]
                         if match_mzs(sorted(spectrum['m/z array']), pred_peaks, max_error=max_error):
-                            yield spec_id, spectrum
+                            yield spec_id, mgf_file, spectrum
                         i += 1
 
     def match_sqldb(self, sqldb_uri="postgresql:///ms2pip", max_error=0.02):
         from ms2pip.sqldb import tables
+        from sqlalchemy import select
 
         engine = tables.create_engine(sqldb_uri)
         precursors = np.fromiter((x[1] for x in self.peptides), dtype=np.float, count=len(self.peprec))
@@ -81,7 +82,8 @@ class MatchSpectra:
             start = 0
             for end in gaps:
                 for spec in connection.execute(
-                        tables.spec.select().where(
+                        select([tables.spec, tables.specfile.c.filename])
+                        .select_from(tables.spec.join(tables.specfile)).where(
                             tables.spec.c.pepmass > self.peptides[start][1] - max_error
                         ).where(
                             tables.spec.c.pepmass < self.peptides[end][1] + max_error
@@ -93,6 +95,8 @@ class MatchSpectra:
                             start += 1
                             continue
                         if match_mzs(spec.mzs, pred_peaks, max_error=max_error):
-                            yield spec_id, {'params': {'title': spec.spec_id},
-                                            'm/z array': spec.mzs}
+                            yield (spec_id,
+                                   spec.filename,
+                                   {'params': {'title': spec.spec_id},
+                                    'm/z array': spec.mzs})
                 start = end + 1
