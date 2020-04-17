@@ -16,7 +16,7 @@ def match_mzs(mzs, predicted, max_error=0.02):
     current = 0
     for pred in predicted:
         current = bisect.bisect_right(mzs, pred - max_error, lo=current)
-        if current >= len(mzs) or mzs[current] > pred + max_error:
+        if current >= len(mzs) or mzs[current] >= pred + max_error:
             return False
     return current < len(mzs)
 
