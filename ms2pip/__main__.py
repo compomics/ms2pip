@@ -89,6 +89,12 @@ def argument_parser():
         type=int,
         help="number of CPUs to use (default: all available)",
     )
+    parser.add_argument(
+        "--sqldb-uri",
+        action="store",
+        dest="sqldb_uri",
+        help="use sql database of observed spectra instead of MGF files",
+    )
     args = parser.parse_args()
 
     if not args.num_cpu:
@@ -118,9 +124,13 @@ def main():
             add_retention_time=args.add_retention_time,
             compute_correlations=args.correlations,
             match_spectra=args.match_spectra,
+            sqldb_uri=args.sqldb_uri,
             tableau=args.tableau
         )
-        ms2pip.run()
+        try:
+            ms2pip.run()
+        finally:
+            ms2pip.cleanup()
     except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
     except NoValidPeptideSequencesError:

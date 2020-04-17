@@ -103,6 +103,8 @@ def get_predictions(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 					np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
 					charge, model_id, peaks_version, ce):
 	cdef float* results = get_p_ms2pip(len(peptide)-2, &peptide[0], &modpeptide[0], charge, model_id, ce)
+	if results is NULL:
+		raise NotImplementedError(model_id)
 	result_parsed = []
 	for i in range(NUM_ION_TYPES_MAPPING[peaks_version]):
 		tmp = []

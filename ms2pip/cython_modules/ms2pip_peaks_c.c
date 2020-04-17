@@ -1,8 +1,3 @@
-#define compile_HCD 0
-#define compile_HCD_ce 0
-#define compile_TMT 0
-#define compile_ALL 1
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,36 +8,12 @@
 #include "ms2pip_features_c_old.c"
 #include "ms2pip_features_c_catboost.c"
 
-// Import models
-//#include "../models/HCD/pkl_B_4deep.c"
-//#include "../models/modelGBM_B.c"
-//#include "../models/HCD/pkl_Y_4deep.c"
-//#include "../models/merged_500_Y.c"
-//#include "../models/HCD/model_20190107_HCD_train_B.c"
-//#include "../models/HCD/model_20190107_HCD_train_Y.c"
-
-#if compile_HCD == 1
-	#include "../models/HCD.h"
-#endif
-
-#if compile_HCD_ce == 1
-	#include "../models/HCD/pkl_B_9deep.c"
-	#include "../models/HCD/pkl_Y_9deep.c"
-#endif
-
-#if compile_TMT == 1
-	#include "../models/TMT/tmt_human_mouse_sven_15_B.c"
-	#include "../models/TMT/tmt_human_mouse_sven_20_Y.c"
-#endif
-
-#if compile_ALL == 1
-	#include "../models/CID.h"
-	#include "../models/HCD.h"
-	#include "../models/TTOF5600.h"
-	#include "../models/TMT.h"
-	#include "../models/iTRAQ.h"
-	#include "../models/iTRAQphospho.h"
-#endif
+#include "../models/CID.h"
+#include "../models/HCD.h"
+#include "../models/TTOF5600.h"
+#include "../models/TMT.h"
+#include "../models/iTRAQ.h"
+#include "../models/iTRAQphospho.h"
 
 float membuffer[10000];
 float ions[2000]; 
@@ -58,49 +29,12 @@ typedef struct annotations annotations;
 //compute feature vector from peptide + predict intensities
 float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id, int ce)
 	{
+	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
+	int fnum = v[0]/(peplen-1);
 	int i;
 
-#if compile_HCD_ce == 1
-	// HCD with collision energy
-	if (model_id == 1) {
-		unsigned int* v = get_v_ms2pip_ce(peplen, peptide, modpeptide, charge, ce);
-		int fnum = v[0]/(peplen-1);
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
-		}
-	}
-#endif
-#if compile_TMT == 1
-	// TMT with integer intentities
-	if (model_id == 3) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = (((float)score_TMT_B(v+1+(i*fnum)))/1000)+0.5;
-			predictions[2*(peplen-1)-i-1] = (((float)score_TMT_Y(v+1+(i*fnum)))/1000)+0.5;
-		}
-	}
-#endif
-
-#if compile_HCD == 1
-	// HCD
-	if (model_id == 1) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
-		}
-	}
-#endif
-
-
-#if compile_ALL == 1
 	// CID
 	if (model_id == 0) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
@@ -108,9 +42,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// HCD
-	if (model_id == 1) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 1) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
@@ -118,19 +50,23 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// TTOF5600
-	if (model_id == 2) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 2) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_TTOF5600_Y(v+1+(i*fnum))+0.5;
 		}
 	}
 
+	// TMT
+	else if (model_id == 3) {
+		for (i=0; i < peplen-1; i++) {
+		    predictions[0*(peplen-1)+i] = score_TMT_B(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)-i-1] = score_TMT_Y(v+1+(i*fnum))+0.5;
+		}
+	}
+
 	// iTRAQ
-	if (model_id == 4) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 4) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_iTRAQ_Y(v+1+(i*fnum))+0.5;
@@ -138,9 +74,7 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 
 	// iTRAQphospho
-	if (model_id == 5) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 5) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_iTRAQphospho_Y(v+1+(i*fnum))+0.5;
@@ -148,21 +82,17 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	}
 	
 	// EThcD
-	//if (model_id == 6) {
-	//	unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-	//	int fnum = v[0]/(peplen-1);
-	//	for (i=0; i < peplen-1; i++) {
-	//		predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;
-	//		predictions[2*(peplen-1)-i-1] = score_EThcD_Y(v+1+(i*fnum))+0.5;
-	//		predictions[2*(peplen-1)+i] = score_EThcD_C(v+1+(i*fnum))+0.5;
-	//		predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
-	//	}
-	//}
+	// else if (model_id == 6) {
+	// 	for (i=0; i < peplen-1; i++) {
+	// 		predictions[0*(peplen-1)+i] = score_EThcD_B(v+1+(i*fnum))+0.5;
+	// 		predictions[2*(peplen-1)-i-1] = score_EThcD_Y(v+1+(i*fnum))+0.5;
+	// 		predictions[2*(peplen-1)+i] = score_EThcD_C(v+1+(i*fnum))+0.5;
+	// 		predictions[4*(peplen-1)-i-1] = score_EThcD_Z(v+1+(i*fnum))+0.5;
+	// 	}
+	// }
 
 	// HCDch2
-	if (model_id == 7) {
-		unsigned int* v = get_v_ms2pip(peplen, peptide, modpeptide, charge);
-		int fnum = v[0]/(peplen-1);
+	else if (model_id == 7) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
@@ -170,7 +100,19 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 			predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
 		}
 	}
-#endif
+
+	// CIDch2
+	else if (model_id == 8) {
+		for (i=0; i < peplen-1; i++) {
+		    predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)+i] = score_CID_B2(v+1+(i*fnum))+0.5;
+		    predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
+		}
+	}
+	else {
+		return NULL;
+	}
 	return predictions;
 }
 

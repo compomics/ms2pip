@@ -2,19 +2,20 @@
 import os
 import sys
 import glob
-import logging
-import bisect
 import itertools
-from operator import itemgetter
+import logging
+import multiprocessing
+import multiprocessing.dummy
+import csv
 from random import shuffle
 
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
-import pyteomics.mgf
 
 from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
 from ms2pip.retention_time import RetentionTime
+from ms2pip.match_spectra import MatchSpectra
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.peptides import (
     Modifications, AMINO_ACID_IDS, write_amino_accid_masses
@@ -633,29 +634,6 @@ def peakcount(x):
     return c / len(x)
 
 
-def get_intense_mzs(mzs, intensity, n=3):
-    return [x[0] for x in sorted(zip(mzs, intensity), key=itemgetter(1), reverse=True)[:n]]
-
-
-def match_mzs(mzs, predicted, max_error=0.02):
-    current = 0
-    for pred in predicted:
-        current = bisect.bisect_right(mzs, pred - max_error, lo=current)
-        if current >= len(mzs) or mzs[current] > pred + max_error:
-            return False
-    return current < len(mzs)
-
-
-def get_predicted_peaks(results):
-    mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
-
-    return dict(zip(itertools.chain.from_iterable(pepid_bufs),
-                    (sorted(get_intense_mzs(np.concatenate(mzs[0], axis=None),
-                                            np.concatenate(mzs[1], axis=None)))
-                     for mzs in zip(itertools.chain.from_iterable(mz_bufs),
-                                    itertools.chain.from_iterable(prediction_bufs)))))
-
-
 class MS2PIP:
     def __init__(
         self,
@@ -663,7 +641,6 @@ class MS2PIP:
         spec_file=None,
         vector_file=None,
         num_cpu=1,
-        use_billiard=False,
         params=None,
         output_filename=None,
         datasetname=None,
@@ -672,6 +649,7 @@ class MS2PIP:
         add_retention_time=False,
         compute_correlations=False,
         match_spectra=False,
+        sqldb_uri=None,
         tableau=False,
     ):
         self.pep_file = pep_file
@@ -683,7 +661,12 @@ class MS2PIP:
         self.add_retention_time = add_retention_time
         self.compute_correlations = compute_correlations
         self.match_spectra = match_spectra
+        self.sqldb_uri = sqldb_uri
         self.tableau = tableau
+
+        self.afile = None
+        self.modfile = None
+        self.modfile2 = None
 
         if params is None:
             raise MissingConfigurationError()
@@ -725,23 +708,23 @@ class MS2PIP:
             self.output_filename = output_filename
 
         logger.debug(
-            "starting workers (use_billiard=%r, num_cpu=%d) ...",
-            use_billiard,
+            "starting workers (num_cpu=%d) ...",
             self.num_cpu,
         )
-        if use_billiard:
-            import billiard
-            self.myPool = billiard.Pool(self.num_cpu)
+        if multiprocessing.current_process().daemon:
+            logger.warn("MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children.")
+            self.myPool = multiprocessing.dummy.Pool(1)
         else:
-            import multiprocessing
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
         if self.match_spectra:
             self.spec_file = None
-            if os.path.isdir(spec_file):
+            if self.sqldb_uri:
+                self.spec_files = None
+            elif os.path.isdir(spec_file):
                 self.spec_files = glob.glob("{}/*.mgf".format(spec_file))
             else:
-                self.spec_files = [self.spec_file]
+                self.spec_files = [spec_file]
             logger.debug("use spec files %s", self.spec_files)
         else:
             self.spec_file = spec_file
@@ -757,11 +740,6 @@ class MS2PIP:
         self.modfile2 = self.mods.write_modifications_file(mod_type='sptm')
 
         self._read_peptide_information()
-
-        if self.add_retention_time:
-            logging.info("Adding retention time predictions")
-            rt_predictor = RetentionTime(config=self.params)
-            rt_predictor.add_rt_predictions(self.data)
 
         if self.spec_file:
             results = self._process_spectra()
@@ -787,27 +765,31 @@ class MS2PIP:
                         "median correlations: %f",
                         correlations.groupby("ion")["pearsonr"].median(),
                     )
-            self._remove_amino_accid_masses()
         elif self.match_spectra:
             results = self._process_peptides()
-            self._generate_peptide_list(results)
-            for pep, spec in self._match_spectra():
-                print(pep, spec['params']['title'])
-            self._remove_amino_accid_masses()
+            matched_spectra = self._match_spectra(results)
+            self._write_matched_spectra(matched_spectra)
         else:
             results = self._process_peptides()
+
+            if self.add_retention_time:
+                self._predict_retention_times()
 
             logger.info("merging results ...")
             all_preds = self._predict_spec(results)
 
-            self._remove_amino_accid_masses()
             if not self.return_results:
                 self._write_predictions(all_preds)
             else:
                 return all_preds
 
-    def _remove_amino_accid_masses(self):
-        os.remove(self.afile)
+    def cleanup(self):
+        if self.afile:
+            os.remove(self.afile)
+        if self.modfile:
+            os.remove(self.modfile)
+        if self.modfile2:
+            os.remove(self.modfile2)
 
     def _read_peptide_information(self):
         # read peptide information
@@ -967,8 +949,16 @@ class MS2PIP:
         all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
         if target_bufs:
             all_preds["target"] = np.concatenate(target_bufs, axis=None)
+        if "rt" in self.data:
+            # TODO: might be a good idea to index the dataframes on spec_id
+            all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on="spec_id", copy=False)
 
         return all_preds
+
+    def _predict_retention_times(self):
+        logging.info("Adding retention time predictions")
+        rt_predictor = RetentionTime(config=self.params)
+        rt_predictor.add_rt_predictions(self.data)
 
     def _process_peptides(self):
         logger.info("scanning peptide file...")
@@ -980,44 +970,32 @@ class MS2PIP:
         )
 
     def _write_predictions(self, all_preds):
-        if self.add_retention_time:
-            all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on='spec_id')
-
         spec_out = spectrum_output.SpectrumOutput(
             all_preds, self.data, self.params["ms2pip"], output_filename=self.output_filename,
         )
         spec_out.write_results(self.out_formats)
 
-    def _generate_peptide_list(self, results):
-        predictions = get_predicted_peaks(results)
+    def _match_spectra(self, results):
+        mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
 
-        data_cols = ['spec_id', 'peptide', 'modifications', 'charge']
-        peptides = [
-            (
-                spec_id,
-                self.mods.calc_precursor_mz(peptide,
-                                            modifications,
-                                            charge)[1],
-                predictions[spec_id]
-            ) for spec_id, peptide, modifications, charge in self.data[data_cols].values
-        ]
-        peptides.sort(key=itemgetter(1))
-        self.peptides = peptides
+        match_spectra = MatchSpectra(self.data,
+                                     self.mods,
+                                     itertools.chain.from_iterable(pepid_bufs),
+                                     itertools.chain.from_iterable(mz_bufs),
+                                     itertools.chain.from_iterable(prediction_bufs))
+        if self.spec_files:
+            return match_spectra.match_mgfs(self.spec_files)
+        elif self.sqldb_uri:
+            return match_spectra.match_sqldb(self.sqldb_uri)
+        else:
+            raise NotImplementedError
 
-    def _match_spectra(self, max_error=0.02):
-        precursors = [x[1] for x in self.peptides]
+    def _write_matched_spectra(self, matched_spectra):
+        filename = f"{self.output_filename}_matched_spectra.csv"
+        logger.info("writing file %s...", filename)
 
-        for spec_file in self.spec_files:
-            with pyteomics.mgf.read(spec_file, use_header=False, convert_arrays=0, read_charges=False) as reader:
-                for spectrum in reader:
-                    if 'pepmass' not in spectrum['params']:
-                        continue
-                    pepmass = spectrum['params']['pepmass'][0]
-
-                    # compare all peptides with a similar precursor m/z
-                    i = bisect.bisect_right(precursors, pepmass - max_error)
-                    while i < len(precursors) and precursors[i] < pepmass + max_error:
-                        spec_id, _, pred_peaks = self.peptides[i]
-                        if match_mzs(sorted(spectrum['m/z array']), pred_peaks, max_error=max_error):
-                            yield spec_id, spectrum
-                        i += 1
+        with open(filename, mode="w") as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow(('spec_id', 'matched_file' 'matched_title'))
+            for pep, spec_file, spec in matched_spectra:
+                csv_writer.writerow((pep, spec_file, spec['params']['title']))
