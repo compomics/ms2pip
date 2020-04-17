@@ -25,3 +25,4 @@ tensorflow-estimator = "<2.2.0"
 
 [tool.poetry.dev-dependencies]
 cython = "*"
+pytest = "*"
