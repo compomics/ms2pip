@@ -49,7 +49,7 @@ jobs:
         twine upload wheelhouse/ms2pip*-manylinux1_x86_64.whl
         twine upload dist/*.tar.gz
 
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v2-preview
       with:
         name: wheels
         path: wheelhouse/ms2pip*-manylinux1_x86_64.whl
