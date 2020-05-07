@@ -1,4 +1,13 @@
-VERSION = "3.6.1"
+import os
+from glob import glob
+
+from setuptools import setup
+from setuptools.extension import Extension
+from Cython.Distutils import build_ext
+import numpy
+
+
+VERSION = "3.6.2.dev"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
@@ -43,15 +52,6 @@ INSTALL_REQUIRES = [
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
-import os
-from glob import glob
-
-from setuptools import setup
-from setuptools.extension import Extension
-from Cython.Distutils import build_ext
-import numpy
-
-
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
@@ -59,7 +59,7 @@ to_remove = [
     "ms2pip/cython_modules/ms2pip_pyx.c*",
     "ms2pip/cython_modules/ms2pip_pyx.so",
 ]
-_ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
+#_ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
 
 extensions = [
     Extension(

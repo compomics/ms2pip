@@ -149,7 +149,7 @@ def scan_mgf(peprec, mgf_folder, filename_col='raw_file', scan_num_col='scan_num
                             found = False
                     if found and line[-4:] != '0.0\n':
                         out.write(line)
-    logging.info("{}/{} spectra found and written to new MGF file.".format(count, len(peprec)))
+    logging.info("%i/%i spectra found and written to new MGF file.", count, len(peprec))
 
 
 def ArgParse():
