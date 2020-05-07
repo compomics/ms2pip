@@ -762,8 +762,8 @@ class MS2PIP:
                         "{}_correlations.csv".format(self.output_filename), index=True
                     )
                     logger.info(
-                        "median correlations: %f",
-                        correlations.groupby("ion")["pearsonr"].median(),
+                        "median correlations: \n%s",
+                        str(correlations.groupby("ion")["pearsonr"].median()),
                     )
         elif self.match_spectra:
             results = self._process_peptides()
@@ -822,7 +822,7 @@ class MS2PIP:
         num_pep_filtered = num_pep - len(data)
         if num_pep_filtered > 0:
             logger.info(
-                "Removed {} unsupported peptide sequences (< 3, > 99 \
+                "Removed %i unsupported peptide sequences (< 3, > 99 \
     amino acids, or containing B, J, O, U, X or Z).",
                 num_pep_filtered,
             )
