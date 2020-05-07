@@ -34,8 +34,7 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
-    - uses: actions/upload-artifact@v2-preview
+    - uses: actions/upload-artifact@v2
       with:
         name: wheels
         path: dist/ms2pip*.whl
-  
