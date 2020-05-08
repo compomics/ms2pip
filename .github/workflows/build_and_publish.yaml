@@ -32,14 +32,14 @@ jobs:
         python-versions: 'cp36-cp36m cp37-cp37m cp38-cp38'
         build-requirements: 'setuptools numpy cython'
 
-#    - name: Test build
-#      run: |
-#        pip install wheelhouse/ms2pip-*-cp38-cp38-manylinux1_x86_64.whl
-#        pytest
-
-    - name: Package source distribution
+    - name: Test build
       run: |
-        python setup.py sdist
+        pip install wheelhouse/ms2pip-*-cp38-cp38-manylinux1_x86_64.whl
+        pytest
+
+#    - name: Package source distribution
+#      run: |
+#        python setup.py sdist
 
     - name: Publish to PyPI
       env:
