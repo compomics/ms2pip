@@ -109,12 +109,12 @@ description = "DeepLC: Retention time prediction for (modified) peptides using D
 name = "deeplc"
 optional = false
 python-versions = ">=3.6,<3.8"
-version = "0.1.14"
+version = "0.1.15"
 
 [package.dependencies]
 matplotlib = ">=3,<4"
 numpy = ">=1.17,<2"
-pandas = ">=0.25,<1"
+pandas = ">=0.25,<2"
 scipy = ">=1.3.1,<2"
 setuptools = ">=42.0.1"
 tensorflow = ">=1.14.0,<3"
@@ -856,8 +856,8 @@ cython = [
     {file = "Cython-0.29.17.tar.gz", hash = "sha256:6361588cb1d82875bcfbad83d7dd66c442099759f895cf547995f00601f9caf2"},
 ]
 deeplc = [
-    {file = "deeplc-0.1.14-py3-none-any.whl", hash = "sha256:9263bdf7865230611cba0ed21e2b48ca95c8bd2baf83a63b67eab5b7f708ccac"},
-    {file = "deeplc-0.1.14.tar.gz", hash = "sha256:9e3aa7d7b7b21411d28e50d685c230f54f12b662fcf87172704254ad32778630"},
+    {file = "deeplc-0.1.15-py3-none-any.whl", hash = "sha256:36d24a3a8d75935046bb2b4cd5bf63b38c3a4e02702d02a065b7d4e0e4bab46e"},
+    {file = "deeplc-0.1.15.tar.gz", hash = "sha256:5372a91cd3b32a30f648cb69951a0b4705decdb74ec760cb3af2bd3aa88d71b5"},
 ]
 gast = [
     {file = "gast-0.2.2.tar.gz", hash = "sha256:fe939df4583692f0512161ec1c880e0a10e71e6a232da045ab8edd3756fbadf0"},
