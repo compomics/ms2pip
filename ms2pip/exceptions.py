@@ -24,3 +24,7 @@ class MissingConfigurationError(Exception):
 
 class FragmentationModelRequiredError(Exception):
     pass
+
+
+class PeptideTooLongError(Exception):
+    """The passed peptide is too long to be processed."""
