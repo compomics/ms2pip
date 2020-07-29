@@ -22,23 +22,29 @@ spectrum prediction for multiple fragmentation methods, instruments and labeling
 ---
 
 ## Introduction
-MS²PIP is a tool to predict MS² signal peak intensities from peptide sequences.
-It employs the XGBoost machine learning algorithm and is written in Python.
+MS²PIP is a tool to predict MS² peak intensities from peptide sequences. The result is
+a predicted peptide fragmentation spectrum that accurately resembles its observed
+equivalent. These predictions can be used to validate peptide identifications, generate
+proteome-wide spectral libraries, or to select discriminative transitions for targeted
+proteomics. MS²PIP employs the XGBoost machine learning algorithm and is written in
+Python.
 
 You can install MS²PIP on your machine by following the
-[instructions below](#installation). For a more user friendly experience, go to the
-[MS²PIP web server](https://iomics.ugent.be/ms2pip).
-There, you can easily upload a list of peptide sequences, after which the
-corresponding predicted MS² spectra can be downloaded in multiple file
-formats. The web server can also be contacted through the
-[RESTful API](https://iomics.ugent.be/ms2pip/api/).
+[installation instructions](#installation) below. For a more user-friendly experience,
+go to the [MS²PIP web server](https://iomics.ugent.be/ms2pip). There, you can easily
+upload a list of peptide sequences, after which the corresponding predicted MS² spectra
+can be downloaded in multiple file formats. The web server can also be contacted
+through the [RESTful API](https://iomics.ugent.be/ms2pip/api/).
 
 To generate a predicted spectral library starting from a FASTA file, we
 developed a pipeline called fasta2speclib. Usage of this pipeline is described
 on the
-[fasta2speclib wiki page](http://compomics.github.io/projects/ms2pip_c/wiki/fasta2speclib). 
+[fasta2speclib wiki page](http://compomics.github.io/projects/ms2pip_c/wiki/fasta2speclib).
 Fasta2speclib was developed in collaboration with the ProGenTomics group for the
 [MS²PIP for DIA](https://github.com/brvpuyve/MS2PIP-for-DIA) project.
+
+To improve the sensitivity of your peptide identification pipeline with MS²PIP
+predictions, check out [MS²ReScore](https://github.com/compomics/ms2rescore/).
 
 If you use MS²PIP for your research, please cite the following articles:
 - Gabriels, R., Martens, L., & Degroeve, S. (2019). Updated MS²PIP web server
@@ -59,17 +65,37 @@ Please also take note of and mention the MS²PIP-version you used.
 
 ## Installation
 
-#### Install with pip
+[![install pip](https://flat.badgen.net/badge/install%20with/pip/green)](https://pypi.org/project/ms2pip/)
+[![install bioconda](https://flat.badgen.net/badge/install%20with/bioconda/green)](https://bioconda.github.io/recipes/ms2pip/README.html)
+[![container](https://flat.badgen.net/badge/pull/biocontainer/blue?icon=docker)](https://quay.io/repository/biocontainers/ms2pip)
 
+#### Pip package
+
+With Python 3.6 or higher, run:
 ```
 pip install ms2pip
 ```
-We recommend using a [conda](https://docs.conda.io/en/latest/) or
-[venv](https://docs.python.org/3/library/venv.html) virtual environment.
+
+We recommend using a [venv](https://docs.python.org/3/library/venv.html) or
+[conda](https://docs.conda.io/en/latest/) virtual environment.
+
+#### Conda package
+
+Install with activated bioconda and conda-forge channels:
+```
+conda install -c defaults -c bioconda -c conda-forge ms2pip
+```
+
+#### Docker container
+First check the latest version tag on [biocontainers/ms2pip/tags](https://quay.io/repository/biocontainers/ms2pip?tab=tags). Then pull and run the container with
+```
+docker container run -v <working-directory>:/data -w /data quay.io/biocontainers/ms2pip:<tag> ms2pip <ms2pip-arguments>
+```
+where `<working-directory>` is the absolute path to the directory with your MS²PIP input files, `<tag>` is the container version tag, and `<ms2pip-arguments>` are the ms2pip command line options (see [Command line interface](#command-line-interface)).
 
 #### For development
 
-Clone the repository and use pip to install an editable version:
+Clone this repository and use pip to install an editable version:
 ```
 pip install --editable .
 ```
@@ -77,6 +103,7 @@ pip install --editable .
 ---
 
 ## Usage
+
 MS²PIP comes with [pre-trained models](#specialized-prediction-models) for a
 variety of fragmentation methods and modifications. These models can easily be
 applied by configuring MS²PIP in the [config file](#config-file) and providing a
@@ -112,12 +139,12 @@ optional arguments:
 ### Input files
 #### Config file
 Several MS²PIP options need to be set in this config file.
-- `model=X` where X is one of the currently supported MS²PIP models (see 
+- `model=X` where X is one of the currently supported MS²PIP models (see
 [Specialized prediction models](#specialized-prediction-models)).
 - `frag_error=X` where is X is the fragmentation spectrum mass tolerance in Da
 (only relevant if an MGF file is passed).
 - `out=X` where X is a comma-separated list of a selection of the currently
-supported output file formats: `csv`, `mgf`, `msp`, `spectronaut`, or 
+supported output file formats: `csv`, `mgf`, `msp`, `spectronaut`, or
 `bibliospec` (SSL/MS2, also for Skyline). For example: `out=csv,msp`.
 - `ptm=X,Y,opt,Z` for every peptide modification where:
   - `X` is the PTM name and needs to match the names that are used in the
@@ -215,10 +242,10 @@ instrument, labeling techniques and modifications. As all of these properties
 can influence fragmentation patterns, it is important to match the MS²PIP model
 to the properties of your experimental dataset.
 
-Currently the following models are supported in MS²PIP: `HCD`, `CID`, `iTRAQ`, 
+Currently the following models are supported in MS²PIP: `HCD`, `CID`, `iTRAQ`,
 `iTRAQphospho`, `TMT`, `TTOF5600`, `HCDch2` and `CIDch2`. The last two "ch2"
 models also include predictions for doubly charged fragment ions (b++ and y++),
-next to the predictions for singly charged b- and y-ions. 
+next to the predictions for singly charged b- and y-ions.
 
 ### MS² acquisition information and peptide properties of the models' training datasets
 
