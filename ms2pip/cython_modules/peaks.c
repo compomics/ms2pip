@@ -17,8 +17,8 @@
 #define PREDICTED_INTENSITIES_SIZE (2 * (MAX_PEPLEN - 1))
 
 // TODO: define
-float ions[2000]; 
-float mzs[2000]; 
+float ions[2000];
+float mzs[2000];
 float mass_buffer[MASS_BUFFER_SIZE];
 float predicted_intensities[PREDICTED_INTENSITIES_SIZE];
 
