@@ -1,7 +1,9 @@
 import os
+import shlex
 from glob import glob
 
 from setuptools import setup
+from setuptools.command.build_clib import build_clib
 from setuptools.extension import Extension
 from Cython.Distutils import build_ext
 import numpy
@@ -55,23 +57,25 @@ PYTHON_REQUIRES = ">=3.6,<4"
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
-to_remove = [
-    "ms2pip/cython_modules/ms2pip_pyx.c*",
-    "ms2pip/cython_modules/ms2pip_pyx.so",
-]
-#_ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
+extra_compile_args = [
+        "-fno-var-tracking",
+        '-Wno-unused-result',
+        '-Wno-cpp',
+        '-Wno-unused-function',
+    ]
+
+libms2pip = ('ms2pip', {'sources': ["ms2pip/cython_modules/init.c", "ms2pip/cython_modules/features.c", "ms2pip/cython_modules/peaks.c"] + glob("ms2pip/models/*/*.c"), 'cflags': extra_compile_args})
+
+if 'CFLAGS' in os.environ:
+    cflags = shlex.split(os.environ['CFLAGS'])
+    if '-UNDEBUG' not in cflags:
+        extra_compile_args.append('-DCYTHON_WITHOUT_ASSERTIONS')
 
 extensions = [
     Extension(
         "ms2pip.cython_modules.ms2pip_pyx",
-        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx", "ms2pip/cython_modules/init.c", "ms2pip/cython_modules/features.c", "ms2pip/cython_modules/peaks.c"] + glob("ms2pip/models/*/*.c"),
-        extra_compile_args=[
-            "-fno-var-tracking",
-            "-Og",
-            "-Wno-unused-result",
-            "-Wno-cpp",
-            "-Wno-unused-function",
-        ],
+        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"],
+        extra_compile_args=extra_compile_args,
     )
 ]
 
@@ -98,7 +102,8 @@ setup(
     },
     install_requires=INSTALL_REQUIRES,
     python_requires=PYTHON_REQUIRES,
+    libraries=[libms2pip],
     ext_modules=extensions,
     include_dirs=[numpy.get_include()],
-    cmdclass={"build_ext": build_ext},
+    cmdclass={"build_clib": build_clib, "build_ext": build_ext},
 )
