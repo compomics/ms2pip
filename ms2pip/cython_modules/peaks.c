@@ -206,52 +206,6 @@ float* get_mz_ms2pip_etd(int peplen, unsigned short* modpeptide)
 }
 
 
-//get fragment ion mz values (b, y, b++, y++)
-float* get_mz_ms2pip_ch2(int peplen, unsigned short* modpeptide)
-    {
-    int i,j;
-    float mz;
-    j=0;
-
-    mz = 0;
-    if (modpeptide[0] != 0) {
-        mz = amino_masses[modpeptide[0]];
-    }
-    for (i=1; i < peplen; i++) {
-        mz += amino_masses[modpeptide[i]];
-        mass_buffer[j++] = mz+1.007236;  //b-ion
-    }
-
-    mz = 0;
-    if (modpeptide[peplen+1] != 0) {
-        mz = amino_masses[modpeptide[peplen+1]];
-    }
-    for (i=peplen; i > 1; i--) {
-        mz += amino_masses[modpeptide[i]];
-        mass_buffer[j++] = 18.0105647 + mz + 1.007236;  //y-ion
-    }
-
-    mz = 0;
-    if (modpeptide[0] != 0) {
-        mz = amino_masses[modpeptide[0]];
-    }
-    for (i=1; i < peplen; i++) {
-        mz += amino_masses[modpeptide[i]];
-        mass_buffer[j++] = (mz + 1.007236 + 1.007236)/2;  //b2-ion: (b-ion + H)/2
-    }
-
-    mz = 0;
-    if (modpeptide[peplen+1] != 0) {
-        mz = amino_masses[modpeptide[peplen+1]];
-    }
-    for (i=peplen; i > 1; i--) {
-        mz += amino_masses[modpeptide[i]];
-        mass_buffer[j++] = (18.0105647 + mz + 1.007236 + 1.007236)/2;  //y2-ion: (y-ion + H)/2
-    }
-
-    return mass_buffer;
-}
-
 //get all fragment ion peaks from spectrum
 annotations get_t_ms2pip_all(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
     {

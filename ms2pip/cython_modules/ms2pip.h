@@ -27,7 +27,6 @@ unsigned int* get_ms2pip_feature_vector(int peplen, unsigned short* peptide, uns
 
 float* get_mz_ms2pip_general(int peplen, unsigned short* modpeptide);
 float* get_mz_ms2pip_etd(int peplen, unsigned short* modpeptide);
-float* get_mz_ms2pip_ch2(int peplen, unsigned short* modpeptide);
 annotations get_t_ms2pip_all(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz);
 float* get_t_ms2pip_general(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz);
 float* get_t_ms2pip_etd(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz);

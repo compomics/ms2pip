@@ -173,7 +173,7 @@ def get_mzs(*args):
     if args[1] == 'etd':
         result = get_mzs_etd(*args)
     if args[1] == 'ch2':
-        result = get_mzs_ch2(*args)
+        result = get_mzs_general(*args)
     return result
 
 
@@ -192,18 +192,6 @@ def get_mzs_general(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
 def get_mzs_etd(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
                 peaks_version):
     cdef float* results = get_mz_ms2pip_etd(len(modpeptide)-2, &modpeptide[0])
-    result_parsed = []
-    for i in range(NUM_ION_TYPES_MAPPING[peaks_version]):
-        tmp = []
-        for j in range(len(modpeptide)-3):
-            tmp.append(results[(len(modpeptide)-3) * i + j])
-        result_parsed.append(tmp)
-    return result_parsed
-
-
-def get_mzs_ch2(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
-                peaks_version):
-    cdef float* results = get_mz_ms2pip_ch2(len(modpeptide)-2, &modpeptide[0])
     result_parsed = []
     for i in range(NUM_ION_TYPES_MAPPING[peaks_version]):
         tmp = []
