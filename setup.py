@@ -8,7 +8,6 @@ from setuptools.extension import Extension
 from Cython.Distutils import build_ext
 import numpy
 
-
 VERSION = "3.6.2"
 
 NAME = "ms2pip"
@@ -105,5 +104,6 @@ setup(
     libraries=[libms2pip],
     ext_modules=extensions,
     include_dirs=[numpy.get_include()],
+    library_dirs=[os.path.join(os.path.dirname(__file__), 'ms2pip', 'cython_modules')],
     cmdclass={"build_clib": build_clib, "build_ext": build_ext},
 )
