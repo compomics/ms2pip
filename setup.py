@@ -66,7 +66,6 @@ extensions = [
         "ms2pip.cython_modules.ms2pip_pyx",
         sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/*/*.c"),
         extra_compile_args=[
-            "-fno-var-tracking-assignments",
             "-fno-var-tracking",
             "-Og",
             "-Wno-unused-result",
