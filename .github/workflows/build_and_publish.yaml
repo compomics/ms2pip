@@ -1,9 +1,8 @@
-name: Publish to PyPI
+name: Build and publish to PyPI
 
 on:
   release:
     types: [created]
-  push:
 
 jobs:
   build-sdist:
@@ -87,15 +86,15 @@ jobs:
         name: dist
         path: dist/ms2pip-*-macosx*.whl
 
-#  publish-to-pypi:
-#    needs: [build-sdist, build-linux-wheels, build-macos-wheels]
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/download-artifact@v2
-#        with:
-#          name: dist
-#          path: dist
-#      - uses: pypa/gh-action-pypi-publish@master
-#        with:
-#          user: ${{ secrets.PYPI_USERNAME }}
-#          password: ${{ secrets.PYPI_PASSWORD }}
+  publish-to-pypi:
+    needs: [build-sdist, build-linux-wheels, build-macos-wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: ${{ secrets.PYPI_USERNAME }}
+          password: ${{ secrets.PYPI_PASSWORD }}
