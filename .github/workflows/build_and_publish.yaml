@@ -53,7 +53,7 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: dist
-        path: dist/ms2pip-*-manylinux1_x86_64.whl
+        path: dist/ms2pip-*-manylinux*.whl
 
   build-macos-wheels:
     runs-on: macos-latest
