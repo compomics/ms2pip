@@ -70,7 +70,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 numpy pandas cython pytest
+        pip install flake8 setuptools wheel numpy pandas cython pytest
     - name: Check for syntax errors
       run: |
         pip install flake8
