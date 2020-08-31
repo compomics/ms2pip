@@ -4,6 +4,7 @@ from glob import glob
 
 from setuptools import setup
 from setuptools.command.build_clib import build_clib
+from setuptools.command.develop import develop as st_develop
 from setuptools.extension import Extension
 from Cython.Distutils import build_ext
 import numpy
@@ -78,6 +79,15 @@ extensions = [
     )
 ]
 
+
+class develop(st_develop):
+    __doc__ = st_develop.__doc__
+
+    def install_for_development(self):
+        self.run_command('build_clib')
+        st_develop.install_for_development(self)
+
+
 setup(
     name=NAME,
     version=VERSION,
@@ -104,6 +114,6 @@ setup(
     libraries=[libms2pip],
     ext_modules=extensions,
     include_dirs=[numpy.get_include()],
-    library_dirs=[os.path.join(os.path.dirname(__file__), 'ms2pip', 'cython_modules')],
-    cmdclass={"build_clib": build_clib, "build_ext": build_ext},
+    # library_dirs=[os.path.join(os.path.dirname(__file__), 'ms2pip', 'cython_modules')],
+    cmdclass={"build_clib": build_clib, "build_ext": build_ext, 'develop': develop},
 )
