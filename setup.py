@@ -65,7 +65,7 @@ extra_compile_args = [
         '-Wno-unused-function',
     ]
 
-libms2pip = ('ms2pip', {'sources': ["ms2pip/ms2pip_c/init.c", "ms2pip/ms2pip_c/features.c", "ms2pip/ms2pip_c/peaks.c"] + glob("ms2pip/models/*/*.c"), 'cflags': extra_compile_args})
+libms2pip = ('ms2pip', {'sources': ["ms2pip/ms2pip_c/init.c", "ms2pip/ms2pip_c/features.c", "ms2pip/ms2pip_c/peaks.c"] + glob("ms2pip/ms2pip_c/models/*/*.c"), 'cflags': extra_compile_args})
 
 if 'CFLAGS' in os.environ:
     cflags = shlex.split(os.environ['CFLAGS'])

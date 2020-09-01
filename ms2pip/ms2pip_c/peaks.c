@@ -5,12 +5,12 @@
 
 #include "ms2pip.h"
 
-#include "../models/CID.h"
-#include "../models/HCD.h"
-#include "../models/TTOF5600.h"
-#include "../models/TMT.h"
-#include "../models/iTRAQ.h"
-#include "../models/iTRAQphospho.h"
+#include "models/CID.h"
+#include "models/HCD.h"
+#include "models/TTOF5600.h"
+#include "models/TMT.h"
+#include "models/iTRAQ.h"
+#include "models/iTRAQphospho.h"
 
 #define MASS_BUFFER_SIZE (18 * (MAX_PEPLEN - 1))
 // TODO: correct?
