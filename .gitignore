@@ -2,8 +2,7 @@
 
 # Custom MS2PIP stuff
 data/
-*_pyx.c
-*_pyx_*.c
+ms2pip/ms2pip_c/predictions.c
 
 # Pytest
 .pytest_cache/
