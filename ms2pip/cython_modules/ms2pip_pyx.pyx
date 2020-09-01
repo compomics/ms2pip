@@ -9,7 +9,7 @@ NUM_ION_TYPES_MAPPING = {'general': 2, 'etd': 4, 'ch2': 4, 'all': 18}
 
 
 cdef extern from "ms2pip.h":
-    cdef int MAX_PEPLEN
+    cdef int _MAX_PEPLEN "MAX_PEPLEN"
 
     ctypedef struct annotations:
         float* peaks
@@ -29,6 +29,9 @@ cdef extern from "ms2pip.h":
     float* get_t_ms2pip_general(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
     float* get_t_ms2pip_etd(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
     float* get_t_ms2pip_ch2(int peplen, unsigned short* modpeptide, int numpeaks, float* msms, float* peaks, float tolmz)
+
+
+MAX_PEPLEN = _MAX_PEPLEN
 
 
 def ms2pip_init(amino_masses_fname, modifications_fname, modifications_fname_sptm):
