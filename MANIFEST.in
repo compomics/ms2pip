@@ -1,6 +1,6 @@
 include ms2pip/ms2pip_c/*.c
 include ms2pip/ms2pip_c/*.h
 include ms2pip/ms2pip_c/libms2pip.a
-include ms2pip/models/*/*.c
-include ms2pip/models/*.h
+include ms2pip/ms2pip_c/models/*/*.c
+include ms2pip/ms2pip_c/models/*.h
 include setup.cfg
