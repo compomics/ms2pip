@@ -20,7 +20,7 @@ from ms2pip.feature_names import get_feature_names_new
 from ms2pip.peptides import (
     Modifications, AMINO_ACID_IDS, write_amino_accid_masses
 )
-from ms2pip.ms2pip_c import ms2pip_pyx
+from ms2pip.ms2pip_c import predictions as ms2pip_predictions
 from ms2pip.exceptions import (
     UnknownModificationError,
     InvalidPEPRECError,
@@ -101,7 +101,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     spectra for all the peptides.
     """
 
-    ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
+    ms2pip_predictions.ms2pip_init(afile, modfile, modfile2)
 
     pcount = 0
 
@@ -166,14 +166,14 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         peaks_version = MODELS[model]["peaks_version"]
 
         # get ion mzs
-        mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+        mzs = ms2pip_predictions.get_mzs(modpeptide, peaks_version)
         mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
         # Predict the b- and y-ion intensities from the peptide
         # For C-term ion types (y, y++, z), flip the order of predictions,
         # because get_predictions follows order from vector file
         # enumerate works for variable number (and all) ion types
-        predictions = ms2pip_pyx.get_predictions(
+        predictions = ms2pip_predictions.get_predictions(
             peptide, modpeptide, ch, model_id, peaks_version, colen
         )  # SD: added colen
         prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
@@ -208,7 +208,7 @@ def process_spectra(
     empirical intensities.
     """
 
-    ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
+    ms2pip_predictions.ms2pip_init(afile, modfile, modfile2)
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
@@ -357,14 +357,14 @@ def process_spectra(
 
                 if vector_file:
                     # get targets
-                    targets = ms2pip_pyx.get_targets(
+                    targets = ms2pip_predictions.get_targets(
                         modpeptide, msms, peaks, float(fragerror), peaks_version
                     )
                     psmids.extend([title] * (len(targets[0])))
                     if "ce" in data.columns:
                         dvectors.append(
                             np.array(
-                                ms2pip_pyx.get_vector_ce(
+                                ms2pip_predictions.get_vector_ce(
                                     peptide, modpeptide, charge, colen
                                 ),
                                 dtype=np.uint16,
@@ -373,7 +373,7 @@ def process_spectra(
                     else:
                         dvectors.append(
                             np.array(
-                                ms2pip_pyx.get_vector(peptide, modpeptide, charge),
+                                ms2pip_predictions.get_vector(peptide, modpeptide, charge),
                                 dtype=np.uint16,
                             )
                         )
@@ -399,13 +399,13 @@ def process_spectra(
                     explainedall = 0
                     ts = []
                     ps = []
-                    predictions = ms2pip_pyx.get_predictions(
+                    predictions = ms2pip_predictions.get_predictions(
                         peptide, modpeptide, charge, model_id, peaks_version, colen
                     )
                     for m, p in zip(msms, peaks):
                         ft.write("%s;%f;%f;;;0\n" % (title, m, 2 ** p))
                     # get targets
-                    mzs, targets = ms2pip_pyx.get_targets_all(
+                    mzs, targets = ms2pip_predictions.get_targets_all(
                         modpeptide, msms, peaks, float(fragerror), "all"
                     )
                     # get mean by intensity values to normalize!; WRONG !!!
@@ -526,13 +526,13 @@ def process_spectra(
                     charge_buf.append(charge)
 
                     # get/append ion mzs, targets and predictions
-                    targets = ms2pip_pyx.get_targets(
+                    targets = ms2pip_predictions.get_targets(
                         modpeptide, msms, peaks, float(fragerror), peaks_version
                     )
                     target_buf.append([np.array(t, dtype=np.float32) for t in targets])
-                    mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+                    mzs = ms2pip_predictions.get_mzs(modpeptide, peaks_version)
                     mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
-                    predictions = ms2pip_pyx.get_predictions(
+                    predictions = ms2pip_predictions.get_predictions(
                         peptide, modpeptide, charge, model_id, peaks_version, colen
                     )  # SD: added colen
                     prediction_buf.append(

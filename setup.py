@@ -74,8 +74,8 @@ if 'CFLAGS' in os.environ:
 
 extensions = [
     Extension(
-        "ms2pip.ms2pip_c.ms2pip_pyx",
-        sources=["ms2pip/ms2pip_c/ms2pip_pyx.pyx"],
+        "ms2pip.ms2pip_c.predictions",
+        sources=["ms2pip/ms2pip_c/predictions.pyx"],
         extra_compile_args=extra_compile_args,
     )
 ]
