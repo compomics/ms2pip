@@ -61,8 +61,6 @@ with open("README.md", "r") as fh:
 extra_compile_args = [
         "-fno-var-tracking",
         '-Wno-unused-result',
-        '-Wno-cpp',
-        '-Wno-unused-function',
     ]
 
 libms2pip = ('ms2pip', {'sources': ["ms2pip/ms2pip_c/init.c", "ms2pip/ms2pip_c/features.c", "ms2pip/ms2pip_c/peaks.c"] + glob("ms2pip/ms2pip_c/models/*/*.c"), 'cflags': extra_compile_args})
