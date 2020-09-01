@@ -20,7 +20,7 @@ from ms2pip.feature_names import get_feature_names_new
 from ms2pip.peptides import (
     Modifications, AMINO_ACID_IDS, write_amino_accid_masses
 )
-from ms2pip.cython_modules import ms2pip_pyx
+from ms2pip.ms2pip_c import ms2pip_pyx
 from ms2pip.exceptions import (
     UnknownModificationError,
     InvalidPEPRECError,

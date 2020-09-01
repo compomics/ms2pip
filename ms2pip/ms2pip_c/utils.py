@@ -17,5 +17,5 @@ def get_include():
                 include_dirs=[np.get_include()])
         ...
     """
-    d = os.path.join(os.path.dirname(ms2pip.__file__), 'cython_modules')
+    d = os.path.join(os.path.dirname(ms2pip.__file__), 'ms2pip_c')
     return d

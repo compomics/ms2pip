@@ -65,7 +65,7 @@ extra_compile_args = [
         '-Wno-unused-function',
     ]
 
-libms2pip = ('ms2pip', {'sources': ["ms2pip/cython_modules/init.c", "ms2pip/cython_modules/features.c", "ms2pip/cython_modules/peaks.c"] + glob("ms2pip/models/*/*.c"), 'cflags': extra_compile_args})
+libms2pip = ('ms2pip', {'sources': ["ms2pip/ms2pip_c/init.c", "ms2pip/ms2pip_c/features.c", "ms2pip/ms2pip_c/peaks.c"] + glob("ms2pip/models/*/*.c"), 'cflags': extra_compile_args})
 
 if 'CFLAGS' in os.environ:
     cflags = shlex.split(os.environ['CFLAGS'])
@@ -74,8 +74,8 @@ if 'CFLAGS' in os.environ:
 
 extensions = [
     Extension(
-        "ms2pip.cython_modules.ms2pip_pyx",
-        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"],
+        "ms2pip.ms2pip_c.ms2pip_pyx",
+        sources=["ms2pip/ms2pip_c/ms2pip_pyx.pyx"],
         extra_compile_args=extra_compile_args,
     )
 ]

@@ -1,1 +1,1 @@
-from ms2pip.cython_modules.utils import get_include
+from ms2pip.ms2pip_c.utils import get_include
