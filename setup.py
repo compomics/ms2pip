@@ -100,7 +100,7 @@ setup(
     project_urls=PROJECT_URLS,
     keywords=KEYWORDS,
     classifiers=CLASSIFIERS,
-    packages=["ms2pip", "ms2pip.ms2pip_tools", "fasta2speclib"],
+    packages=["ms2pip", "ms2pip.ms2pip_c", "ms2pip.ms2pip_tools", "fasta2speclib"],
     include_package_data=True,
     entry_points={
         "console_scripts": [
