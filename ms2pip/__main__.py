@@ -2,14 +2,15 @@ import argparse
 import logging
 import multiprocessing
 
-from ms2pip.exceptions import (
-    InvalidPEPRECError,
-    NoValidPeptideSequencesError,
-    UnknownOutputFormatError,
-    UnknownFragmentationMethodError,
-    FragmentationModelRequiredError)
-from ms2pip.ms2pipC import MS2PIP, SUPPORTED_OUT_FORMATS, MODELS
 from ms2pip.config_parser import ConfigParser
+from ms2pip.exceptions import (FragmentationModelRequiredError,
+                               InvalidModificationFormattingError,
+                               InvalidPEPRECError,
+                               NoValidPeptideSequencesError,
+                               UnknownFragmentationMethodError,
+                               UnknownModificationError,
+                               UnknownOutputFormatError)
+from ms2pip.ms2pipC import MODELS, MS2PIP, SUPPORTED_OUT_FORMATS
 
 
 def print_logo():
@@ -136,6 +137,10 @@ def main():
     except NoValidPeptideSequencesError:
         root_logger.error("No peptides for which to predict intensities. \
             please provide at least one valid peptide sequence.")
+    except UnknownModificationError as e:
+        root_logger.error("Unknown modification: %s", e)
+    except InvalidModificationFormattingError as e:
+        root_logger.error("Invalid formatting of modifications: %s", e)
     except UnknownOutputFormatError as o:
         root_logger.error("Unknown output format: '%s' (supported formats: %s)", o, SUPPORTED_OUT_FORMATS)
     except UnknownFragmentationMethodError as f:

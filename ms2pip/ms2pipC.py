@@ -145,15 +145,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         # convert peptide string to integer list to speed up C code
         peptide = np.array([0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16)
-
-        try:
-            modpeptide = apply_mods(peptide, mods, PTMmap)
-        except UnknownModificationError as e:
-            logger.warn("Unknown modification: %s", e)
-            continue
-        except InvalidModificationFormattingError as e:
-            logger.error("Invalid formatting of modifications: %s", e)
-            continue
+        modpeptide = apply_mods(peptide, mods, PTMmap)
 
         pepid_buf.append(pepid)
         peplen = len(peptide) - 2
@@ -167,6 +159,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         # get ion mzs
         mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+
         mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
         # Predict the b- and y-ion intensities from the peptide
