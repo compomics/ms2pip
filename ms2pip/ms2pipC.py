@@ -1,35 +1,32 @@
 #!/usr/bin/env python
-import os
-import sys
+import csv
 import glob
 import itertools
 import logging
 import multiprocessing
 import multiprocessing.dummy
-import csv
+import os
+import sys
 from random import shuffle
 
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 
-from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
-from ms2pip.retention_time import RetentionTime
-from ms2pip.match_spectra import MatchSpectra
-from ms2pip.feature_names import get_feature_names_new
-from ms2pip.peptides import (
-    Modifications, AMINO_ACID_IDS, write_amino_accid_masses
-)
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (
-    UnknownModificationError,
-    InvalidPEPRECError,
-    NoValidPeptideSequencesError,
-    UnknownOutputFormatError,
-    UnknownFragmentationMethodError,
-    FragmentationModelRequiredError,
-    MissingConfigurationError,
-)
+from ms2pip.exceptions import (FragmentationModelRequiredError,
+                               InvalidModificationFormattingError,
+                               InvalidPEPRECError, MissingConfigurationError,
+                               NoValidPeptideSequencesError,
+                               UnknownFragmentationMethodError,
+                               UnknownModificationError,
+                               UnknownOutputFormatError)
+from ms2pip.feature_names import get_feature_names_new
+from ms2pip.match_spectra import MatchSpectra
+from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
+from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
+                             write_amino_accid_masses)
+from ms2pip.retention_time import RetentionTime
 
 logger = logging.getLogger("ms2pip")
 
@@ -153,6 +150,9 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
             modpeptide = apply_mods(peptide, mods, PTMmap)
         except UnknownModificationError as e:
             logger.warn("Unknown modification: %s", e)
+            continue
+        except InvalidModificationFormattingError as e:
+            logger.error("Invalid formatting of modifications: %s", e)
             continue
 
         pepid_buf.append(pepid)
@@ -616,6 +616,8 @@ def apply_mods(peptide, mods, PTMmap):
 
     if mods != "-":
         l = mods.split("|")
+        if len(l) % 2 != 0:
+            raise InvalidModificationFormattingError(mods)
         for i in range(0, len(l), 2):
             tl = l[i + 1]
             if tl in PTMmap:
