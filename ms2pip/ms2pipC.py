@@ -1,35 +1,32 @@
 #!/usr/bin/env python
-import os
-import sys
+import csv
 import glob
 import itertools
 import logging
 import multiprocessing
 import multiprocessing.dummy
-import csv
+import os
+import sys
 from random import shuffle
 
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 
-from ms2pip.ms2pip_tools import spectrum_output, calc_correlations
-from ms2pip.retention_time import RetentionTime
-from ms2pip.match_spectra import MatchSpectra
-from ms2pip.feature_names import get_feature_names_new
-from ms2pip.peptides import (
-    Modifications, AMINO_ACID_IDS, write_amino_accid_masses
-)
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (
-    UnknownModificationError,
-    InvalidPEPRECError,
-    NoValidPeptideSequencesError,
-    UnknownOutputFormatError,
-    UnknownFragmentationMethodError,
-    FragmentationModelRequiredError,
-    MissingConfigurationError,
-)
+from ms2pip.exceptions import (FragmentationModelRequiredError,
+                               InvalidModificationFormattingError,
+                               InvalidPEPRECError, MissingConfigurationError,
+                               NoValidPeptideSequencesError,
+                               UnknownFragmentationMethodError,
+                               UnknownModificationError,
+                               UnknownOutputFormatError)
+from ms2pip.feature_names import get_feature_names_new
+from ms2pip.match_spectra import MatchSpectra
+from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
+from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
+                             write_amino_accid_masses)
+from ms2pip.retention_time import RetentionTime
 
 logger = logging.getLogger("ms2pip")
 
@@ -93,6 +90,12 @@ MODELS = {
 }
 
 
+def pairwise(iterable):
+    "s -> (s0, s1), (s2, s3), (s4, s5), ..."
+    a = iter(iterable)
+    return zip(a, a)
+
+
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
     Function for each worker to process a list of peptides. The models are
@@ -132,6 +135,9 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     charges = specdict["charge"]
     del specdict
 
+    model_id = MODELS[model]["id"]
+    peaks_version = MODELS[model]["peaks_version"]
+
     for pepid in pepids:
         peptide = peptides[pepid]
         peptide = peptide.replace("L", "I")
@@ -144,16 +150,12 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
         if len(peptide) > 100:
+            logger.error("peptide too long: %s", peptide)
             continue
 
         # convert peptide string to integer list to speed up C code
         peptide = np.array([0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16)
-
-        try:
-            modpeptide = apply_mods(peptide, mods, PTMmap)
-        except UnknownModificationError as e:
-            logger.warn("Unknown modification: %s", e)
-            continue
+        modpeptide = apply_mods(peptide, mods, PTMmap)
 
         pepid_buf.append(pepid)
         peplen = len(peptide) - 2
@@ -162,11 +164,9 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         ch = charges[pepid]
         charge_buf.append(ch)
 
-        model_id = MODELS[model]["id"]
-        peaks_version = MODELS[model]["peaks_version"]
-
         # get ion mzs
         mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+
         mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
         # Predict the b- and y-ion intensities from the peptide
@@ -606,6 +606,20 @@ def prepare_titles(titles, num_cpu):
     return split_titles
 
 
+def parse_mods(modstring, PTMmap):
+    if modstring == "-":
+        return []
+    mods = []
+    modstring_parts = modstring.split("|")
+    if len(modstring_parts) % 2 != 0:
+        raise InvalidModificationFormattingError(modstring)
+    for pos, mod in pairwise(modstring_parts):
+        if mod not in PTMmap:
+            raise UnknownModificationError(mod)
+        mods.append((int(pos), PTMmap[mod]))
+    return mods
+
+
 def apply_mods(peptide, mods, PTMmap):
     """
     Takes a peptide sequence and a set of modifications. Returns the modified
@@ -613,16 +627,8 @@ def apply_mods(peptide, mods, PTMmap):
     version are hard coded in ms2pipfeatures_c.c for now.
     """
     modpeptide = np.array(peptide[:], dtype=np.uint16)
-
-    if mods != "-":
-        l = mods.split("|")
-        for i in range(0, len(l), 2):
-            tl = l[i + 1]
-            if tl in PTMmap:
-                modpeptide[int(l[i])] = PTMmap[tl]
-            else:
-                raise UnknownModificationError(tl)
-
+    for pos, mod in mods:
+        modpeptide[pos] = mod
     return modpeptide
 
 
@@ -826,6 +832,8 @@ class MS2PIP:
     amino acids, or containing B, J, O, U, X or Z).",
                 num_pep_filtered,
             )
+
+        data['modifications'] = data['modifications'].apply(parse_mods, args=(self.mods.ptm_ids,))
 
         if len(data) == 0:
             raise NoValidPeptideSequencesError()

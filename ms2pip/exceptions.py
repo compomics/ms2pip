@@ -24,3 +24,7 @@ class MissingConfigurationError(Exception):
 
 class FragmentationModelRequiredError(Exception):
     pass
+
+
+class InvalidModificationFormattingError(Exception):
+    pass
