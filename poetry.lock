@@ -441,7 +441,7 @@ description = "A framework for proteomics data analysis."
 name = "pyteomics"
 optional = false
 python-versions = "*"
-version = "4.3.2"
+version = "4.3.3"
 
 [package.extras]
 df = ["pandas"]
@@ -1168,8 +1168,8 @@ pyparsing = [
     {file = "pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1"},
 ]
 pyteomics = [
-    {file = "pyteomics-4.3.2-py2.py3-none-any.whl", hash = "sha256:4947e1f7dbf8c6cdad9db9382e7eb5ef0288dbfbcfe5dfa2f629f3b8a5f394fb"},
-    {file = "pyteomics-4.3.2.tar.gz", hash = "sha256:b3a9590869ef990cc9f5d4f2bb3af877213c3da49ddbb0370e170b45535d9b40"},
+    {file = "pyteomics-4.3.3-py2.py3-none-any.whl", hash = "sha256:a4a0afb4f50fa236d87c552639bead600d13a2aae2cae883d1478c7ecf9fe90b"},
+    {file = "pyteomics-4.3.3.tar.gz", hash = "sha256:9ab0864cf1de788f4e9ec1b50575c47aa90a571aa9f7bf41f92e458003d1857e"},
 ]
 pytest = [
     {file = "pytest-6.0.1-py3-none-any.whl", hash = "sha256:8b6007800c53fdacd5a5c192203f4e531eb2a1540ad9c752e052ec0f7143dbad"},
