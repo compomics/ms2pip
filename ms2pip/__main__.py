@@ -16,11 +16,11 @@ from ms2pip.ms2pipC import MODELS, MS2PIP, SUPPORTED_OUT_FORMATS
 
 def print_logo():
     logo = """
- __  __ ___  __ ___ ___ ___
-|  \/  / __||_ ) _ \_ _| _ \
-| |\/| \__ \/__|  _/| ||  _/
-|_|  |_|___/   |_| |___|_|
-
+ __  __ ___  __ ___ ___ ___  
+|  \/  / __||_ ) _ \_ _| _ \ 
+| |\/| \__ \/__|  _/| ||  _/ 
+|_|  |_|___/   |_| |___|_|   
+                             
 by CompOmics
 sven.degroeve@ugent.be
 ralf.gabriels@ugent.be
