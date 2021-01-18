@@ -134,19 +134,26 @@ def main():
             ms2pip.cleanup()
     except InvalidPEPRECError:
         root_logger.error("PEPREC file should start with header column")
+        exit(1)
     except NoValidPeptideSequencesError:
         root_logger.error("No peptides for which to predict intensities. \
             please provide at least one valid peptide sequence.")
+        exit(1)
     except UnknownModificationError as e:
         root_logger.error("Unknown modification: %s", e)
+        exit(1)
     except InvalidModificationFormattingError as e:
         root_logger.error("Invalid formatting of modifications: %s", e)
+        exit(1)
     except UnknownOutputFormatError as o:
         root_logger.error("Unknown output format: '%s' (supported formats: %s)", o, SUPPORTED_OUT_FORMATS)
+        exit(1)
     except UnknownFragmentationMethodError as f:
         root_logger.error("Unknown fragmentation method: %s (supported methods: %s)", f, MODELS.keys())
+        exit(1)
     except FragmentationModelRequiredError:
         root_logger.error("Please specify model in config file.")
+        exit(1)
 
 
 if __name__ == "__main__":
