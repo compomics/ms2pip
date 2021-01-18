@@ -95,8 +95,8 @@ class Modifications:
 
             if amino_acid == "N-term":
                 amino_acid_id = -1
-            elif amino_acid == "N-term":
-                amino_acid_id = -1
+            elif amino_acid == "C-term":
+                amino_acid_id = -2
             elif amino_acid in AMINO_ACID_IDS:
                 amino_acid_id = AMINO_ACID_IDS[amino_acid]
             else:
