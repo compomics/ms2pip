@@ -114,7 +114,7 @@ MS²PIP predictions can be compared to spectra in an
 ### Command line interface
 ```
 usage: ms2pip [-h] -c CONFIG_FILE [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
-              [-r] [-x] [-t] [-n NUM_CPU]
+              [-r] [-x] [-m] [-t] [-n NUM_CPU] [--sqldb-uri SQLDB_URI]
               <PEPREC file>
 
 positional arguments:
@@ -131,9 +131,14 @@ optional arguments:
   -r, --retention-time  add retention time predictions (requires DeepLC python
                         package)
   -x, --correlations    calculate correlations (if MGF is given)
+  -m, --match-spectra   match peptides to spectra based on predicted spectra
+                        (if MGF is given)
   -t, --tableau         create Tableau Reader file
   -n NUM_CPU, --num-cpu NUM_CPU
                         number of CPUs to use (default: all available)
+  --sqldb-uri SQLDB_URI
+                        use sql database of observed spectra instead of MGF
+                        files
 ```
 
 ### Input files
