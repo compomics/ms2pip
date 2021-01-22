@@ -5,10 +5,11 @@ import numpy as np
 
 from ms2pip.ms2pipC import MS2PIP
 
-class TestFeatureExtraction:
-    def __init__(self):
-        pass
 
+TEST_DIR = os.path.dirname(__file__)
+
+
+class TestFeatureExtraction:
     def _assert_get_feature_vectors(self, test_data, target_data):
         assert test_data[test_data.columns[:-3]].equals(
             target_data[target_data.columns[:-3]]
@@ -38,16 +39,18 @@ class TestFeatureExtraction:
             }
         }
         ms2pip = MS2PIP(
-            "tests/test_data/test.peprec",
-            spec_file="tests/test_data/hard_test.mgf",
-            vector_file="tests/test_data/test.h5",            
-            params=params
+            os.path.join(TEST_DIR, "test_data/test.peprec"),
+            spec_file=os.path.join(TEST_DIR, "test_data/hard_test.mgf"),
+            vector_file=os.path.join(TEST_DIR, "test_data/test.h5"),
+            params=params,
         )
         ms2pip.run()
 
         # Load target values
-        test_data = pd.read_hdf("tests/test_data/test.h5", "table")
-        target_data = pd.read_hdf("tests/test_data/hard_test_targetvectors.h5", "table")
+        test_data = pd.read_hdf(os.path.join(TEST_DIR, "test_data/test.h5"), "table")
+        target_data = pd.read_hdf(
+            os.path.join(TEST_DIR, "test_data/hard_test_targetvectors.h5"), "table"
+        )
 
         # Test
         self._assert_get_feature_vectors(test_data, target_data)
@@ -55,7 +58,7 @@ class TestFeatureExtraction:
         self._assert_get_targetsY(test_data, target_data)
         self._assert_get_psmid(test_data, target_data)
 
-        os.remove("tests/test_data/test.h5")
+        os.remove(os.path.join(TEST_DIR, "test_data/test.h5"))
 
     def test_real_spectra(self):
         # Run ms2pipC to extract features and targets from an .mgf and .PEPREC files
@@ -77,18 +80,23 @@ class TestFeatureExtraction:
             }
         }
         ms2pip = MS2PIP(
-            "tests/test_data/massivekb_selected_500.peprec",
-            spec_file="tests/test_data/massivekb_selected_500.mgf",
-            vector_file="tests/test_data/massivekb_selected_500_test.h5",            
+            os.path.join(TEST_DIR, "test_data/massivekb_selected_500.peprec"),
+            spec_file=os.path.join(TEST_DIR, "test_data/massivekb_selected_500.mgf"),
+            vector_file=os.path.join(
+                TEST_DIR, "test_data/massivekb_selected_500_test.h5"
+            ),
             params=params,
-            num_cpu=1
+            num_cpu=1,
         )
         ms2pip.run()
 
         # Load target values
-        test_data = pd.read_hdf("tests/test_data/massivekb_selected_500_test.h5", "table")
+        test_data = pd.read_hdf(
+            os.path.join(TEST_DIR, "test_data/massivekb_selected_500_test.h5"), "table"
+        )
         target_data = pd.read_hdf(
-            "tests/test_data/massivekb_selected_500_targetvectors.h5", "table"
+            os.path.join(TEST_DIR, "test_data/massivekb_selected_500_targetvectors.h5"),
+            "table",
         )
 
         # Test
@@ -97,4 +105,4 @@ class TestFeatureExtraction:
         self._assert_get_targetsY(test_data, target_data)
         self._assert_get_psmid(test_data, target_data)
 
-        os.remove("tests/test_data/massivekb_selected_500_test.h5")
+        os.remove(os.path.join(TEST_DIR, "test_data/massivekb_selected_500_test.h5"))
