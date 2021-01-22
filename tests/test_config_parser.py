@@ -3,9 +3,12 @@ import os
 from ms2pip.config_parser import ConfigParser
 
 
+TEST_DIR = os.path.dirname(__file__)
+
+
 class TestConfigParser:
     def test_load_ms2pip_txt(self):
-        config_file = "tests/test_data/config.txt"
+        config_file = os.path.join(TEST_DIR, "test_data/config.txt")
         config_parser = ConfigParser(config_file)
         config_parser.load()
 
@@ -25,7 +28,7 @@ class TestConfigParser:
         }
 
     def test_load_toml(self):
-        config_file = "tests/test_data/config.toml"
+        config_file = os.path.join(TEST_DIR, "test_data/config.toml")
         config_parser = ConfigParser(config_file)
         config_parser.load()
 
@@ -45,7 +48,7 @@ class TestConfigParser:
         }
 
     def test_write_toml(self):
-        test_config_file = "tests/test_data/config_test.toml"
+        test_config_file = os.path.join(TEST_DIR, "test_data/config_test.toml")
         config_parser = ConfigParser()
         target_config = {
             "ms2pip": {

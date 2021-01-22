@@ -1,13 +1,40 @@
+import os
+import re
+
+import numpy as np
 import pandas as pd
 
 from ms2pip.ms2pip_tools.spectrum_output import SpectrumOutput
 
 
+TEST_DIR = os.path.dirname(__file__)
+
+
 class TestSpectrumOutput:
     def test_integration(self):
+        def compare_line(test_line, target_line):
+            """Assert if two lines in spectrum output are the same."""
 
-        peprec = pd.read_pickle("tests/test_data/spectrum_output/input_peprec.pkl")
-        all_preds = pd.read_pickle("tests/test_data/spectrum_output/input_preds.pkl")
+            # Extract float values from line and use assert_allclose, to allow for
+            # float imprecisions
+            float_pattern = re.compile(r"[0-9]*[.][0-9]+")
+            test_floats = float_pattern.findall(test_line)
+            target_floats = float_pattern.findall(target_line)
+            assert len(test_floats) == len(target_floats)
+            [
+                np.testing.assert_allclose(float(te), float(ta), rtol=1e-5)
+                for te, ta in zip(test_floats, target_floats)
+            ]
+            assert float_pattern.sub(test_line, "") == float_pattern.sub(
+                target_line, ""
+            )
+
+        peprec = pd.read_pickle(
+            os.path.join(TEST_DIR, "test_data/spectrum_output/input_peprec.pkl")
+        )
+        all_preds = pd.read_pickle(
+            os.path.join(TEST_DIR, "test_data/spectrum_output/input_preds.pkl")
+        )
 
         params = {
             "ptm": [
@@ -37,7 +64,9 @@ class TestSpectrumOutput:
             return_stringbuffer=True,
         )
 
-        target_filename_base = "tests/test_data/spectrum_output/target"
+        target_filename_base = os.path.join(
+            TEST_DIR, "test_data/spectrum_output/target"
+        )
 
         # Test general output
         test_cases = [
@@ -51,7 +80,7 @@ class TestSpectrumOutput:
             test.seek(0)
             with open(target_filename_base + file_ext) as target:
                 for test_line, target_line in zip(test.readlines(), target.readlines()):
-                    assert test_line == target_line
+                    compare_line(test_line, target_line)
 
         # Test bibliospec output
         bibliospec_ssl, bibliospec_ms2 = so.write_bibliospec()
@@ -68,4 +97,4 @@ class TestSpectrumOutput:
                         "test_predictions.ms2", "target_predictions.ms2"
                     )
                     if not "CreationDate" in target_line:
-                        assert test_line == target_line
+                        compare_line(test_line, target_line)

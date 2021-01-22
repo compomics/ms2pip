@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -5,9 +7,11 @@ from ms2pip.retention_time import RetentionTime
 from ms2pip.config_parser import ConfigParser
 
 
+TEST_DIR = os.path.dirname(__file__)
+
 class TestRetentionTime:
     def test_prepare_deeplc_peptide_df(self):
-        peprec = pd.read_csv("tests/test_data/test.peprec", sep=" ")
+        peprec = pd.read_csv(os.path.join(TEST_DIR, "test_data/test.peprec"), sep=" ")
         config = {
             "deeplc": {
                 "calibration_file": False,
