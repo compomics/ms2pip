@@ -17,7 +17,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install setuptools numpy cython
+          pip install setuptools numpy cython flake8
+      - name: Check for syntax errors
+        run: |
+          flake8 ./ms2pip ./fasta2speclib --count --select=E9,F63,F7,F82 --show-source --statistics
       - name: Build sdist
         run: python setup.py sdist
       - uses: actions/upload-artifact@v2
@@ -25,69 +28,38 @@ jobs:
           name: dist
           path: dist/*.tar.gz
 
-  build-linux-wheels:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.9
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 numpy pandas cython pytest
-    - name: Check for syntax errors
-      run: |
-        pip install flake8
-        flake8 ./ms2pip ./fasta2speclib --count --select=E9,F63,F7,F82 --show-source --statistics
-    - name: Build manylinux wheels
-      uses: RalfG/python-wheels-manylinux-build@v0.3.3
-      with:
-        python-versions: 'cp36-cp36m cp37-cp37m cp38-cp38 cp39-cp39'
-        build-requirements: 'setuptools numpy cython'
-    - name: Test build
-      run: |
-        pip install dist/ms2pip-*-cp39-cp39-manylinux*_x86_64.whl
-        pytest
-    - uses: actions/upload-artifact@v2
-      with:
-        name: dist
-        path: dist/ms2pip-*-manylinux*.whl
-
-  build-macos-wheels:
-    runs-on: macos-latest
+  build-wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        os: [ubuntu-18.04, macos-latest]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 setuptools wheel numpy pandas cython pytest
-    - name: Check for syntax errors
-      run: |
-        pip install flake8
-        flake8 ./ms2pip ./fasta2speclib --count --select=E9,F63,F7,F82 --show-source --statistics
-    - name: Build wheels
-      run: |
-        python setup.py bdist_wheel
-    - name: Test build
-      run: |
-        pip install dist/ms2pip-*.whl
-        pytest
-    - uses: actions/upload-artifact@v2
-      with:
-        name: dist
-        path: dist/ms2pip-*-macosx*.whl
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        name: Install Python
+        with:
+          python-version: '3.7'
+      - name: Check for syntax errors
+        run: |
+          pip install flake8
+          flake8 ./ms2pip ./fasta2speclib --count --select=E9,F63,F7,F82 --show-source --statistics
+      - uses: joerick/cibuildwheel@v1.7.4
+        with:
+          output-dir: dist
+        env:
+          CIBW_BUILD: "cp3*-macosx_x86_64 cp3*-manylinux_x86_64"
+          CIBW_SKIP: "cp35-* cp39-macosx_x86_64" # see compomics/ms2pip_c#126
+          CIBW_BEFORE_BUILD: "pip install setuptools cython numpy"
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_TEST_COMMAND: "pytest {project}/tests"
+      - uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist/ms2pip-*.whl
 
   publish-to-pypi:
-    needs: [build-sdist, build-linux-wheels, build-macos-wheels]
+    needs: [build-sdist, build-wheels]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v2
