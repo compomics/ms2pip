@@ -39,7 +39,7 @@ def argument_parser():
         action="store",
         required=True,
         dest="config_file",
-        help="config file",
+        help="Configuration file: text-based (extensions `.txt`, `.config`, or `.ms2pip`) or TOML (extension `.toml`).",
     )
     parser.add_argument(
         "-s", "--spectrum-file",

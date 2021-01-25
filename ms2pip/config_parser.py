@@ -105,10 +105,14 @@ class ConfigParser:
 
         if config_format == "toml":
             self._load_toml()
-        elif config_format in ("txt", "config"):
+        elif config_format in ("txt", "config", "ms2pip"):
             self._load_ms2pip_txt()
         else:
-            raise UnsupportedConfigFormatError(config_format)
+            raise UnsupportedConfigFormatError(
+                "Configuration file should have extension `txt`, `config`, or "
+                "`ms2pip` (text-based format) or `toml` (TOML-based format), not "
+                f"`{config_format}`",
+            )
 
     def write(self, filepath=None, config_format="toml"):
         """
