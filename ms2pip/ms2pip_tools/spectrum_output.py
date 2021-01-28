@@ -2,19 +2,17 @@
 Write spectrum files from MS2PIP predictions.
 """
 
-# Standard library
-import os
+import itertools
 import logging
+import os
 from ast import literal_eval
+from functools import wraps
 from io import StringIO
 from operator import itemgetter
 from time import localtime, strftime
-from functools import wraps
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
-# Project imports
 from ms2pip.peptides import Modifications
-
 
 logger = logging.getLogger("ms2pip.spectrum_output")
 
@@ -662,6 +660,61 @@ class SpectrumOutput:
         )
 
         return file_obj_ssl, file_obj_ms2
+
+    @output_format('dlib')
+    def write_dlib(self):
+        """
+        Write MS2PIP predictions to DLIB.
+        """
+        from ms2pip.ms2pip_tools.dlib import Entries, open_sqlite, metadata
+        from sqlalchemy.sql import insert
+
+        if not self.normalization == "basepeak_10000":
+            self._normalize_spectra(method="basepeak_10000")
+            self._generate_preds_dict()
+        if not self.peprec_dict:
+            self._generate_peprec_dict()
+
+        # TODO: actually support non-append modes ...
+        logger.warn("write mode is ignored for DLIB at the file mode, although append or not is respected")
+
+        if self.return_stringbuffer:
+            raise NotImplementedError()
+
+        if not self.has_rt:
+            raise NotImplementedError()
+
+        filename = "{}.dlib".format(self.output_filename)
+        logger.info("writing results to %s", filename)
+
+        with open_sqlite(filename) as connection:
+            metadata.create_all()
+            for spec_id, peprec in self.peprec_dict.items():
+                seq = peprec["peptide"]
+                mods = peprec["modifications"]
+                charge = peprec["charge"]
+
+                prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
+                mod_seq = seq  # TODO: implement mods!
+
+                all_peaks = sorted(itertools.chain(self.preds_dict[spec_id]['peaks'].values()), key=itemgetter(1))
+                mzs = [peak[1] for peak in all_peaks]
+                intensities = [peak[2] for peak in all_peaks]
+
+                connection.execute(insert(Entries(
+                    PrecursorMz=prec_mz,
+                    PrecursorCharge=charge,
+                    PeptideModSeq=mod_seq,
+                    PeptideSeq=seq,
+                    Copies=1,
+                    RTInSeconds=peprec["rt"],
+                    Score=0,
+                    MassEncodedLength=0,
+                    MassArray=mzs,
+                    IntensityEncodedLength=len(intensities),
+                    IntensityArray=intensities,
+                    SourceFile=self.output_filename  # TODO: any alternative?
+                )))
 
     def get_normalized_predictions(self, normalization_method='tic'):
         """
