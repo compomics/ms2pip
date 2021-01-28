@@ -90,12 +90,6 @@ MODELS = {
 }
 
 
-def pairwise(iterable):
-    "s -> (s0, s1), (s2, s3), (s4, s5), ..."
-    a = iter(iterable)
-    return zip(a, a)
-
-
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
     Function for each worker to process a list of peptides. The models are
@@ -135,9 +129,6 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     charges = specdict["charge"]
     del specdict
 
-    model_id = MODELS[model]["id"]
-    peaks_version = MODELS[model]["peaks_version"]
-
     for pepid in pepids:
         peptide = peptides[pepid]
         peptide = peptide.replace("L", "I")
@@ -150,7 +141,6 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
         if len(peptide) > 100:
-            logger.error("peptide too long: %s", peptide)
             continue
 
         # convert peptide string to integer list to speed up C code
@@ -163,6 +153,9 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
 
         ch = charges[pepid]
         charge_buf.append(ch)
+
+        model_id = MODELS[model]["id"]
+        peaks_version = MODELS[model]["peaks_version"]
 
         # get ion mzs
         mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
@@ -606,20 +599,6 @@ def prepare_titles(titles, num_cpu):
     return split_titles
 
 
-def parse_mods(modstring, PTMmap):
-    if modstring == "-":
-        return []
-    mods = []
-    modstring_parts = modstring.split("|")
-    if len(modstring_parts) % 2 != 0:
-        raise InvalidModificationFormattingError(modstring)
-    for pos, mod in pairwise(modstring_parts):
-        if mod not in PTMmap:
-            raise UnknownModificationError(mod)
-        mods.append((int(pos), PTMmap[mod]))
-    return mods
-
-
 def apply_mods(peptide, mods, PTMmap):
     """
     Takes a peptide sequence and a set of modifications. Returns the modified
@@ -627,8 +606,18 @@ def apply_mods(peptide, mods, PTMmap):
     version are hard coded in ms2pipfeatures_c.c for now.
     """
     modpeptide = np.array(peptide[:], dtype=np.uint16)
-    for pos, mod in mods:
-        modpeptide[pos] = mod
+
+    if mods != "-":
+        l = mods.split("|")
+        if len(l) % 2 != 0:
+            raise InvalidModificationFormattingError(mods)
+        for i in range(0, len(l), 2):
+            tl = l[i + 1]
+            if tl in PTMmap:
+                modpeptide[int(l[i])] = PTMmap[tl]
+            else:
+                raise UnknownModificationError(tl)
+
     return modpeptide
 
 
@@ -832,8 +821,6 @@ class MS2PIP:
     amino acids, or containing B, J, O, U, X or Z).",
                 num_pep_filtered,
             )
-
-        data['modifications'] = data['modifications'].apply(parse_mods, args=(self.mods.ptm_ids,))
 
         if len(data) == 0:
             raise NoValidPeptideSequencesError()
