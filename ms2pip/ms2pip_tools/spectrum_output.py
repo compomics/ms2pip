@@ -674,8 +674,12 @@ class SpectrumOutput:
         if not self.peprec_dict:
             self._generate_peprec_dict()
 
-        # TODO: actually support non-append modes ...
+        filename = "{}.dlib".format(self.output_filename)
+        logger.info("writing results to %s", filename)
+
         logger.warn("write mode is ignored for DLIB at the file mode, although append or not is respected")
+        if 'a' not in self.write_mode and os.path.exists(filename):
+            os.remove(filename)
 
         if self.return_stringbuffer:
             raise NotImplementedError()
@@ -683,11 +687,9 @@ class SpectrumOutput:
         if not self.has_rt:
             raise NotImplementedError()
 
-        filename = "{}.dlib".format(self.output_filename)
-        logger.info("writing results to %s", filename)
-
         with open_sqlite(filename) as connection:
             metadata.create_all()
+
             for spec_id, peprec in self.peprec_dict.items():
                 seq = peprec["peptide"]
                 mods = peprec["modifications"]
