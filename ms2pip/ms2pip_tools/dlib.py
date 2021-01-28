@@ -34,11 +34,11 @@ class CompressedArray(TypeDecorator):
 
 metadata = MetaData()
 
-big_float = numpy.float32.newbyteorder(new_order='B')
-big_double = numpy.float64.newbyteorder(new_order='B')
+big_float = numpy.dtype('>f4')
+big_double = numpy.dtype('>f8')
 
 # TODO: index
-Entries = Table(
+Entry = Table(
     'entries',
     metadata,
     Column('PrecursorMz', Float, nullable=False),

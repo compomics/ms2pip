@@ -31,7 +31,7 @@ from ms2pip.retention_time import RetentionTime
 logger = logging.getLogger("ms2pip")
 
 # Supported output formats
-SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut"]
+SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut", "dlib"]
 
 # Models and their properties
 # id is passed to get_predictions to select model

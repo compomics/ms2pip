@@ -666,8 +666,7 @@ class SpectrumOutput:
         """
         Write MS2PIP predictions to DLIB.
         """
-        from ms2pip.ms2pip_tools.dlib import Entries, open_sqlite, metadata
-        from sqlalchemy.sql import insert
+        from ms2pip.ms2pip_tools.dlib import Entry, open_sqlite, metadata
 
         if not self.normalization == "basepeak_10000":
             self._normalize_spectra(method="basepeak_10000")
@@ -697,11 +696,11 @@ class SpectrumOutput:
                 prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
                 mod_seq = seq  # TODO: implement mods!
 
-                all_peaks = sorted(itertools.chain(self.preds_dict[spec_id]['peaks'].values()), key=itemgetter(1))
+                all_peaks = sorted(itertools.chain.from_iterable(self.preds_dict[spec_id]['peaks'].values()), key=itemgetter(1))
                 mzs = [peak[1] for peak in all_peaks]
                 intensities = [peak[2] for peak in all_peaks]
 
-                connection.execute(insert(Entries(
+                connection.execute(Entry.insert().values(
                     PrecursorMz=prec_mz,
                     PrecursorCharge=charge,
                     PeptideModSeq=mod_seq,
@@ -709,12 +708,14 @@ class SpectrumOutput:
                     Copies=1,
                     RTInSeconds=peprec["rt"],
                     Score=0,
-                    MassEncodedLength=0,
+                    MassEncodedLength=len(mzs),
                     MassArray=mzs,
                     IntensityEncodedLength=len(intensities),
                     IntensityArray=intensities,
                     SourceFile=self.output_filename  # TODO: any alternative?
-                )))
+                ))
+
+                # TODO: peptide to protein
 
     def get_normalized_predictions(self, normalization_method='tic'):
         """
