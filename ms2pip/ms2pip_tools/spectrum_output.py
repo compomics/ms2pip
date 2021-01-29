@@ -79,6 +79,8 @@ class SpectrumOutput:
         Write predictions to Bibliospec SSL/MS2 files (also for Skyline)
     write_spectronaut()
         Write predictions to Spectronaut CSV file
+    write_dlib()
+        Write predictions to a DLIB SQLite file
     write_csv()
         Write predictions to CSV file
     write_results(output_formats)
@@ -573,7 +575,7 @@ class SpectrumOutput:
         """
         General write function to call core write functions.
 
-        Note: Does not work for write_bibliospec function.
+        Note: Does not work for write_bibliospec and write_dlin functions.
         """
 
         # Normalize if necessary and make dicts
@@ -667,7 +669,7 @@ class SpectrumOutput:
     @output_format('dlib')
     def write_dlib(self):
         """
-        Write MS2PIP predictions to DLIB.
+        Write MS2PIP predictions to a DLIB SQLite file.
         """
         from ms2pip.ms2pip_tools.dlib import Entry, PeptideToProtein, open_sqlite, metadata
 
