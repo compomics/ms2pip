@@ -669,7 +669,7 @@ class SpectrumOutput:
         """
         Write MS2PIP predictions to DLIB.
         """
-        from ms2pip.ms2pip_tools.dlib import Entry, open_sqlite, metadata
+        from ms2pip.ms2pip_tools.dlib import Entry, PeptideToProtein, open_sqlite, metadata
 
         normalization = "basepeak_10000"
         precision = 5
@@ -724,7 +724,16 @@ class SpectrumOutput:
                     SourceFile=self.output_filename  # TODO: any alternative?
                 ))
 
-                # TODO: peptide to protein
+                if self.has_protein_list:
+                    protein_list = peprec["protein_list"]
+                    if isinstance(protein_list, str):
+                        protein_list = literal_eval(protein_list)
+
+                    for protein in protein_list:
+                        connection.execute(PeptideToProtein.insert().values(
+                            PeptideSeq=seq,
+                            ProteinAccession=protein
+                        ))
 
     def get_normalized_predictions(self, normalization_method='tic'):
         """

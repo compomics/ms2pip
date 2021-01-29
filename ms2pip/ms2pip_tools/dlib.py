@@ -1,9 +1,9 @@
 import zlib
+
 import numpy
 import sqlalchemy
-
-from sqlalchemy import (MetaData, Table, Column, Integer, String, Float,
-                        TypeDecorator, Boolean)
+from sqlalchemy import (Boolean, Column, Float, Index, Integer, MetaData,
+                        String, Table, TypeDecorator)
 from sqlalchemy.dialects.sqlite import BLOB
 
 
@@ -41,10 +41,10 @@ big_double = numpy.dtype('>f8')
 Entry = Table(
     'entries',
     metadata,
-    Column('PrecursorMz', Float, nullable=False),
+    Column('PrecursorMz', Float, nullable=False, index=True),
     Column('PrecursorCharge', Integer, nullable=False),
     Column('PeptideModSeq', String, nullable=False),
-    Column('PeptideSeq', String, nullable=False),
+    Column('PeptideSeq', String, nullable=False, index=True),
     Column('Copies', Integer, nullable=False),
     Column('RTInSeconds', Float, nullable=False),
     Column('Score', Float, nullable=False),
@@ -61,12 +61,14 @@ Entry = Table(
     Column('SourceFile', String, nullable=False),
 )
 
+Index('ix_entries_PeptideModSeq_PrecursorCharge_SourceFile', Entry.c.PeptideModSeq, Entry.c.PrecursorCharge, Entry.c.SourceFile)
+
 PeptideToProtein = Table(
     'peptidetoprotein',
     metadata,
-    Column('PeptideSeq', String),
-    Column('isDecoy', Boolean),
-    Column('ProteinAccession', String),
+    Column('PeptideSeq', String, nullable=False, index=True),
+    Column('isDecoy', Boolean, nullable=True),
+    Column('ProteinAccession', String, nullable=False, index=True),
 )
 
 
