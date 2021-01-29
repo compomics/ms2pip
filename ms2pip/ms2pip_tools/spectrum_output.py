@@ -689,10 +689,10 @@ class SpectrumOutput:
             os.remove(filename)
 
         if self.return_stringbuffer:
-            raise NotImplementedError()
+            raise NotImplementedError("`return_stringbuffer` not implemented for DLIB output.")
 
         if not self.has_rt:
-            raise NotImplementedError()
+            raise NotImplementedError("Retention times required to write DLIB file.")
 
         with open_sqlite(filename) as connection:
             metadata.create_all()
