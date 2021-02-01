@@ -575,7 +575,7 @@ class SpectrumOutput:
         """
         General write function to call core write functions.
 
-        Note: Does not work for write_bibliospec and write_dlin functions.
+        Note: Does not work for write_bibliospec and write_dlib functions.
         """
 
         # Normalize if necessary and make dicts
