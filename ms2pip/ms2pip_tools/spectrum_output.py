@@ -699,43 +699,44 @@ class SpectrumOutput:
         with open_sqlite(filename) as connection:
             metadata.create_all()
 
-            for spec_id, peprec in self.peprec_dict.items():
-                seq = peprec["peptide"]
-                mods = peprec["modifications"]
-                charge = peprec["charge"]
+            with connection.begin():
+                for spec_id, peprec in self.peprec_dict.items():
+                    seq = peprec["peptide"]
+                    mods = peprec["modifications"]
+                    charge = peprec["charge"]
 
-                prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-                mod_seq = self._get_diff_modified_sequence(seq, mods, precision=precision)
+                    prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
+                    mod_seq = self._get_diff_modified_sequence(seq, mods, precision=precision)
 
-                all_peaks = sorted(itertools.chain.from_iterable(self.preds_dict[spec_id]['peaks'].values()), key=itemgetter(1))
-                mzs = [peak[1] for peak in all_peaks]
-                intensities = [peak[2] for peak in all_peaks]
+                    all_peaks = sorted(itertools.chain.from_iterable(self.preds_dict[spec_id]['peaks'].values()), key=itemgetter(1))
+                    mzs = [peak[1] for peak in all_peaks]
+                    intensities = [peak[2] for peak in all_peaks]
 
-                connection.execute(Entry.insert().values(
-                    PrecursorMz=prec_mz,
-                    PrecursorCharge=charge,
-                    PeptideModSeq=mod_seq,
-                    PeptideSeq=seq,
-                    Copies=1,
-                    RTInSeconds=peprec["rt"],
-                    Score=0,
-                    MassEncodedLength=len(mzs),
-                    MassArray=mzs,
-                    IntensityEncodedLength=len(intensities),
-                    IntensityArray=intensities,
-                    SourceFile=self.output_filename  # TODO: any alternative?
-                ))
+                    connection.execute(Entry.insert().values(
+                        PrecursorMz=prec_mz,
+                        PrecursorCharge=charge,
+                        PeptideModSeq=mod_seq,
+                        PeptideSeq=seq,
+                        Copies=1,
+                        RTInSeconds=peprec["rt"],
+                        Score=0,
+                        MassEncodedLength=len(mzs),
+                        MassArray=mzs,
+                        IntensityEncodedLength=len(intensities),
+                        IntensityArray=intensities,
+                        SourceFile=self.output_filename  # TODO: any alternative?
+                    ))
 
-                if self.has_protein_list:
-                    protein_list = peprec["protein_list"]
-                    if isinstance(protein_list, str):
-                        protein_list = literal_eval(protein_list)
+                    if self.has_protein_list:
+                        protein_list = peprec["protein_list"]
+                        if isinstance(protein_list, str):
+                            protein_list = literal_eval(protein_list)
 
-                    for protein in protein_list:
-                        connection.execute(PeptideToProtein.insert().values(
-                            PeptideSeq=seq,
-                            ProteinAccession=protein
-                        ))
+                        for protein in protein_list:
+                            connection.execute(PeptideToProtein.insert().values(
+                                PeptideSeq=seq,
+                                ProteinAccession=protein
+                            ))
 
     def get_normalized_predictions(self, normalization_method='tic'):
         """
