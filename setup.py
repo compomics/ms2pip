@@ -42,7 +42,7 @@ CLASSIFIERS = [
 ]
 INSTALL_REQUIRES = [
     "biopython>=1.74,<2",
-    "numpy>=1.16,<2",
+    "numpy>=1.16.6,<2",
     "pandas>=0.24,<2",
     "pyteomics>=3.5,<5",
     "scipy>=1.2,<2",
