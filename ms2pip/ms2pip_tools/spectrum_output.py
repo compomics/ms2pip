@@ -686,7 +686,7 @@ class SpectrumOutput:
         filename = "{}.dlib".format(self.output_filename)
         logger.info("writing results to %s", filename)
 
-        logger.warn("write mode is ignored for DLIB at the file mode, although append or not is respected")
+        logger.debug("write mode is ignored for DLIB at the file mode, although append or not is respected")
         if 'a' not in self.write_mode and os.path.exists(filename):
             os.remove(filename)
 
