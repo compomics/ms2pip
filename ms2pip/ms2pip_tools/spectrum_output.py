@@ -676,9 +676,12 @@ class SpectrumOutput:
         """
         Write MS2PIP predictions to a DLIB SQLite file.
         """
+        from sqlalchemy import select
         from ms2pip.ms2pip_tools.dlib import (
+            DLIB_VERSION,
             Entry,
             PeptideToProtein,
+            Metadata,
             open_sqlite,
             metadata,
         )
@@ -715,6 +718,14 @@ class SpectrumOutput:
             peptide_to_proteins = set()
 
             with connection.begin():
+                version = connection.execute(select([Metadata.c.Value]).where(Metadata.c.Key == "version")).scalar()
+                if version is None:
+                    connection.execute(Metadata.insert().values(
+                        Key="version",
+                        Value=DLIB_VERSION,
+                    ))
+
+            with connection.begin():
                 for spec_id, peprec in self.peprec_dict.items():
                     seq = peprec["peptide"]
                     mods = peprec["modifications"]
@@ -747,7 +758,7 @@ class SpectrumOutput:
                             MassArray=mzs,
                             IntensityEncodedLength=len(intensities),
                             IntensityArray=intensities,
-                            SourceFile=self.output_filename,  # TODO: any alternative?
+                            SourceFile=self.output_filename,
                         )
                     )
 

@@ -7,6 +7,9 @@ from sqlalchemy import (Boolean, Column, Float, Index, Integer, MetaData,
 from sqlalchemy.dialects.sqlite import BLOB
 
 
+DLIB_VERSION = "0.1.14"
+
+
 class CompressedArray(TypeDecorator):
     """ Sqlite-like does not support arrays.
         Let's use a custom type decorator.
