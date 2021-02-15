@@ -671,17 +671,112 @@ class SpectrumOutput:
 
         return file_obj_ssl, file_obj_ms2
 
+    def _write_dlib_metadata(self, connection):
+        from sqlalchemy import select
+        from ms2pip.ms2pip_tools.dlib import (
+            DLIB_VERSION,
+            Metadata,
+        )
+
+        with connection.begin():
+            version = connection.execute(
+                select([Metadata.c.Value]).where(Metadata.c.Key == "version")
+            ).scalar()
+            if version is None:
+                connection.execute(
+                    Metadata.insert().values(
+                        Key="version",
+                        Value=DLIB_VERSION,
+                    )
+                )
+
+    def _write_dlib_entries(self, connection, precision):
+        from ms2pip.ms2pip_tools.dlib import Entry
+
+        peptide_to_proteins = set()
+
+        with connection.begin():
+            for spec_id, peprec in self.peprec_dict.items():
+                seq = peprec["peptide"]
+                mods = peprec["modifications"]
+                charge = peprec["charge"]
+
+                prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
+                mod_seq = self._get_diff_modified_sequence(
+                    seq, mods, precision=precision
+                )
+
+                all_peaks = sorted(
+                    itertools.chain.from_iterable(
+                        self.preds_dict[spec_id]["peaks"].values()
+                    ),
+                    key=itemgetter(1),
+                )
+                mzs = [peak[1] for peak in all_peaks]
+                intensities = [peak[2] for peak in all_peaks]
+
+                connection.execute(
+                    Entry.insert().values(
+                        PrecursorMz=prec_mz,
+                        PrecursorCharge=charge,
+                        PeptideModSeq=mod_seq,
+                        PeptideSeq=seq,
+                        Copies=1,
+                        RTInSeconds=peprec["rt"],
+                        Score=0,
+                        MassEncodedLength=len(mzs),
+                        MassArray=mzs,
+                        IntensityEncodedLength=len(intensities),
+                        IntensityArray=intensities,
+                        SourceFile=self.output_filename,
+                    )
+                )
+
+                if self.has_protein_list:
+                    protein_list = peprec["protein_list"]
+                    if isinstance(protein_list, str):
+                        protein_list = literal_eval(protein_list)
+
+                    for protein in protein_list:
+                        peptide_to_proteins.add((seq, protein))
+
+        return peptide_to_proteins
+
+    def _write_dlib_peptide_to_protein(self, connection, peptide_to_proteins):
+        from ms2pip.ms2pip_tools.dlib import PeptideToProtein
+
+        if not self.has_protein_list:
+            return
+
+        with connection.begin():
+            sql_peptide_to_proteins = set()
+            proteins = {protein for _, protein in peptide_to_proteins}
+            for peptide_to_protein in connection.execute(
+                PeptideToProtein.select().where(
+                    PeptideToProtein.c.ProteinAccession.in_(proteins)
+                )
+            ):
+                sql_peptide_to_proteins.add(
+                    (
+                        peptide_to_protein.PeptideSeq,
+                        peptide_to_protein.ProteinAccession,
+                    )
+                )
+
+            peptide_to_proteins.difference_update(sql_peptide_to_proteins)
+            for seq, protein in peptide_to_proteins:
+                connection.execute(
+                    PeptideToProtein.insert().values(
+                        PeptideSeq=seq, ProteinAccession=protein
+                    )
+                )
+
     @output_format("dlib")
     def write_dlib(self):
         """
         Write MS2PIP predictions to a DLIB SQLite file.
         """
-        from sqlalchemy import select
         from ms2pip.ms2pip_tools.dlib import (
-            DLIB_VERSION,
-            Entry,
-            PeptideToProtein,
-            Metadata,
             open_sqlite,
             metadata,
         )
@@ -715,84 +810,9 @@ class SpectrumOutput:
 
         with open_sqlite(filename) as connection:
             metadata.create_all()
-            peptide_to_proteins = set()
-
-            with connection.begin():
-                version = connection.execute(select([Metadata.c.Value]).where(Metadata.c.Key == "version")).scalar()
-                if version is None:
-                    connection.execute(Metadata.insert().values(
-                        Key="version",
-                        Value=DLIB_VERSION,
-                    ))
-
-            with connection.begin():
-                for spec_id, peprec in self.peprec_dict.items():
-                    seq = peprec["peptide"]
-                    mods = peprec["modifications"]
-                    charge = peprec["charge"]
-
-                    prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-                    mod_seq = self._get_diff_modified_sequence(
-                        seq, mods, precision=precision
-                    )
-
-                    all_peaks = sorted(
-                        itertools.chain.from_iterable(
-                            self.preds_dict[spec_id]["peaks"].values()
-                        ),
-                        key=itemgetter(1),
-                    )
-                    mzs = [peak[1] for peak in all_peaks]
-                    intensities = [peak[2] for peak in all_peaks]
-
-                    connection.execute(
-                        Entry.insert().values(
-                            PrecursorMz=prec_mz,
-                            PrecursorCharge=charge,
-                            PeptideModSeq=mod_seq,
-                            PeptideSeq=seq,
-                            Copies=1,
-                            RTInSeconds=peprec["rt"],
-                            Score=0,
-                            MassEncodedLength=len(mzs),
-                            MassArray=mzs,
-                            IntensityEncodedLength=len(intensities),
-                            IntensityArray=intensities,
-                            SourceFile=self.output_filename,
-                        )
-                    )
-
-                    if self.has_protein_list:
-                        protein_list = peprec["protein_list"]
-                        if isinstance(protein_list, str):
-                            protein_list = literal_eval(protein_list)
-
-                        for protein in protein_list:
-                            peptide_to_proteins.add((seq, protein))
-
-            if self.has_protein_list:
-                with connection.begin():
-                    sql_peptide_to_proteins = set()
-                    proteins = {protein for _, protein in peptide_to_proteins}
-                    for peptide_to_protein in connection.execute(
-                        PeptideToProtein.select().where(
-                            PeptideToProtein.c.ProteinAccession.in_(proteins)
-                        )
-                    ):
-                        sql_peptide_to_proteins.add(
-                            (
-                                peptide_to_protein.PeptideSeq,
-                                peptide_to_protein.ProteinAccession,
-                            )
-                        )
-
-                    peptide_to_proteins.difference_update(sql_peptide_to_proteins)
-                    for seq, protein in peptide_to_proteins:
-                        connection.execute(
-                            PeptideToProtein.insert().values(
-                                PeptideSeq=seq, ProteinAccession=protein
-                            )
-                        )
+            self._write_dlib_metadata(connection)
+            peptide_to_proteins = self._write_dlib_entries(connection, precision)
+            self._write_dlib_peptide_to_protein(connection, peptide_to_proteins)
 
     def get_normalized_predictions(self, normalization_method="tic"):
         """
