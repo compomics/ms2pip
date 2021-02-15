@@ -37,7 +37,6 @@ metadata = MetaData()
 big_float = numpy.dtype('>f4')
 big_double = numpy.dtype('>f8')
 
-# TODO: index
 Entry = Table(
     'entries',
     metadata,
@@ -69,6 +68,13 @@ PeptideToProtein = Table(
     Column('PeptideSeq', String, nullable=False, index=True),
     Column('isDecoy', Boolean, nullable=True),
     Column('ProteinAccession', String, nullable=False, index=True),
+)
+
+Metadata = Table(
+    'metadata',
+    metadata,
+    Column('Key', String, nullable=False, index=True),
+    Column('Value', String, nullable=False),
 )
 
 
