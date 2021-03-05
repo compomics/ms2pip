@@ -461,6 +461,10 @@ def run_batches(peprec, decoy=False):
             logging.info("Writing Spectronaut CSV file")
             spec_out.write_spectronaut()
 
+        if "dlib" in params["output_filetype"]:
+            logging.info("Writing DLIB SQLite file")
+            spec_out.write_dlib()
+
         del all_preds
         del peprec_batch
 

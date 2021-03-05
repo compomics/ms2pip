@@ -2,19 +2,17 @@
 Write spectrum files from MS2PIP predictions.
 """
 
-# Standard library
-import os
+import itertools
 import logging
+import os
 from ast import literal_eval
+from functools import wraps
 from io import StringIO
 from operator import itemgetter
 from time import localtime, strftime
-from functools import wraps
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
-# Project imports
 from ms2pip.peptides import Modifications
-
 
 logger = logging.getLogger("ms2pip.spectrum_output")
 
@@ -29,7 +27,9 @@ def writer(**kwargs):
         @wraps(write_function)
         def wrapper(self):
             return self._write_general(write_function, **kwargs)
+
         return wrapper
+
     return deco
 
 
@@ -81,6 +81,8 @@ class SpectrumOutput:
         Write predictions to Bibliospec SSL/MS2 files (also for Skyline)
     write_spectronaut()
         Write predictions to Spectronaut CSV file
+    write_dlib()
+        Write predictions to a DLIB SQLite file
     write_csv()
         Write predictions to CSV file
     write_results(output_formats)
@@ -121,7 +123,7 @@ class SpectrumOutput:
         self.peprec_dict = None
         self.preds_dict = None
         self.normalization = None
-        self.ssl_modification_mapping = None
+        self.diff_modification_mapping = {}
 
         self.has_rt = "rt" in self.peprec.columns
         self.has_protein_list = "protein_list" in self.peprec.columns
@@ -290,43 +292,42 @@ class SpectrumOutput:
             last_scannr = int(last_line.split("\t")[1])
         return last_scannr
 
-    def _generate_ssl_modification_mapping(self):
+    def _generate_diff_modification_mapping(self, precision):
         """
         Make modification name -> ssl modification name mapping.
         """
-        self.ssl_modification_mapping = {
-            ptm.split(",")[0]: "{:+.1f}".format(round(float(ptm.split(",")[1]), 1))
+        self.diff_modification_mapping[precision] = {
+            ptm.split(",")[0]: "{0:+.{1}f}".format(float(ptm.split(",")[1]), precision)
             for ptm in self.params["ptm"]
         }
 
-    def _get_ssl_modified_sequence(self, sequence, modifications):
+    def _get_diff_modified_sequence(self, sequence, modifications, precision=1):
         """
         Build BiblioSpec SSL modified sequence string.
         """
         pep = list(sequence)
+        mapping = self.diff_modification_mapping[precision]
 
         for loc, name in zip(
             modifications.split("|")[::2], modifications.split("|")[1::2]
         ):
             # C-term mod
             if loc == "-1":
-                pep[-1] = pep[-1] + "[{}]".format(self.ssl_modification_mapping[name])
+                pep[-1] = pep[-1] + "[{}]".format(mapping[name])
             # N-term mod
             elif loc == "0":
-                pep[0] = pep[0] + "[{}]".format(self.ssl_modification_mapping[name])
+                pep[0] = pep[0] + "[{}]".format(mapping[name])
             # Normal mod
             else:
-                pep[int(loc) - 1] = pep[int(loc) - 1] + "[{}]".format(
-                    self.ssl_modification_mapping[name]
-                )
+                pep[int(loc) - 1] = pep[int(loc) - 1] + "[{}]".format(mapping[name])
         return "".join(pep)
 
-    @output_format('msp')
+    @output_format("msp")
     @writer(
         file_suffix="_predictions.msp",
         normalization_method="basepeak_10000",
         requires_dicts=True,
-        requires_ssl_modifications=False,
+        requires_diff_modifications=False,
     )
     def write_msp(self, file_object):
         """
@@ -374,12 +375,12 @@ class SpectrumOutput:
 
             file_object.writelines([line + "\n" for line in out] + ["\n"])
 
-    @output_format('mgf')
+    @output_format("mgf")
     @writer(
         file_suffix="_predictions.mgf",
         normalization_method="basepeak_10000",
         requires_dicts=True,
-        requires_ssl_modifications=False,
+        requires_diff_modifications=False,
     )
     def write_mgf(self, file_object):
         """
@@ -419,12 +420,12 @@ class SpectrumOutput:
             out.append("END IONS\n")
             file_object.writelines([line + "\n" for line in out])
 
-    @output_format('spectronaut')
+    @output_format("spectronaut")
     @writer(
         file_suffix="_predictions_spectronaut.csv",
         normalization_method="tic",
         requires_dicts=False,
-        requires_ssl_modifications=True,
+        requires_diff_modifications=True,
     )
     def write_spectronaut(self, file_obj):
         """
@@ -441,7 +442,7 @@ class SpectrumOutput:
 
         # ModifiedPeptide and PrecursorMz columns
         spectronaut_peprec["ModifiedPeptide"] = spectronaut_peprec.apply(
-            lambda row: self._get_ssl_modified_sequence(
+            lambda row: self._get_diff_modified_sequence(
                 row["peptide"], row["modifications"]
             ),
             axis=1,
@@ -532,11 +533,13 @@ class SpectrumOutput:
             ms2_filename = os.path.basename(self.output_filename) + "_predictions.ms2"
 
             peaks = self._get_peak_string(
-                self.preds_dict[spec_id]["peaks"], sep="\t", include_annotations=False,
+                self.preds_dict[spec_id]["peaks"],
+                sep="\t",
+                include_annotations=False,
             )
 
             if isinstance(mods, str) and mods != "-" and mods != "":
-                mod_seq = self._get_ssl_modified_sequence(seq, mods)
+                mod_seq = self._get_diff_modified_sequence(seq, mods)
             else:
                 mod_seq = seq
 
@@ -568,12 +571,13 @@ class SpectrumOutput:
         file_suffix,
         normalization_method,
         requires_dicts,
-        requires_ssl_modifications,
+        requires_diff_modifications,
+        diff_modification_precision=1,
     ):
         """
         General write function to call core write functions.
 
-        Note: Does not work for write_bibliospec function.
+        Note: Does not work for write_bibliospec and write_dlib functions.
         """
 
         # Normalize if necessary and make dicts
@@ -586,8 +590,11 @@ class SpectrumOutput:
         if requires_dicts and not self.peprec_dict:
             self._generate_peprec_dict()
 
-        if requires_ssl_modifications and not self.ssl_modification_mapping:
-            self._generate_ssl_modification_mapping()
+        if (
+            requires_diff_modifications
+            and diff_modification_precision not in self.diff_modification_mapping
+        ):
+            self._generate_diff_modification_mapping(diff_modification_precision)
 
         # Write to file or stringbuffer
         if self.return_stringbuffer:
@@ -602,15 +609,16 @@ class SpectrumOutput:
 
         return file_object
 
-    @output_format('bibliospec')
+    @output_format("bibliospec")
     def write_bibliospec(self):
         """
         Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
         (For example for use in Skyline).
         """
 
-        if not self.ssl_modification_mapping:
-            self._generate_ssl_modification_mapping()
+        precision = 1
+        if precision not in self.diff_modification_mapping:
+            self._generate_diff_modification_mapping(precision)
 
         # Normalize if necessary and make dicts
         if not self.normalization == "basepeak_10000":
@@ -663,20 +671,163 @@ class SpectrumOutput:
 
         return file_obj_ssl, file_obj_ms2
 
-    def get_normalized_predictions(self, normalization_method='tic'):
+    def _write_dlib_metadata(self, connection):
+        from sqlalchemy import select
+        from ms2pip.ms2pip_tools.dlib import (
+            DLIB_VERSION,
+            Metadata,
+        )
+
+        with connection.begin():
+            version = connection.execute(
+                select([Metadata.c.Value]).where(Metadata.c.Key == "version")
+            ).scalar()
+            if version is None:
+                connection.execute(
+                    Metadata.insert().values(
+                        Key="version",
+                        Value=DLIB_VERSION,
+                    )
+                )
+
+    def _write_dlib_entries(self, connection, precision):
+        from ms2pip.ms2pip_tools.dlib import Entry
+
+        peptide_to_proteins = set()
+
+        with connection.begin():
+            for spec_id, peprec in self.peprec_dict.items():
+                seq = peprec["peptide"]
+                mods = peprec["modifications"]
+                charge = peprec["charge"]
+
+                prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
+                mod_seq = self._get_diff_modified_sequence(
+                    seq, mods, precision=precision
+                )
+
+                all_peaks = sorted(
+                    itertools.chain.from_iterable(
+                        self.preds_dict[spec_id]["peaks"].values()
+                    ),
+                    key=itemgetter(1),
+                )
+                mzs = [peak[1] for peak in all_peaks]
+                intensities = [peak[2] for peak in all_peaks]
+
+                connection.execute(
+                    Entry.insert().values(
+                        PrecursorMz=prec_mz,
+                        PrecursorCharge=charge,
+                        PeptideModSeq=mod_seq,
+                        PeptideSeq=seq,
+                        Copies=1,
+                        RTInSeconds=peprec["rt"],
+                        Score=0,
+                        MassEncodedLength=len(mzs),
+                        MassArray=mzs,
+                        IntensityEncodedLength=len(intensities),
+                        IntensityArray=intensities,
+                        SourceFile=self.output_filename,
+                    )
+                )
+
+                if self.has_protein_list:
+                    protein_list = peprec["protein_list"]
+                    if isinstance(protein_list, str):
+                        protein_list = literal_eval(protein_list)
+
+                    for protein in protein_list:
+                        peptide_to_proteins.add((seq, protein))
+
+        return peptide_to_proteins
+
+    def _write_dlib_peptide_to_protein(self, connection, peptide_to_proteins):
+        from ms2pip.ms2pip_tools.dlib import PeptideToProtein
+
+        if not self.has_protein_list:
+            return
+
+        with connection.begin():
+            sql_peptide_to_proteins = set()
+            proteins = {protein for _, protein in peptide_to_proteins}
+            for peptide_to_protein in connection.execute(
+                PeptideToProtein.select().where(
+                    PeptideToProtein.c.ProteinAccession.in_(proteins)
+                )
+            ):
+                sql_peptide_to_proteins.add(
+                    (
+                        peptide_to_protein.PeptideSeq,
+                        peptide_to_protein.ProteinAccession,
+                    )
+                )
+
+            peptide_to_proteins.difference_update(sql_peptide_to_proteins)
+            for seq, protein in peptide_to_proteins:
+                connection.execute(
+                    PeptideToProtein.insert().values(
+                        PeptideSeq=seq, ProteinAccession=protein
+                    )
+                )
+
+    @output_format("dlib")
+    def write_dlib(self):
+        """
+        Write MS2PIP predictions to a DLIB SQLite file.
+        """
+        from ms2pip.ms2pip_tools.dlib import (
+            open_sqlite,
+            metadata,
+        )
+
+        normalization = "basepeak_10000"
+        precision = 5
+        if not self.normalization == normalization:
+            self._normalize_spectra(method=normalization)
+            self._generate_preds_dict()
+        if not self.peprec_dict:
+            self._generate_peprec_dict()
+        if precision not in self.diff_modification_mapping:
+            self._generate_diff_modification_mapping(precision)
+
+        filename = "{}.dlib".format(self.output_filename)
+        logger.info("writing results to %s", filename)
+
+        logger.debug(
+            "write mode is ignored for DLIB at the file mode, although append or not is respected"
+        )
+        if "a" not in self.write_mode and os.path.exists(filename):
+            os.remove(filename)
+
+        if self.return_stringbuffer:
+            raise NotImplementedError(
+                "`return_stringbuffer` not implemented for DLIB output."
+            )
+
+        if not self.has_rt:
+            raise NotImplementedError("Retention times required to write DLIB file.")
+
+        with open_sqlite(filename) as connection:
+            metadata.create_all()
+            self._write_dlib_metadata(connection)
+            peptide_to_proteins = self._write_dlib_entries(connection, precision)
+            self._write_dlib_peptide_to_protein(connection, peptide_to_proteins)
+
+    def get_normalized_predictions(self, normalization_method="tic"):
         """
         Return normalized copy of predictions.
         """
         self._normalize_spectra(method=normalization_method)
         return self.all_preds.copy()
 
-    @output_format('csv')
+    @output_format("csv")
     def write_csv(self):
         """
         Write MS2PIP predictions to CSV.
         """
 
-        self._normalize_spectra(method='tic')
+        self._normalize_spectra(method="tic")
 
         # Write to file or stringbuffer
         if self.return_stringbuffer:
