@@ -9,7 +9,7 @@
 #include "ms2pip_features_c_catboost.c"
 
 #include "../models/CID.h"
-#include "../models/HCD.h"
+#include "../models/HCD-2019.h"
 #include "../models/TTOF5600.h"
 #include "../models/TMT.h"
 #include "../models/iTRAQ.h"
