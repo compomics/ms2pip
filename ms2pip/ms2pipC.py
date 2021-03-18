@@ -87,6 +87,18 @@ MODELS = {
         "peaks_version": "ch2",
         "features_version": "normal",
     },
+    # "HCD2021": {
+    #     "id": 9,
+    #     "ion_types": ["B", "Y"],
+    #     "peaks_version": "general",
+    #     "features_version": "normal",
+    # },
+    "HCD2021fast": {
+        "id": 10,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+    },
 }
 
 
