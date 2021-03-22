@@ -104,6 +104,19 @@ pip install --editable .
 
 ## Usage
 
+1. [Fast prediction of large amounts of peptide spectra](#fast-prediction-of-large-amounts-of-peptide-spectra)
+    1. [Command line interface](#command-line-interface)
+    2. [Input files](#input-files)
+        1. [Config file](#config-file)
+        2. [PEPREC file](#peprec-file)
+        3. [MGF file (optional)](#mgf-file-(optional))
+        4. [Examples](#examples)
+    3. [Output](#output)
+2. [Predict and plot a single peptide spectrum](#predict-and-plot-a-single-peptide-spectrum)
+
+
+### Fast prediction of large amounts of peptide spectra
+
 MS²PIP comes with [pre-trained models](#specialized-prediction-models) for a
 variety of fragmentation methods and modifications. These models can easily be
 applied by configuring MS²PIP in the [config file](#config-file) and providing a
@@ -111,7 +124,9 @@ list of peptides in the form of a [PEPREC file](#peprec-file). Optionally,
 MS²PIP predictions can be compared to spectra in an
 [MGF file](#MGF-file-optional).
 
-### Command line interface
+#### Command line interface
+
+To predict a large amount of peptide spectra, use `ms2pip`:
 ```
 usage: ms2pip [-h] -c CONFIG_FILE [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
               [-r] [-x] [-m] [-t] [-n NUM_CPU] [--sqldb-uri SQLDB_URI]
@@ -141,8 +156,8 @@ optional arguments:
                         files
 ```
 
-### Input files
-#### Config file
+#### Input files
+##### Config file
 Several MS²PIP options need to be set in this config file.
 - `model=X` where X is one of the currently supported MS²PIP models (see
 [Specialized prediction models](#specialized-prediction-models)).
@@ -161,7 +176,7 @@ supported output file formats: `csv`, `mgf`, `msp`, `spectronaut`, or
 For N- and C-terminal modifications, `Z` should be `N-term` or `C-term`,
 respectively.
 
-#### PEPREC file
+##### PEPREC file
 To apply the pre-trained models you need to pass *only* a `<PEPREC file>` to
 MS²PIP. This file contains the peptide sequences for which you want to predict
 peak intensities. The file is space separated and contains at least the
@@ -191,14 +206,14 @@ output files to a PEPREC file.
 To start from a FASTA file, see [fasta2speclib](http://compomics.github.io/projects/ms2pip_c/wiki/fasta2speclib).
 
 
-#### MGF file (optional)
+##### MGF file (optional)
 Optionally, an MGF file with measured spectra can be passed to MS²PIP. In this
 case, MS²PIP will calculate correlations between the measured and predicted
 peak intensities. Make sure that the PEPREC `spec_id` matches the mgf `TITLE`
 field. Spectra present in the MGF file, but missing in the PEPREC file (and
 vice versa) will be skipped.
 
-#### Examples
+##### Examples
 Suppose the **config file** contains the following lines
 ```
 model=HCD
@@ -231,12 +246,27 @@ CHARGE=2+
 END IONS
 ```
 
-### Output
+#### Output
 The predictions are saved in the output file(s) specified in the
 [config file](#config-file). Note that the normalization of intensities depends
 on the output file format. In the CSV file output, intensities are
 log2-transformed. To "unlog" the intensities, use the following formula:
 `intensity = (2 ** log2_intensity) - 0.001`.
+
+
+### Predict and plot a single peptide spectrum
+With `ms2pip-single-prediction` a single peptide spectrum can be predicted with MS²PIP
+and plotted with [spectrum_utils](https://spectrum-utils.readthedocs.io/). For instance,
+
+```sh
+ms2pip-single-prediction "PGAQANPYSR" "-" 3 --model TMT
+```
+
+results in:
+
+![Predicted spectrum](img/PGAQANPYSR-3-TMT.png)
+
+Run `ms2pip-single-prediction --help` for more details.
 
 ---
 
