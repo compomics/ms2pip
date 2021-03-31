@@ -27,6 +27,7 @@ from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
 from ms2pip.retention_time import RetentionTime
+from ms2pip.predict_xgboost import process_peptides_xgb
 
 logger = logging.getLogger("ms2pip")
 
@@ -87,12 +88,16 @@ MODELS = {
         "peaks_version": "ch2",
         "features_version": "normal",
     },
-    # "HCD2021": {
-    #     "id": 9,
-    #     "ion_types": ["B", "Y"],
-    #     "peaks_version": "general",
-    #     "features_version": "normal",
-    # },
+    "HCD2021": {
+        "id": 9,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "ms2pip/models_xgboost/Hyperopt_joint_HCDb.xgboost",
+            "y": "ms2pip/models_xgboost/Hyperopt_joint_HCDy.xgboost",
+        }
+    },
     "HCD2021fast": {
         "id": 10,
         "ion_types": ["B", "Y"],
@@ -777,7 +782,10 @@ class MS2PIP:
             matched_spectra = self._match_spectra(results)
             self._write_matched_spectra(matched_spectra)
         else:
-            results = self._process_peptides()
+            if "xgboost_model_files" in MODELS[self.model]:
+                results = self._process_peptides_xgb()
+            else:
+                results = self._process_peptides()
 
             if self.add_retention_time:
                 self._predict_retention_times()
@@ -974,6 +982,14 @@ class MS2PIP:
             titles,
             process_peptides,
             (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
+        )
+
+    def _process_peptides_xgb(self):
+        """Process peptides and get predictions directly from XGBoost models."""
+        ms2pip_pyx.ms2pip_init(self.afile, self.modfile, self.modfile2)
+
+        return process_peptides_xgb(
+            self.data, MODELS[self.model], self.mods.ptm_ids, self.num_cpu
         )
 
     def _write_predictions(self, all_preds):
