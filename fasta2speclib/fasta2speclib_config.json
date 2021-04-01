@@ -1,5 +1,5 @@
 {
-    "output_filetype":["msp", "mgf", "bibliospec", "spectronaut", "hdf"],
+    "output_filetype":["msp", "mgf", "bibliospec", "spectronaut", "hdf", "dlib"],
     "charges":[2, 3],
     "min_peplen":8,
     "max_peplen":30,
