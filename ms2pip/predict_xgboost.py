@@ -51,8 +51,9 @@ def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
     vector_list = []
     mz_list = []
     for row in peprec.to_dict(orient="records"):
+
         peptide = np.array(
-            [0] + [AMINO_ACID_IDS[x] for x in row["peptide"]] + [0], dtype=np.uint16
+            [0] + [AMINO_ACID_IDS[x] for x in row["peptide"].replace("L", "I")] + [0], dtype=np.uint16
         )
         modpeptide = apply_mods(peptide, row["modifications"], ptm_ids)
         charge = row["charge"]

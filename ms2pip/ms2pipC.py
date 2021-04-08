@@ -94,8 +94,8 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "ms2pip/models_xgboost/Hyperopt_joint_HCDb.xgboost",
-            "y": "ms2pip/models_xgboost/Hyperopt_joint_HCDy.xgboost",
+            "b": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/Hyperopt_joint_HCDb.xgboost",
+            "y": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/Hyperopt_joint_HCDy.xgboost",
         }
     },
     "HCD2021fast": {
