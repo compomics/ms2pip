@@ -94,8 +94,8 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/Hyperopt_joint_HCDb.xgboost",
-            "y": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/Hyperopt_joint_HCDy.xgboost",
+            "b": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210416_HCD_B.xgboost",
+            "y": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210416_HCD_Y.xgboost",
         }
     },
     "HCD2021fast": {
@@ -103,6 +103,16 @@ MODELS = {
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+    },
+    "HCD-HLA1": {
+        "id": 11,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210316_HCD_HLA1_B.xgboost",
+            "y": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210316_HCD_HLA1_Y.xgboost",
+        }
     },
 }
 
