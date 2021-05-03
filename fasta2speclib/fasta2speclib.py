@@ -336,10 +336,13 @@ def run_batches(peprec, decoy=False):
         }
     }
 
-    # If add_retention_time, initiate DeepLC (and calibrate once)
+    # If add_retention_time, initiate DeepLC
     if params["add_retention_time"]:
         logging.debug("Initializing DeepLC predictor")
-        rt_predictor = RetentionTime()
+        if "deeplc" not in params:
+            params["deeplc"] = {}
+        params["deeplc"]["n_jobs"] = params["num_cpu"]
+        rt_predictor = RetentionTime(config=params)
 
     # Split up into batches to save memory:
     b_size = params["batch_size"]
