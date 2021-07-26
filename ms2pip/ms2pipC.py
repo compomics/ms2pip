@@ -231,6 +231,16 @@ def process_spectra(
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
+    if "xgboost_model_files" in MODELS[model].keys():
+        xgb_B = xgb.Booster({"nthread": 1})
+        xgb_B.load_model(MODELS[model]["xgboost_model_files"]["b"])
+        xgb_Y = xgb.Booster({"nthread": 1})
+        xgb_Y.load_model(MODELS[model]["xgboost_model_files"]["y"])
+        XGB_models = {
+            "b": xgb_B,
+            "y": xgb_Y
+        }
+
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
         specdict = (
@@ -264,8 +274,9 @@ def process_spectra(
     charge_buf = []
     pepid_buf = []
 
-    ft = open("ms2pip_tableau.%i" % worker_num, "w")
-    ft2 = open("stats_tableau.%i" % worker_num, "w")
+    if tableau:
+        ft = open("ms2pip_tableau.%i" % worker_num, "w")
+        ft2 = open("stats_tableau.%i" % worker_num, "w")
 
     title = ""
     charge = 0
@@ -364,15 +375,7 @@ def process_spectra(
 
                 model_id = MODELS[model]["id"]
                 peaks_version = MODELS[model]["peaks_version"]
-                if "xgboost_model_files" in MODELS[model].keys():
-                    xgb_B = xgb.Booster({"nthread": 1})
-                    xgb_B.load_model(MODELS[model]["xgboost_model_files"]["b"])
-                    xgb_Y = xgb.Booster({"nthread": 1})
-                    xgb_Y.load_model(MODELS[model]["xgboost_model_files"]["y"])
-                    XGB_models = {
-                        "b" : xgb_B,
-                        "y" : xgb_Y
-                    }
+
                 # TODO: Check if 30 is good default CE!
                 # RG: removed `if ce == 0` in get_vector, split up into two functions
                 colen = 30
