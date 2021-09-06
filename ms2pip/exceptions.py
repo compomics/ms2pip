@@ -28,3 +28,7 @@ class FragmentationModelRequiredError(Exception):
 
 class InvalidModificationFormattingError(Exception):
     pass
+
+
+class InvalidAminoAcidError(Exception):
+    pass
