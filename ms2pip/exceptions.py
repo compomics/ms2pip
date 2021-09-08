@@ -1,3 +1,11 @@
+class MS2PIPError(Exception):
+    pass
+
+
+class InvalidPeptideError(MS2PIPError):
+    pass
+
+
 class UnknownModificationError(ValueError):
     pass
 

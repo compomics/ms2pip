@@ -48,8 +48,10 @@ INSTALL_REQUIRES = [
     "scipy>=1.2,<2",
     "tqdm>=4,<5",
     "tables>=3.4",
-    "tomlkit>=0.5,<1"
-    "sqlalchemy>=1.3,<2"
+    "tomlkit>=0.5,<1",
+    "sqlalchemy>=1.3,<2",
+    "spectrum-utils>=0.3,<2",
+    "click>=7,<8"
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
@@ -95,6 +97,7 @@ setup(
         "console_scripts": [
             "ms2pip=ms2pip.__main__:main",
             "fasta2speclib=fasta2speclib.fasta2speclib:main",
+            "ms2pip-single-prediction=ms2pip.single_prediction:_main",
         ],
     },
     install_requires=INSTALL_REQUIRES,
