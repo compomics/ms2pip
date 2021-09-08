@@ -7,6 +7,8 @@ import tempfile
 
 from pyteomics import mass
 
+from ms2pip.exceptions import InvalidAminoAcidError
+
 AMINO_ACIDS = [
     "A",
     "C",
@@ -89,7 +91,7 @@ class Modifications:
         if mod_type not in self.modifications:
             self.modifications[mod_type] = {}
 
-        # TODO: check opt
+        # NOTE: opt is ignored
         for mod in modstrings:
             mod_name, mass_shift, opt, amino_acid = mod.split(",")
 
@@ -97,11 +99,12 @@ class Modifications:
                 amino_acid_id = -1
             elif amino_acid == "C-term":
                 amino_acid_id = -2
+            elif amino_acid == "L":
+                amino_acid_id = AMINO_ACID_IDS["I"]
             elif amino_acid in AMINO_ACID_IDS:
                 amino_acid_id = AMINO_ACID_IDS[amino_acid]
             else:
-                # TODO: raise or at least log error?
-                continue
+                raise InvalidAminoAcidError(amino_acid)
 
             self.modifications[mod_type][mod_name] = {
                 "mass_shift": float(mass_shift),
