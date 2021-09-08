@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Gabriels"
+  given-names: "Ralf"
+  orcid: "https://orcid.org/0000-0002-1679-1711"
+- family-names: "Velghe"
+  given-names: "Kevin"
+  orcid: "https://orcid.org/0000-0002-9968-6043"
+- family-names: "Martens"
+  given-names: "Lennart"
+  orcid: "https://orcid.org/0000-0003-4277-658X"
+- family-names: "Degroeve"
+  given-names: "Sven"
+  orcid: "https://orcid.org/0000-0001-8349-3370"
+title: "MS²PIP"
+url: "https://github.com/compomics/ms2pip_c"
+license: "Apache-2.0"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Gabriels"
+    given-names: "Ralf"
+    orcid: "https://orcid.org/0000-0002-1679-1711"
+  - family-names: "Martens"
+    given-names: "Lennart"
+    orcid: "https://orcid.org/0000-0003-4277-658X"
+  - family-names: "Degroeve"
+    given-names: "Sven"
+    orcid: "https://orcid.org/0000-0001-8349-3370"
+  doi: "10.1093/nar/gkz299"
+  journal: "Nucleic Acids Research"
+  month: 9
+  start: W295
+  end: W299
+  title: "Updated MS²PIP web server delivers fast and accurate MS2 peak intensity prediction for multiple fragmentation methods, instruments and labeling techniques"
+  issue: 1
+  volume: 47
+  year: 2019
+  abstract: "MS²PIP is a data-driven tool that accurately predicts peak intensities for a given peptide's fragmentation mass spectrum. Since the release of the MS²PIP web server in 2015, we have brought significant updates to both the tool and the web server. In addition to the original models for CID and HCD fragmentation, we have added specialized models for the TripleTOF 5600+ mass spectrometer, for TMT-labeled peptides, for iTRAQ-labeled peptides, and for iTRAQ-labeled phosphopeptides. Because the fragmentation pattern is heavily altered in each of these cases, these additional models greatly improve the prediction accuracy for their corresponding data types. We have also substantially reduced the computational resources required to run MS²PIP, and have completely rebuilt the web server, which now allows predictions of up to 100 000 peptide sequences in a single request. The MS²PIP web server is freely available at https://iomics.ugent.be/ms2pip/."
