@@ -101,18 +101,18 @@ class SinglePrediction:
         peaks_version = MODELS[model]["peaks_version"]
         ce = 30
 
-        mz = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
-        intensity = ms2pip_pyx.get_predictions(
+        mz = np.array(ms2pip_pyx.get_mzs(modpeptide, peaks_version))
+        intensity = np.array(ms2pip_pyx.get_predictions(
             peptide, modpeptide, charge, model_id, peaks_version, ce
-        )
+        ))
 
-        annotation = [
+        annotation = np.array([
             ["b" + str(i + 1) for i in range(len(mz[0]))],
             ["y" + str(i + 1) for i in range(len(mz[1]))],
-        ]
-        mz = _flatten(mz)
-        intensity = self._tic_normalize(self._transform(_flatten(intensity)))
-        annotation = _flatten(annotation)
+        ])
+        mz = mz.flatten()
+        intensity = self._tic_normalize(self._transform(intensity.flatten()))
+        annotation = annotation.flatten()
         return mz, intensity, annotation
 
     def plot_prediction(
