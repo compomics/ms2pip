@@ -217,11 +217,6 @@ class SinglePrediction:
         ]
 
 
-def _flatten(nested_list):
-    """Flatten a nested list by one level."""
-    return [item for sublist in nested_list for item in sublist]
-
-
 @click.command()
 @click.argument("peptide", type=str)
 @click.argument("modifications", type=str)
