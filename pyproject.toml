@@ -5,7 +5,7 @@ description = "MS²PIP: MS² Peak Intensity Prediction"
 authors = ["Sven Degroeve", "Ralf Gabriels", "Kevin Velghe", "Ana Sílvia C. Silva"]
 
 [build-system]
-requires = ["setuptools", "cython", "numpy"]
+requires = ["setuptools", "cython", "oldest-supported-numpy"]
 build-backend = "setuptools.build_meta"
 
 [tool.poetry.dependencies]
