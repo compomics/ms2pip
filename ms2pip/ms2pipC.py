@@ -96,8 +96,8 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "/home/compomics/arthur/ms2pip_c/ms2pip/models_xgboost/model_20210416_HCD_B.xgboost",
-            "y": "/home/compomics/arthur/ms2pip_c/ms2pip/models_xgboost/model_20210416_HCD_Y.xgboost",
+            "b": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210416_HCD_B.xgboost",
+            "y": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210416_HCD_Y.xgboost",
         }
     },
     "HCD2021fast": {
@@ -112,8 +112,8 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "/home/compomics/arthur/ms2pip_c/ms2pip/models_xgboost/model_20210316_HCD_HLA1_B.xgboost",
-            "y": "/home/compomics/arthur/ms2pip_c/ms2pip/models_xgboost/model_20210316_HCD_HLA1_Y.xgboost",
+            "b": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210316_HCD_HLA1_B.xgboost",
+            "y": "/home/compomics/ms2pip_c/ms2pip/models_xgboost/model_20210316_HCD_HLA1_Y.xgboost",
         }
     },
 }
