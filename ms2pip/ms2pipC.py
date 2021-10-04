@@ -373,6 +373,9 @@ def process_spectra(
                 peaks = np.log2(np.array(peaks) + 0.001)
                 peaks = peaks.astype(np.float32)
 
+                if (len(peaks) == 0) or (len(msms) == 0):
+                    raise Exception(f"{title}")
+
                 model_id = MODELS[model]["id"]
                 peaks_version = MODELS[model]["peaks_version"]
 
