@@ -10,6 +10,7 @@ from ms2pip.exceptions import (
     InvalidModificationFormattingError, UnknownModificationError
 )
 
+
 def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
     """Get predictions for peptides directly from XGBoost model."""
     feature_vectors, mzs = _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids)
@@ -43,6 +44,7 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
     return [_MultiprocessingResultSpoofer(
         (mzs, predictions, None, peptide_lengths, charges, spec_ids)
     )]
+
 
 def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
     """Get feature vectors and mz values for all peptides in self.data."""

@@ -286,7 +286,8 @@ next to the predictions for singly charged b- and y-ions.
 
 | Model | Fragmentation method | MS² mass analyzer | Peptide properties |
 | - | - | - | - |
-| HCD | HCD | Orbitrap | Tryptic digest |
+| HCD2019 | HCD | Orbitrap | Tryptic digest |
+| HCD2021 | HCD | Orbitrap | Tryptic/ Chymotrypsin digest |
 | CID | CID | Linear ion trap | Tryptic digest |
 | iTRAQ | HCD | Orbitrap | Tryptic digest, iTRAQ-labeled |
 | iTRAQphospho | HCD | Orbitrap | Tryptic digest, iTRAQ-labeled, enriched for phosphorylation |
@@ -294,12 +295,13 @@ next to the predictions for singly charged b- and y-ions.
 | TTOF5600 | CID | Quadrupole Time-of-Flight | Tryptic digest |
 | HCDch2 | HCD | Orbitrap | Tryptic digest |
 | CIDch2 | CID | Linear ion trap | Tryptic digest |
+| Immuno-HCD | HCD | Orbitrap | Immunopeptides |
 
 ### Models, version numbers, and the train and test datasets used to create each model
 
 | Model | Current version | Train-test dataset (unique peptides) | Evaluation dataset (unique peptides) | Median Pearson correlation on evaluation dataset |
 | - | - | - | - | - |
-| HCD | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786 |
+| HCD2019 | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786 |
 | CID | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947 |
 | iTRAQ | v20190107 | [NIST iTRAQ](https://chemdata.nist.gov/) (704 041) | [PXD001189](https://doi.org/10.1182/blood-2016-05-714048) (41 502) | 0.905870 |
 | iTRAQphospho | v20190107 | [NIST iTRAQ phospho](https://chemdata.nist.gov/) (183 383) | [PXD001189](https://doi.org/10.1182/blood-2016-05-714048) (9 088) | 0.843898 |
@@ -307,5 +309,8 @@ next to the predictions for singly charged b- and y-ions.
 | TTOF5600 | v20190107 | [PXD000954](https://doi.org/10.1038/sdata.2014.31) (215 713) | [PXD001587](https://doi.org/10.1038/nmeth.3255) (15 111) | 0.746823 |
 | HCDch2 | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786 (+) and 0.644162 (++) |
 | CIDch2 | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947 (+) and 0.813342 (++) |
+| HCD2021 | v20210416 | [Combined dataset] (520 579) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269)  | 0.932361
+| Immuno-HCD | v20210316 | [Combined dataset] (460191) | [PXD005231 (HLA-I)](https://doi.org/10.1101/098780) (46 753) | 0.963736
+| Immuno-HCD | v20210316 | [Combined dataset] (460191) | [PXD020011 (HLA-II)](https://doi.org/10.3389/fimmu.2020.01981 ) (23 941) | 0.942383
 
 To train custom MS²PIP models, please refer to [Training new MS²PIP models](http://compomics.github.io/projects/ms2pip_c/wiki/Training-new-MS2PIP-models.html) on our Wiki pages.

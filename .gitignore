@@ -4,6 +4,7 @@
 data/
 *_pyx.c
 *_pyx_*.c
+ms2pip/models_xgboost/*.xgboost
 
 # Pytest
 .pytest_cache/

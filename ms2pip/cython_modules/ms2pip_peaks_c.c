@@ -112,22 +112,6 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 		    predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
 		}
 	}
-
-	// HCD2021
-	// else if (model_id == 9) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 		predictions[0*(peplen-1)+i] = score_HCD2021_B(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)-i-1] = score_HCD2021_Y(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
-
-	// HCD2021fast
-	else if (model_id == 10) {
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_HCD2021fast_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_HCD2021fast_Y(v+1+(i*fnum))+0.5;
-		}
-	}
 	else {
 		return NULL;
 	}

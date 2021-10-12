@@ -40,3 +40,7 @@ class InvalidModificationFormattingError(Exception):
 
 class InvalidAminoAcidError(Exception):
     pass
+
+
+class EmptySpectrumError(Exception):
+    pass
