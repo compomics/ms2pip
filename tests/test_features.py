@@ -33,7 +33,7 @@ class TestFeatureExtraction:
                 "ptm": [],
                 "sptm": [],
                 "gptm": [],
-                "frag_method": "HCD",
+                "frag_method": "HCD2019",
                 "frag_error": 0.02,
                 "out": "csv",
             }
@@ -74,7 +74,7 @@ class TestFeatureExtraction:
                 ],
                 "sptm": [],
                 "gptm": [],
-                "frag_method": "HCD",
+                "frag_method": "HCD2019",
                 "frag_error": 0.02,
                 "out": "csv",
             }
