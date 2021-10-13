@@ -96,8 +96,8 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "ms2pip/models_xgboost/model_20210416_HCD_B.xgboost",
-            "y": "ms2pip/models_xgboost/model_20210416_HCD_Y.xgboost",
+            "b": "model_20210416_HCD2021_B.xgboost",
+            "y": "model_20210416_HCD2021_Y.xgboost",
         }
     },
     "Immuno-HCD": {
@@ -106,8 +106,8 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "/public/compomics/arthur/ms2pip_models/xgboost/model_20210316_HCD_HLA1_B.xgboost",
-            "y": "/public/compomics/arthur/ms2pip_models/xgboost/model_20210316_HCD_HLA1_Y.xgboost",
+            "b": "model_20210316_Immuno_HCD_B.xgboost",
+            "y": "model_20210316_Immuno_HCD_Y.xgboost",
         }
     },
 }
@@ -367,7 +367,7 @@ def process_spectra(
                 peaks = peaks.astype(np.float32)
 
                 if (len(peaks) == 0) or (len(msms) == 0):
-                    raise EmptySpectrumError("Provided spectra should not be empty")
+                    raise EmptySpectrumError()
 
                 model_id = MODELS[model]["id"]
                 peaks_version = MODELS[model]["peaks_version"]

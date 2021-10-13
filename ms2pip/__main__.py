@@ -6,21 +6,23 @@ import sys
 from ms2pip.config_parser import ConfigParser
 from ms2pip.exceptions import (FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
-                               InvalidPEPRECError,
+                               InvalidPEPRECError, InvalidXGBoostModelError,
                                NoValidPeptideSequencesError,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
-                               UnknownOutputFormatError)
+                               UnknownOutputFormatError,
+                               InvalidXGBoostModelError,
+                               EmptySpectrumError)
 from ms2pip.ms2pipC import MODELS, MS2PIP, SUPPORTED_OUT_FORMATS
 
 
 def print_logo():
     logo = """
- __  __ ___  __ ___ ___ ___  
-|  \/  / __||_ ) _ \_ _| _ \ 
-| |\/| \__ \/__|  _/| ||  _/ 
-|_|  |_|___/   |_| |___|_|   
-                             
+ __  __ ___  __ ___ ___ ___
+|  \/  / __||_ ) _ \_ _| _ \
+| |\/| \__ \/__|  _/| ||  _/
+|_|  |_|___/   |_| |___|_|
+
 by CompOmics
 sven.degroeve@ugent.be
 ralf.gabriels@ugent.be
@@ -154,6 +156,13 @@ def main():
         sys.exit(1)
     except FragmentationModelRequiredError:
         root_logger.error("Please specify model in config file.")
+        sys.exit(1)
+    except InvalidXGBoostModelError:
+        root_logger.error(f"Could not downlaod {config_parser.config["ms2pip"]["model"]} XGBoost model properly\n\
+        Try manual download to {os.path.isdir(os.path.join(os.path.expanduser("~"), ".ms2pip")}")
+        sys.exit(1)
+    except EmptySpectrumError:
+        root_logger.error("Provided MGF file cannot contain empty spectra")
         sys.exit(1)
 
 

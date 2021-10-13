@@ -44,3 +44,7 @@ class InvalidAminoAcidError(Exception):
 
 class EmptySpectrumError(Exception):
     pass
+
+
+class InvalidXGBoostModelError(Exception):
+    pass

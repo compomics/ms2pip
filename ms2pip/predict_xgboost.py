@@ -1,13 +1,21 @@
 """Get predictions directly from XGBoost model, within ms2pip framework."""
 
+from genericpath import isfile
 from itertools import islice
+import os
+import urllib.request
+
 
 import numpy as np
 import xgboost as xgb
+import hashlib
 
 from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
 from ms2pip.exceptions import (
-    InvalidModificationFormattingError, UnknownModificationError
+    InvalidModificationFormattingError,
+    InvalidXGBoostModelError,
+    UnknownModificationError,
+    UnknownFragmentationMethodError,
 )
 
 
@@ -23,6 +31,10 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
 
     preds_list = []
     for ion_type, model_file in model_params["xgboost_model_files"].items():
+        # Check if  xgb models are present, if not dowload them
+        if not check_model_presence(model_file):
+            download_model(model=model_file)
+
         # Get predictions from XGBoost model
         bst = xgb.Booster({"nthread": num_cpu})
         bst.load_model(model_file)
@@ -41,9 +53,11 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
     predictions = [list(t) for t in zip(*preds_list)]
 
     # List of objects with `get` method is expected, use spoofer class
-    return [_MultiprocessingResultSpoofer(
-        (mzs, predictions, None, peptide_lengths, charges, spec_ids)
-    )]
+    return [
+        _MultiprocessingResultSpoofer(
+            (mzs, predictions, None, peptide_lengths, charges, spec_ids)
+        )
+    ]
 
 
 def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
@@ -55,15 +69,17 @@ def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
     for row in peprec.to_dict(orient="records"):
 
         peptide = np.array(
-            [0] + [AMINO_ACID_IDS[x] for x in row["peptide"].replace("L", "I")] + [0], dtype=np.uint16
+            [0] + [AMINO_ACID_IDS[x] for x in row["peptide"].replace("L", "I")] + [0],
+            dtype=np.uint16,
         )
         modpeptide = apply_mods(peptide, row["modifications"], ptm_ids)
         charge = row["charge"]
 
-        vector_list.append(np.array(
-            ms2pip_pyx.get_vector(peptide, modpeptide, charge),
-            dtype=np.uint16
-        ))
+        vector_list.append(
+            np.array(
+                ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16
+            )
+        )
         mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
         mz_list.append([np.array(m, dtype=np.float32) for m in mzs])
 
@@ -79,6 +95,7 @@ def _split_list_by_lengths(list_in, lengths):
 
 class _MultiprocessingResultSpoofer:
     """Spoof result structure of multiprocessing, for direct XGB predictions."""
+
     def __init__(self, contents):
         self.contents = contents
 
@@ -106,3 +123,52 @@ def apply_mods(peptide, mods, PTMmap):
                 raise UnknownModificationError(tl)
 
     return modpeptide
+
+
+def check_model_presence(model):
+    """ Check whether xgboost model is downloaded"""
+
+    home = os.path.expanduser("~")
+    if not os.path.isdir(os.path.join(home, ".ms2pip")):
+        return False
+    elif not os.path.isfile(os.path.join(home, ".ms2pip", model)):
+        return False
+    elif check_model_integrity(os.path.join(home, ".ms2pip", model)):
+        return True
+    else:
+        raise UnknownFragmentationMethodError()
+
+
+def download_model(model):
+    """ Download the xgboost model to user/.ms2pip path"""
+
+    home = os.path.expanduser("~")
+    if not os.path.isdir(os.path.join(home, ".ms2pip")):
+        os.mkdir(os.path.join(home, ".ms2pip"))
+
+    dowloadpath = os.path.join(home, ".ms2pip", model)
+    urllib.request.urlretrieve("modelfilepath", dowloadpath)
+    check_model_integrity(dowloadpath)
+
+
+def check_model_integrity(filename):
+    """Check that models are correctly downloaded"""
+
+    MODEL_hashes = {
+        "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
+        "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea",
+        "model_20210416_HCD2021_B.xgboost": "c086c599f618b199bbb36e2411701fb2866b24c8",
+        "model_20210416_HCD2021_Y.xgboost": "22a5a137e29e69fa6d4320ed7d701b61cbdc4fcf",
+    }
+    model = filename.rsplit("/", 1)[1]
+    sha1_hash = hashlib.sha1()
+    with open(filename, "rb") as modelfile:
+        while True:
+            chunk = f.read(16 * 1024)
+            if not chunk:
+                break
+            sha1_hash.update(chunk)
+    if sha1_hash.hexdigest() != MODEL_hashes[model]:
+        raise InvalidXGBoostModelError()
+    else:
+        return True
