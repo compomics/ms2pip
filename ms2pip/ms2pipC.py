@@ -29,7 +29,10 @@ from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
 from ms2pip.retention_time import RetentionTime
-from ms2pip.predict_xgboost import _get_ms2pip_data_for_xgb, process_peptides_xgb
+from ms2pip.predict_xgboost import (_get_ms2pip_data_for_xgb,
+                                    process_peptides_xgb,
+                                    check_model_presence,
+                                    download_model)
 
 logger = logging.getLogger("ms2pip")
 
@@ -111,6 +114,7 @@ MODELS = {
         }
     },
 }
+
 
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     """
@@ -226,9 +230,9 @@ def process_spectra(
 
     if "xgboost_model_files" in MODELS[model].keys():
         xgb_B = xgb.Booster({"nthread": 1})
-        xgb_B.load_model(MODELS[model]["xgboost_model_files"]["b"])
+        xgb_B.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["b"]))
         xgb_Y = xgb.Booster({"nthread": 1})
-        xgb_Y.load_model(MODELS[model]["xgboost_model_files"]["y"])
+        xgb_Y.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["y"]))
         XGB_models = {
             "b": xgb_B,
             "y": xgb_Y
@@ -740,6 +744,10 @@ class MS2PIP:
         # Validate requested model
         if self.model in MODELS.keys():
             logger.info("using %s models", self.model)
+            if "xgboost_model_files" in MODELS[self.model].keys():
+                for _, model_file in MODELS[self.model]["xgboost_model_files"].items():
+                    if not check_model_presence(model_file):
+                        download_model(model_file)
         else:
             raise UnknownFragmentationMethodError(self.model)
 

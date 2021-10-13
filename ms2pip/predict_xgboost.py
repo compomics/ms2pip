@@ -4,6 +4,7 @@ from genericpath import isfile
 from itertools import islice
 import os
 import urllib.request
+import logging
 
 
 import numpy as np
@@ -17,6 +18,7 @@ from ms2pip.exceptions import (
     UnknownModificationError,
     UnknownFragmentationMethodError,
 )
+logger = logging.getLogger("ms2pip")
 
 
 def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
@@ -31,13 +33,9 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
 
     preds_list = []
     for ion_type, model_file in model_params["xgboost_model_files"].items():
-        # Check if  xgb models are present, if not dowload them
-        if not check_model_presence(model_file):
-            download_model(model=model_file)
-
         # Get predictions from XGBoost model
         bst = xgb.Booster({"nthread": num_cpu})
-        bst.load_model(model_file)
+        bst.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", model_file))
         preds = bst.predict(feature_vectors)
 
         # Reshape into arrays for each peptide
@@ -129,9 +127,7 @@ def check_model_presence(model):
     """ Check whether xgboost model is downloaded"""
 
     home = os.path.expanduser("~")
-    if not os.path.isdir(os.path.join(home, ".ms2pip")):
-        return False
-    elif not os.path.isfile(os.path.join(home, ".ms2pip", model)):
+    if not os.path.isfile(os.path.join(home, ".ms2pip", model)):
         return False
     elif check_model_integrity(os.path.join(home, ".ms2pip", model)):
         return True
@@ -142,12 +138,13 @@ def check_model_presence(model):
 def download_model(model):
     """ Download the xgboost model to user/.ms2pip path"""
 
+    logger.info(f"Downloading {model}")
     home = os.path.expanduser("~")
     if not os.path.isdir(os.path.join(home, ".ms2pip")):
         os.mkdir(os.path.join(home, ".ms2pip"))
 
     dowloadpath = os.path.join(home, ".ms2pip", model)
-    urllib.request.urlretrieve("modelfilepath", dowloadpath)
+    urllib.request.urlretrieve(os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
     check_model_integrity(dowloadpath)
 
 
@@ -164,7 +161,7 @@ def check_model_integrity(filename):
     sha1_hash = hashlib.sha1()
     with open(filename, "rb") as modelfile:
         while True:
-            chunk = f.read(16 * 1024)
+            chunk = modelfile.read(16 * 1024)
             if not chunk:
                 break
             sha1_hash.update(chunk)
