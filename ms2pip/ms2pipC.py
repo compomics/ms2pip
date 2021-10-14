@@ -101,6 +101,10 @@ MODELS = {
         "xgboost_model_files": {
             "b": "model_20210416_HCD2021_B.xgboost",
             "y": "model_20210416_HCD2021_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20210416_HCD2021_B.xgboost": "c086c599f618b199bbb36e2411701fb2866b24c8",
+            "model_20210416_HCD2021_Y.xgboost": "22a5a137e29e69fa6d4320ed7d701b61cbdc4fcf"
         }
     },
     "Immuno-HCD": {
@@ -111,6 +115,10 @@ MODELS = {
         "xgboost_model_files": {
             "b": "model_20210316_Immuno_HCD_B.xgboost",
             "y": "model_20210316_Immuno_HCD_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
+            "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea"
         }
     },
 }
@@ -746,8 +754,8 @@ class MS2PIP:
             logger.info("using %s models", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
                 for _, model_file in MODELS[self.model]["xgboost_model_files"].items():
-                    if not check_model_presence(model_file):
-                        download_model(model_file)
+                    if not check_model_presence(model_file, MODELS[self.model]["model_hash"][model_file]):
+                        download_model(model_file, MODELS[self.model]["model_hash"][model_file])
         else:
             raise UnknownFragmentationMethodError(self.model)
 

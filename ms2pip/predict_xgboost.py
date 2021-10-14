@@ -123,19 +123,19 @@ def apply_mods(peptide, mods, PTMmap):
     return modpeptide
 
 
-def check_model_presence(model):
+def check_model_presence(model, model_hash):
     """ Check whether xgboost model is downloaded"""
 
     home = os.path.expanduser("~")
     if not os.path.isfile(os.path.join(home, ".ms2pip", model)):
         return False
-    elif check_model_integrity(os.path.join(home, ".ms2pip", model)):
+    elif check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash):
         return True
     else:
         raise UnknownFragmentationMethodError()
 
 
-def download_model(model):
+def download_model(model, model_hash):
     """ Download the xgboost model to user/.ms2pip path"""
 
     logger.info(f"Downloading {model}")
@@ -145,19 +145,12 @@ def download_model(model):
 
     dowloadpath = os.path.join(home, ".ms2pip", model)
     urllib.request.urlretrieve(os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
-    check_model_integrity(dowloadpath)
+    check_model_integrity(dowloadpath, model_hash)
 
 
-def check_model_integrity(filename):
+def check_model_integrity(filename, model_hash):
     """Check that models are correctly downloaded"""
 
-    MODEL_hashes = {
-        "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
-        "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea",
-        "model_20210416_HCD2021_B.xgboost": "c086c599f618b199bbb36e2411701fb2866b24c8",
-        "model_20210416_HCD2021_Y.xgboost": "22a5a137e29e69fa6d4320ed7d701b61cbdc4fcf",
-    }
-    model = filename.rsplit("/", 1)[1]
     sha1_hash = hashlib.sha1()
     with open(filename, "rb") as modelfile:
         while True:
@@ -165,7 +158,7 @@ def check_model_integrity(filename):
             if not chunk:
                 break
             sha1_hash.update(chunk)
-    if sha1_hash.hexdigest() != MODEL_hashes[model]:
+    if sha1_hash.hexdigest() != model_hash:
         raise InvalidXGBoostModelError()
     else:
         return True
