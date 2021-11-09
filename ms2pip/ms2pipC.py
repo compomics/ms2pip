@@ -8,7 +8,6 @@ import multiprocessing.dummy
 import os
 import sys
 from random import shuffle
-import ms2pip
 
 import numpy as np
 import xgboost as xgb
@@ -29,8 +28,7 @@ from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
 from ms2pip.retention_time import RetentionTime
-from ms2pip.predict_xgboost import (_get_ms2pip_data_for_xgb,
-                                    process_peptides_xgb,
+from ms2pip.predict_xgboost import (process_peptides_xgb,
                                     check_model_presence,
                                     download_model)
 
