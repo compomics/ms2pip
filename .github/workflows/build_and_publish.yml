@@ -1,6 +1,7 @@
 name: Build and publish to PyPI
 
 on:
+  push:
   release:
     types: [created]
 
@@ -62,15 +63,15 @@ jobs:
           name: dist
           path: dist/ms2pip-*.whl
 
-  publish-to-pypi:
-    needs: [build-sdist, build-wheels]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v2
-        with:
-          name: dist
-          path: dist
-      - uses: pypa/gh-action-pypi-publish@master
-        with:
-          user: ${{ secrets.PYPI_USERNAME }}
-          password: ${{ secrets.PYPI_PASSWORD }}
+  #publish-to-pypi:
+  #  needs: [build-sdist, build-wheels]
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/download-artifact@v2
+  #      with:
+  #        name: dist
+  #        path: dist
+  #    - uses: pypa/gh-action-pypi-publish@master
+  #      with:
+  #        user: ${{ secrets.PYPI_USERNAME }}
+  #        password: ${{ secrets.PYPI_PASSWORD }}
