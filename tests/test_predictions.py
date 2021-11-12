@@ -19,7 +19,7 @@ def run_ms2pip():
             ],
             "sptm": [],
             "gptm": [],
-            "frag_method": "HCD",
+            "frag_method": "HCD2019",
             "frag_error": 0.02,
             "out": "csv",
         }
@@ -28,10 +28,10 @@ def run_ms2pip():
     ms2pip.run()
 
     test_data = pd.read_csv(
-        os.path.join(TEST_DIR, "test_data/test_HCD_predictions.csv")
+        os.path.join(TEST_DIR, "test_data/test_HCD2019_predictions.csv")
     )
     target_data = pd.read_csv(
-        os.path.join(TEST_DIR, "test_data/target_HCD_predictions.csv")
+        os.path.join(TEST_DIR, "test_data/target_HCD2019_predictions.csv")
     )
     pepfile = pd.read_csv(
         os.path.join(TEST_DIR, "test_data/test.peprec"),

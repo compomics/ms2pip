@@ -51,7 +51,10 @@ INSTALL_REQUIRES = [
     "tomlkit>=0.5,<1",
     "sqlalchemy>=1.3,<2",
     "spectrum-utils>=0.3,<2",
-    "click>=7,<8"
+    "click>=7,<8",
+    "xgboost>=1.3,<2"
+    "matplotlib>=3.0",
+    "spectrum_utils>=0.3.5"
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 

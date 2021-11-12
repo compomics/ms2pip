@@ -40,3 +40,11 @@ class InvalidModificationFormattingError(Exception):
 
 class InvalidAminoAcidError(Exception):
     pass
+
+
+class EmptySpectrumError(Exception):
+    pass
+
+
+class InvalidXGBoostModelError(Exception):
+    pass

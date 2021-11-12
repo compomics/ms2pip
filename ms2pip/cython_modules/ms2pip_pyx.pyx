@@ -14,7 +14,7 @@ cdef extern from "ms2pip_peaks_c.c":
 		float* msms
 
 	void init_ms2pip(char* amino_masses_fname, char* modifications_fname, char* modifications_fname_sptm)
-	
+
 	unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 	unsigned int* get_v_ms2pip_ce(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int ce)
 	unsigned int* get_v_ms2pip_old(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
@@ -134,10 +134,10 @@ def get_targets_all(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
 	results = get_t_ms2pip_all(len(modpeptide)-2, &modpeptide[0], len(peaks), &msms[0], &peaks[0], fragerror)
 	result_peaks = []
 	for i in range(NUM_ION_TYPES_MAPPING[peaks_version]*(len(modpeptide)-3)):
-		result_peaks.append(results.peaks[i])   
+		result_peaks.append(results.peaks[i])
 	result_mzs = []
 	for i in range(NUM_ION_TYPES_MAPPING[peaks_version]*(len(modpeptide)-3)):
-		result_mzs.append(results.msms[i])  
+		result_mzs.append(results.msms[i])
 	#print(result_parsed)
 	#print()
 	return (result_mzs,result_peaks)

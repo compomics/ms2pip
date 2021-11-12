@@ -10,11 +10,12 @@ import sys
 from random import shuffle
 
 import numpy as np
+import xgboost as xgb
 import pandas as pd
 from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (FragmentationModelRequiredError,
+from ms2pip.exceptions import (EmptySpectrumError, FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, MissingConfigurationError,
                                NoValidPeptideSequencesError,
@@ -27,6 +28,9 @@ from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
 from ms2pip.retention_time import RetentionTime
+from ms2pip.predict_xgboost import (process_peptides_xgb,
+                                    check_model_presence,
+                                    download_model)
 
 logger = logging.getLogger("ms2pip")
 
@@ -44,7 +48,7 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
     },
-    "HCD": {
+    "HCD2019": {
         "id": 1,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
@@ -86,6 +90,34 @@ MODELS = {
         "ion_types": ["B", "Y", "B2", "Y2"],
         "peaks_version": "ch2",
         "features_version": "normal",
+    },
+    "HCD2021": {
+        "id": 9,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20210416_HCD2021_B.xgboost",
+            "y": "model_20210416_HCD2021_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20210416_HCD2021_B.xgboost": "c086c599f618b199bbb36e2411701fb2866b24c8",
+            "model_20210416_HCD2021_Y.xgboost": "22a5a137e29e69fa6d4320ed7d701b61cbdc4fcf"
+        }
+    },
+    "Immuno-HCD": {
+        "id": 10,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20210316_Immuno_HCD_B.xgboost",
+            "y": "model_20210316_Immuno_HCD_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
+            "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea"
+        }
     },
 }
 
@@ -200,8 +232,17 @@ def process_spectra(
     the feature vectors are returned, or a DataFrame with the predicted and
     empirical intensities.
     """
-
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
+
+    if "xgboost_model_files" in MODELS[model].keys():
+        xgb_B = xgb.Booster({"nthread": 1})
+        xgb_B.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["b"]))
+        xgb_Y = xgb.Booster({"nthread": 1})
+        xgb_Y.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["y"]))
+        XGB_models = {
+            "b": xgb_B,
+            "y": xgb_Y
+        }
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
@@ -334,6 +375,9 @@ def process_spectra(
                 peaks = peaks / tic
                 peaks = np.log2(np.array(peaks) + 0.001)
                 peaks = peaks.astype(np.float32)
+
+                if (len(peaks) == 0) or (len(msms) == 0):
+                    raise EmptySpectrumError()
 
                 model_id = MODELS[model]["id"]
                 peaks_version = MODELS[model]["peaks_version"]
@@ -525,9 +569,23 @@ def process_spectra(
                     target_buf.append([np.array(t, dtype=np.float32) for t in targets])
                     mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
                     mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
-                    predictions = ms2pip_pyx.get_predictions(
-                        peptide, modpeptide, charge, model_id, peaks_version, colen
-                    )  # SD: added colen
+                    if "xgboost_model_files" in MODELS[model].keys():
+                        xgb_vector = np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
+                        xgb_vector = xgb.DMatrix(xgb_vector)
+                        predictions = []
+                        for ion_type, model_file in XGB_models.items():
+                            preds = model_file.predict(xgb_vector)
+                            if ion_type in ["x", "y", "z"]:
+                                preds = list(np.array(preds[::-1], dtype=np.float32))
+                            elif ion_type in ["a", "b", "c"]:
+                                preds = list(np.array(preds, dtype=np.float32))
+                            else:
+                                raise ValueError(f"Unsupported ion_type: {ion_type}")
+                            predictions.append(preds)
+                    else:
+                        predictions = ms2pip_pyx.get_predictions(
+                            peptide, modpeptide, charge, model_id, peaks_version, colen
+                        ) # SD: added colen
                     prediction_buf.append(
                         [np.array(p, dtype=np.float32) for p in predictions]
                     )
@@ -692,6 +750,10 @@ class MS2PIP:
         # Validate requested model
         if self.model in MODELS.keys():
             logger.info("using %s models", self.model)
+            if "xgboost_model_files" in MODELS[self.model].keys():
+                for _, model_file in MODELS[self.model]["xgboost_model_files"].items():
+                    if not check_model_presence(model_file, MODELS[self.model]["model_hash"][model_file]):
+                        download_model(model_file, MODELS[self.model]["model_hash"][model_file])
         else:
             raise UnknownFragmentationMethodError(self.model)
 
@@ -765,7 +827,10 @@ class MS2PIP:
             matched_spectra = self._match_spectra(results)
             self._write_matched_spectra(matched_spectra)
         else:
-            results = self._process_peptides()
+            if "xgboost_model_files" in MODELS[self.model]:
+                results = self._process_peptides_xgb()
+            else:
+                results = self._process_peptides()
 
             if self.add_retention_time:
                 self._predict_retention_times()
@@ -962,6 +1027,14 @@ class MS2PIP:
             titles,
             process_peptides,
             (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
+        )
+
+    def _process_peptides_xgb(self):
+        """Process peptides and get predictions directly from XGBoost models."""
+        ms2pip_pyx.ms2pip_init(self.afile, self.modfile, self.modfile2)
+
+        return process_peptides_xgb(
+            self.data, MODELS[self.model], self.mods.ptm_ids, self.num_cpu
         )
 
     def _write_predictions(self, all_preds):
