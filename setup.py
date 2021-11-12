@@ -1,4 +1,5 @@
 import os
+import platform
 from glob import glob
 
 from setuptools import setup
@@ -67,18 +68,32 @@ to_remove = [
 ]
 #_ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
 
+# Large machine-written C model files require optimization to be disabled
+compile_args = {
+    "Linux": [
+        "-O0",
+        "-fno-var-tracking",
+        "-Wno-unused-result",
+        "-Wno-cpp",
+        "-Wno-unused-function",
+    ],
+    "Darwin": [
+        "-O0",
+    ],
+    "Windows": [    
+        "/Od",
+        "/DEBUG",
+        "/GL-",
+        "/bigobj",
+        "-wd4244",
+    ]
+}
+
 extensions = [
     Extension(
         "ms2pip.cython_modules.ms2pip_pyx",
         sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/HCD-2019/*.c"),
-        extra_compile_args=[
-            #"-fno-var-tracking",
-            "-wd4244"
-            #"-Og",
-            #"-Wno-unused-result",
-            #"-Wno-cpp",
-            #"-Wno-unused-function",
-        ],
+        extra_compile_args=compile_args[platform.system()],
     )
 ]
 
