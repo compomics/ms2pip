@@ -70,13 +70,14 @@ to_remove = [
 extensions = [
     Extension(
         "ms2pip.cython_modules.ms2pip_pyx",
-        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/*/*.c"),
+        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/HCD-2019/*.c"),
         extra_compile_args=[
-            "-fno-var-tracking",
-            "-Og",
-            "-Wno-unused-result",
-            "-Wno-cpp",
-            "-Wno-unused-function",
+            #"-fno-var-tracking",
+            "-wd4244"
+            #"-Og",
+            #"-Wno-unused-result",
+            #"-Wno-cpp",
+            #"-Wno-unused-function",
         ],
     )
 ]
