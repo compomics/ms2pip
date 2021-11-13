@@ -51,7 +51,7 @@ jobs:
         with:
           output-dir: dist
         env:
-          CIBW_BUILD: "cp3*-win_amd64 cp3*-win32"
+          CIBW_BUILD: "cp3*-win_amd64"  # No XGBoost wheels for 32bit Windows 
           #CIBW_BUILD: "cp3*-macosx_x86_64 cp3*-manylinux_x86_64"
           #CIBW_SKIP: "cp35-* cp39-macosx_x86_64" # see compomics/ms2pip_c#126
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
