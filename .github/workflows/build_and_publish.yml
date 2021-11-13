@@ -54,6 +54,7 @@ jobs:
           # No PyTables wheels for Python 3.9 and 3.10 yet; see compomics/ms2pip_c#126
           CIBW_BUILD: "cp3*-manylinux_x86_64 cp3*-win_amd64 cp3*-macosx_x86_64"
           CIBW_SKIP: "cp39-* cp310-*"
+          CIBW_BEFORE_ALL_MACOS: "brew install libomp"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest {project}/tests"
