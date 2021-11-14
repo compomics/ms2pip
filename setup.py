@@ -4,6 +4,9 @@ from glob import glob
 
 from setuptools import setup
 from setuptools.extension import Extension
+from Cython.Distutils import build_ext
+import numpy
+
 
 VERSION = "3.8.0"
 
