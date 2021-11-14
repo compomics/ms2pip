@@ -672,11 +672,8 @@ class SpectrumOutput:
         return file_obj_ssl, file_obj_ms2
 
     def _write_dlib_metadata(self, connection):
+        from ms2pip.ms2pip_tools.dlib import DLIB_VERSION, Metadata
         from sqlalchemy import select
-        from ms2pip.ms2pip_tools.dlib import (
-            DLIB_VERSION,
-            Metadata,
-        )
 
         with connection.begin():
             version = connection.execute(
@@ -767,7 +764,7 @@ class SpectrumOutput:
             for seq, protein in peptide_to_proteins:
                 connection.execute(
                     PeptideToProtein.insert().values(
-                        PeptideSeq=seq, ProteinAccession=protein
+                        PeptideSeq=seq, isDecoy=False, ProteinAccession=protein
                     )
                 )
 
@@ -776,10 +773,7 @@ class SpectrumOutput:
         """
         Write MS2PIP predictions to a DLIB SQLite file.
         """
-        from ms2pip.ms2pip_tools.dlib import (
-            open_sqlite,
-            metadata,
-        )
+        from ms2pip.ms2pip_tools.dlib import metadata, open_sqlite
 
         normalization = "basepeak_10000"
         precision = 5
