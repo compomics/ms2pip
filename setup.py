@@ -85,14 +85,14 @@ compile_args = {
         "/DEBUG",
         "/GL-",
         "/bigobj",
-        "-wd4244",
+        "/wd4244",
     ]
 }
 
 extensions = [
     Extension(
         "ms2pip.cython_modules.ms2pip_pyx",
-        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/HCD-2019/*.c"),
+        sources=["ms2pip/cython_modules/ms2pip_pyx.pyx"] + glob("ms2pip/models/*/*.c"),
         extra_compile_args=compile_args[platform.system()],
     )
 ]

@@ -8,12 +8,12 @@
 #include "ms2pip_features_c_old.c"
 #include "ms2pip_features_c_catboost.c"
 
-// #include "../models/CID.h"
+#include "../models/CID.h"
 #include "../models/HCD-2019.h"
-// #include "../models/TTOF5600.h"
-// #include "../models/TMT.h"
-// #include "../models/iTRAQ.h"
-// #include "../models/iTRAQphospho.h"
+#include "../models/TTOF5600.h"
+#include "../models/TMT.h"
+#include "../models/iTRAQ.h"
+#include "../models/iTRAQphospho.h"
 
 float membuffer[10000];
 float ions[2000];
@@ -34,52 +34,52 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	int i;
 
 	// CID
-	// if (model_id == 0) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 		predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	if (model_id == 0) {
+		for (i=0; i < peplen-1; i++) {
+			predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
+		}
+	}
 
 	// HCD
-	if (model_id == 1) {
+	else if (model_id == 1) {
 		for (i=0; i < peplen-1; i++) {
 			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
 			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
 		}
 	}
 
-	// // TTOF5600
-	// else if (model_id == 2) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 		predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)-i-1] = score_TTOF5600_Y(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	// TTOF5600
+	else if (model_id == 2) {
+		for (i=0; i < peplen-1; i++) {
+			predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)-i-1] = score_TTOF5600_Y(v+1+(i*fnum))+0.5;
+		}
+	}
 
-	// // TMT
-	// else if (model_id == 3) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 	    predictions[0*(peplen-1)+i] = score_TMT_B(v+1+(i*fnum))+0.5;
-	// 	    predictions[2*(peplen-1)-i-1] = score_TMT_Y(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	// TMT
+	else if (model_id == 3) {
+		for (i=0; i < peplen-1; i++) {
+		    predictions[0*(peplen-1)+i] = score_TMT_B(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)-i-1] = score_TMT_Y(v+1+(i*fnum))+0.5;
+		}
+	}
 
-	// // iTRAQ
-	// else if (model_id == 4) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 		predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)-i-1] = score_iTRAQ_Y(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	// iTRAQ
+	else if (model_id == 4) {
+		for (i=0; i < peplen-1; i++) {
+			predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)-i-1] = score_iTRAQ_Y(v+1+(i*fnum))+0.5;
+		}
+	}
 
-	// // iTRAQphospho
-	// else if (model_id == 5) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 		predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)-i-1] = score_iTRAQphospho_Y(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	// iTRAQphospho
+	else if (model_id == 5) {
+		for (i=0; i < peplen-1; i++) {
+			predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)-i-1] = score_iTRAQphospho_Y(v+1+(i*fnum))+0.5;
+		}
+	}
 
 	// EThcD
 	// else if (model_id == 6) {
@@ -91,25 +91,25 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 	// 	}
 	// }
 
-	// // HCDch2
-	// else if (model_id == 7) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 		predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
-	// 		predictions[2*(peplen-1)+i] = score_HCD_B2(v+1+(i*fnum))+0.5;
-	// 		predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	// HCDch2
+	else if (model_id == 7) {
+		for (i=0; i < peplen-1; i++) {
+			predictions[0*(peplen-1)+i] = score_HCD_B(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)-i-1] = score_HCD_Y(v+1+(i*fnum))+0.5;
+			predictions[2*(peplen-1)+i] = score_HCD_B2(v+1+(i*fnum))+0.5;
+			predictions[4*(peplen-1)-i-1] = score_HCD_Y2(v+1+(i*fnum))+0.5;
+		}
+	}
 
-	// // CIDch2
-	// else if (model_id == 8) {
-	// 	for (i=0; i < peplen-1; i++) {
-	// 	    predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
-	// 	    predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
-	// 	    predictions[2*(peplen-1)+i] = score_CID_B2(v+1+(i*fnum))+0.5;
-	// 	    predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
-	// 	}
-	// }
+	// CIDch2
+	else if (model_id == 8) {
+		for (i=0; i < peplen-1; i++) {
+		    predictions[0*(peplen-1)+i] = score_CID_B(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)-i-1] = score_CID_Y(v+1+(i*fnum))+0.5;
+		    predictions[2*(peplen-1)+i] = score_CID_B2(v+1+(i*fnum))+0.5;
+		    predictions[4*(peplen-1)-i-1] = score_CID_Y2(v+1+(i*fnum))+0.5;
+		}
+	}
 	else {
 		return NULL;
 	}
