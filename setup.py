@@ -4,11 +4,8 @@ from glob import glob
 
 from setuptools import setup
 from setuptools.extension import Extension
-from Cython.Distutils import build_ext
-import numpy
 
-
-VERSION = "3.7.1"
+VERSION = "3.8.0"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
@@ -80,7 +77,7 @@ compile_args = {
     "Darwin": [
         "-O0",
     ],
-    "Windows": [    
+    "Windows": [
         "/Od",
         "/DEBUG",
         "/GL-",
