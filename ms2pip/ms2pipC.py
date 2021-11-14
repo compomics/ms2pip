@@ -120,6 +120,7 @@ MODELS = {
         }
     },
 }
+MODELS["HCD"] = MODELS["HCD2021"]
 
 
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):

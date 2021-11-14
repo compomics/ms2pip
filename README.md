@@ -76,6 +76,11 @@ With Python 3.6 or higher, run:
 pip install ms2pip
 ```
 
+Compiled wheels are available for Python 3.6, 3.7, and 3.8, on 64bit Linux,
+Windows, and macOS. This should install MS²PIP in a few seconds. For other
+platforms, MS²PIP can be built from source, although it can take up to one hour
+to compile the large prediction models.
+
 We recommend using a [venv](https://docs.python.org/3/library/venv.html) or
 [conda](https://docs.conda.io/en/latest/) virtual environment.
 
@@ -85,6 +90,8 @@ Install with activated bioconda and conda-forge channels:
 ```
 conda install -c defaults -c bioconda -c conda-forge ms2pip
 ```
+
+Bioconda packages are only available for Linux and macOS.
 
 #### Docker container
 First check the latest version tag on [biocontainers/ms2pip/tags](https://quay.io/repository/biocontainers/ms2pip?tab=tags). Then pull and run the container with
