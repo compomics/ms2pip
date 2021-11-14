@@ -91,7 +91,7 @@ Install with activated bioconda and conda-forge channels:
 conda install -c defaults -c bioconda -c conda-forge ms2pip
 ```
 
-Conda packages are only available for Linux and macOS.
+Bioconda packages are only available for Linux and macOS.
 
 #### Docker container
 First check the latest version tag on [biocontainers/ms2pip/tags](https://quay.io/repository/biocontainers/ms2pip?tab=tags). Then pull and run the container with
