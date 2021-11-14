@@ -1,7 +1,11 @@
 name: Tests
 
 #on: [push, pull_request]
-on: release  # temporarily disable
+on:
+  push:
+    branches:
+      - releases
+  pull_request:
 
 jobs:
   build:
