@@ -8,7 +8,7 @@ from Cython.Distutils import build_ext
 import numpy
 
 
-VERSION = "3.8.0"
+VERSION = "3.8.1"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
