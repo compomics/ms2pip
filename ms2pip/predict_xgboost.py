@@ -144,7 +144,7 @@ def download_model(model, model_hash):
         os.mkdir(os.path.join(home, ".ms2pip"))
 
     dowloadpath = os.path.join(home, ".ms2pip", model)
-    urllib.request.urlretrieve(os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
+    urllib.request.urlretrieve(os.path.join("https://iomics.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
     check_model_integrity(dowloadpath, model_hash)
 
 
