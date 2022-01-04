@@ -42,11 +42,25 @@ SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut", "dlib
 # ion_types is required to write the ion types in the headers of the result files
 # features_version is required to select the features version
 MODELS = {
+    # "CID": {
+    #     "id": 0,
+    #     "ion_types": ["B", "Y"],
+    #     "peaks_version": "general",
+    #     "features_version": "normal",
+    # },
     "CID": {
         "id": 0,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_CID_train_B.xgboost",
+            "y": "model_20190107_CID_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_CID_train_B.xgboost": "17b1bbc65d412ef4f62e8bc2bcd5fba5f5279fb1",
+            "model_20190107_CID_train_Y.xgboost": "decac0070c44eedacf564b3e70d54058fc35620d"
+        }
     },
     "HCD2019": {
         "id": 1,
@@ -54,11 +68,25 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
     },
+    # "TTOF5600": {
+    #     "id": 2,
+    #     "ion_types": ["B", "Y"],
+    #     "peaks_version": "general",
+    #     "features_version": "normal",
+    # },
     "TTOF5600": {
         "id": 2,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_TTOF5600_train_B.xgboost",
+            "y": "model_20190107_TTOF5600_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_TTOF5600_train_B.xgboost": "0335f24f63f17ee473f2320b82da14e4efad1ea8",
+            "model_20190107_TTOF5600_train_Y.xgboost": "2c06f41ffe4e253c7331ec10a247703425ce898d"
+        }
     },
     "TMT": {
         "id": 3,
@@ -66,17 +94,45 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
     },
-    "iTRAQ": {
+    # "iTRAQ": {
+    #     "id": 4,
+    #     "ion_types": ["B", "Y"],
+    #     "peaks_version": "general",
+    #     "features_version": "normal",
+    # },
+    "ITRAQ": {
         "id": 4,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_iTRAQ_train_B.xgboost",
+            "y": "model_20190107_iTRAQ_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_iTRAQ_train_B.xgboost": "a3a23e68ced30ae97da808b585ecfad212700d14",
+            "model_20190107_iTRAQ_train_Y.xgboost": "0d167e5a660ee805951c3fefa91a92aa7b606f0c"
+        }
     },
-    "iTRAQphospho": {
+    # "iTRAQphospho": {
+    #     "id": 5,
+    #     "ion_types": ["B", "Y"],
+    #     "peaks_version": "general",
+    #     "features_version": "normal",
+    # },
+    "ITRAQphospho": {
         "id": 5,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_iTRAQphospho_train_B.xgboost",
+            "y": "model_20190107_iTRAQphospho_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_iTRAQphospho_train_B.xgboost": "0fd969bf0304d0d55771e0ff04cfbb4beadd4173",
+            "model_20190107_iTRAQphospho_train_Y.xgboost": "6d6d5bb60be823c806345e5d136a955b6d9bfb97"
+        }
     },
     # ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
     "HCDch2": {
@@ -117,6 +173,20 @@ MODELS = {
         "model_hash": {
             "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
             "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea"
+        }
+    },
+    "CID-TMT": {
+        "id": 11,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20220104_CID_TMT_B.xgboost",
+            "y": "model_20220104_CID_TMT_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20220104_CID_TMT_B.xgboost": "fa834162761a6ae444bb6523c9c1a174b9738389",
+            "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e"
         }
     },
 }
