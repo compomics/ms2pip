@@ -10,10 +10,7 @@
 
 #include "../models/CID.h"
 #include "../models/HCD-2019.h"
-#include "../models/TTOF5600.h"
 #include "../models/TMT.h"
-#include "../models/iTRAQ.h"
-#include "../models/iTRAQphospho.h"
 
 float membuffer[10000];
 float ions[2000];
@@ -49,35 +46,11 @@ float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpept
 		}
 	}
 
-	// TTOF5600
-	else if (model_id == 2) {
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_TTOF5600_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_TTOF5600_Y(v+1+(i*fnum))+0.5;
-		}
-	}
-
 	// TMT
 	else if (model_id == 3) {
 		for (i=0; i < peplen-1; i++) {
 		    predictions[0*(peplen-1)+i] = score_TMT_B(v+1+(i*fnum))+0.5;
 		    predictions[2*(peplen-1)-i-1] = score_TMT_Y(v+1+(i*fnum))+0.5;
-		}
-	}
-
-	// iTRAQ
-	else if (model_id == 4) {
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_iTRAQ_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_iTRAQ_Y(v+1+(i*fnum))+0.5;
-		}
-	}
-
-	// iTRAQphospho
-	else if (model_id == 5) {
-		for (i=0; i < peplen-1; i++) {
-			predictions[0*(peplen-1)+i] = score_iTRAQphospho_B(v+1+(i*fnum))+0.5;
-			predictions[2*(peplen-1)-i-1] = score_iTRAQphospho_Y(v+1+(i*fnum))+0.5;
 		}
 	}
 
