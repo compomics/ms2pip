@@ -58,8 +58,8 @@ MODELS = {
             "y": "model_20190107_CID_train_Y.xgboost",
         },
         "model_hash": {
-            "model_20190107_CID_train_B.xgboost": "17b1bbc65d412ef4f62e8bc2bcd5fba5f5279fb1",
-            "model_20190107_CID_train_Y.xgboost": "decac0070c44eedacf564b3e70d54058fc35620d"
+            "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
+            "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f"
         }
     },
     "HCD2019": {
@@ -84,8 +84,8 @@ MODELS = {
             "y": "model_20190107_TTOF5600_train_Y.xgboost",
         },
         "model_hash": {
-            "model_20190107_TTOF5600_train_B.xgboost": "0335f24f63f17ee473f2320b82da14e4efad1ea8",
-            "model_20190107_TTOF5600_train_Y.xgboost": "2c06f41ffe4e253c7331ec10a247703425ce898d"
+            "model_20190107_TTOF5600_train_B.xgboost": "ab2e28dfbc4ee60640253b0b4c127fc272c9d0ed",
+            "model_20190107_TTOF5600_train_Y.xgboost": "f8e9ddd8ca78ace06f67460a2fea0d8fa2623452"
         }
     },
     "TMT": {
@@ -100,7 +100,7 @@ MODELS = {
     #     "peaks_version": "general",
     #     "features_version": "normal",
     # },
-    "ITRAQ": {
+    "iTRAQ": {
         "id": 4,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
@@ -110,8 +110,8 @@ MODELS = {
             "y": "model_20190107_iTRAQ_train_Y.xgboost",
         },
         "model_hash": {
-            "model_20190107_iTRAQ_train_B.xgboost": "a3a23e68ced30ae97da808b585ecfad212700d14",
-            "model_20190107_iTRAQ_train_Y.xgboost": "0d167e5a660ee805951c3fefa91a92aa7b606f0c"
+            "model_20190107_iTRAQ_train_B.xgboost": "b8d94ad329a245210c652a5b35d724d2c74d0d50",
+            "model_20190107_iTRAQ_train_Y.xgboost": "56ae87d56fd434b53fcc1d291745cabb7baf463a"
         }
     },
     # "iTRAQphospho": {
@@ -120,7 +120,7 @@ MODELS = {
     #     "peaks_version": "general",
     #     "features_version": "normal",
     # },
-    "ITRAQphospho": {
+    "iTRAQphospho": {
         "id": 5,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
@@ -130,8 +130,8 @@ MODELS = {
             "y": "model_20190107_iTRAQphospho_train_Y.xgboost",
         },
         "model_hash": {
-            "model_20190107_iTRAQphospho_train_B.xgboost": "0fd969bf0304d0d55771e0ff04cfbb4beadd4173",
-            "model_20190107_iTRAQphospho_train_Y.xgboost": "6d6d5bb60be823c806345e5d136a955b6d9bfb97"
+            "model_20190107_iTRAQphospho_train_B.xgboost": "e283b158cc50e219f42f93be624d0d0ac01d6b49",
+            "model_20190107_iTRAQphospho_train_Y.xgboost": "261b2e1810a299ed7ebf193ce1fb81a608c07d3b"
         }
     },
     # ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
