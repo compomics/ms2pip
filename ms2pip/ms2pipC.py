@@ -295,6 +295,7 @@ def process_spectra(
 
     if "xgboost_model_files" in MODELS[model].keys():
         XGB_models = {}
+        xgb.set_config(verbosity=0)
         for ion_type in MODELS[model]["xgboost_model_files"].keys():
             xgb_model = xgb.Booster({"nthread": 1})
             xgb_model.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"][ion_type]))
