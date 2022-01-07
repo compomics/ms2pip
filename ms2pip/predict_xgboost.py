@@ -40,9 +40,9 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
 
         # Reshape into arrays for each peptide
         preds = _split_list_by_lengths(preds, num_ions)
-        if ion_type in ["x", "y", "z"]:
+        if ion_type in ["x", "y", "y2", "z"]:
             preds = [np.array(x[::-1], dtype=np.float32) for x in preds]
-        elif ion_type in ["a", "b", "c"]:
+        elif ion_type in ["a", "b", "b2", "c"]:
             preds = [np.array(x, dtype=np.float32) for x in preds]
         else:
             raise ValueError(f"Unsupported ion_type: {ion_type}")
@@ -129,10 +129,8 @@ def check_model_presence(model, model_hash):
     home = os.path.expanduser("~")
     if not os.path.isfile(os.path.join(home, ".ms2pip", model)):
         return False
-    elif check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash):
-        return True
-    else:
-        raise UnknownFragmentationMethodError()
+    return check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash)
+
 
 
 def download_model(model, model_hash):
@@ -145,7 +143,8 @@ def download_model(model, model_hash):
 
     dowloadpath = os.path.join(home, ".ms2pip", model)
     urllib.request.urlretrieve(os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
-    check_model_integrity(dowloadpath, model_hash)
+    if not check_model_integrity(dowloadpath, model_hash):
+        raise InvalidXGBoostModelError()
 
 
 def check_model_integrity(filename, model_hash):
@@ -159,6 +158,7 @@ def check_model_integrity(filename, model_hash):
                 break
             sha1_hash.update(chunk)
     if sha1_hash.hexdigest() != model_hash:
-        raise InvalidXGBoostModelError()
+        logger.warn("Model hash not recognised")
+        return False
     else:
         return True

@@ -42,12 +42,6 @@ SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut", "dlib
 # ion_types is required to write the ion types in the headers of the result files
 # features_version is required to select the features version
 MODELS = {
-    # "CID": {
-    #     "id": 0,
-    #     "ion_types": ["B", "Y"],
-    #     "peaks_version": "general",
-    #     "features_version": "normal",
-    # },
     "CID": {
         "id": 0,
         "ion_types": ["B", "Y"],
@@ -68,12 +62,6 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
     },
-    # "TTOF5600": {
-    #     "id": 2,
-    #     "ion_types": ["B", "Y"],
-    #     "peaks_version": "general",
-    #     "features_version": "normal",
-    # },
     "TTOF5600": {
         "id": 2,
         "ion_types": ["B", "Y"],
@@ -94,12 +82,6 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
     },
-    # "iTRAQ": {
-    #     "id": 4,
-    #     "ion_types": ["B", "Y"],
-    #     "peaks_version": "general",
-    #     "features_version": "normal",
-    # },
     "iTRAQ": {
         "id": 4,
         "ion_types": ["B", "Y"],
@@ -114,12 +96,6 @@ MODELS = {
             "model_20190107_iTRAQ_train_Y.xgboost": "56ae87d56fd434b53fcc1d291745cabb7baf463a"
         }
     },
-    # "iTRAQphospho": {
-    #     "id": 5,
-    #     "ion_types": ["B", "Y"],
-    #     "peaks_version": "general",
-    #     "features_version": "normal",
-    # },
     "iTRAQphospho": {
         "id": 5,
         "ion_types": ["B", "Y"],
@@ -146,6 +122,18 @@ MODELS = {
         "ion_types": ["B", "Y", "B2", "Y2"],
         "peaks_version": "ch2",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_CID_train_B.xgboost",
+            "y": "model_20190107_CID_train_Y.xgboost",
+            "b2": "model_20190107_CID_train_B2.xgboost",
+            "y2": "model_20190107_CID_train_Y2.xgboost"
+        },
+        "model_hash": {
+            "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
+            "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f",
+            "model_20190107_CID_train_B2.xgboost": "602f2fc648890aebbbe2646252ade658af3221a3",
+            "model_20190107_CID_train_Y2.xgboost": "4e4ad0f1d4606c17015aae0f74edba69f684d399"
+        }
     },
     "HCD2021": {
         "id": 9,
@@ -306,14 +294,11 @@ def process_spectra(
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     if "xgboost_model_files" in MODELS[model].keys():
-        xgb_B = xgb.Booster({"nthread": 1})
-        xgb_B.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["b"]))
-        xgb_Y = xgb.Booster({"nthread": 1})
-        xgb_Y.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["y"]))
-        XGB_models = {
-            "b": xgb_B,
-            "y": xgb_Y
-        }
+        XGB_models = {}
+        for ion_type in MODELS[model]["xgboost_model_files"].keys():
+            xgb_model = xgb.Booster({"nthread": 1})
+            xgb_model.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"][ion_type]))
+            XGB_models[ion_type] = xgb_model
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
@@ -646,9 +631,9 @@ def process_spectra(
                         predictions = []
                         for ion_type, model_file in XGB_models.items():
                             preds = model_file.predict(xgb_vector)
-                            if ion_type in ["x", "y", "z"]:
+                            if ion_type in ["x", "y", "y2", "z"]:
                                 preds = list(np.array(preds[::-1], dtype=np.float32))
-                            elif ion_type in ["a", "b", "c"]:
+                            elif ion_type in ["a", "b", "b2", "c"]:
                                 preds = list(np.array(preds, dtype=np.float32))
                             else:
                                 raise ValueError(f"Unsupported ion_type: {ion_type}")
