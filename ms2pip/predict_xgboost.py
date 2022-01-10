@@ -11,7 +11,7 @@ import xgboost as xgb
 
 from ms2pip.exceptions import (InvalidModificationFormattingError,
                                InvalidXGBoostModelError,
-                               UnknownFragmentationMethodError)
+                               UnknownModificationError)
 from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
 
 logger = logging.getLogger("ms2pip")
