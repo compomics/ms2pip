@@ -10,12 +10,13 @@ import sys
 from random import shuffle
 
 import numpy as np
-import xgboost as xgb
 import pandas as pd
+import xgboost as xgb
 from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (EmptySpectrumError, FragmentationModelRequiredError,
+from ms2pip.exceptions import (EmptySpectrumError,
+                               FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, MissingConfigurationError,
                                NoValidPeptideSequencesError,
@@ -27,10 +28,9 @@ from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
+from ms2pip.predict_xgboost import (check_model_presence, download_model,
+                                    process_peptides_xgb)
 from ms2pip.retention_time import RetentionTime
-from ms2pip.predict_xgboost import (process_peptides_xgb,
-                                    check_model_presence,
-                                    download_model)
 
 logger = logging.getLogger("ms2pip")
 
@@ -294,12 +294,17 @@ def process_spectra(
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     if "xgboost_model_files" in MODELS[model].keys():
-        XGB_models = {}
+        xgboost_models = {}
         xgb.set_config(verbosity=0)
         for ion_type in MODELS[model]["xgboost_model_files"].keys():
             xgb_model = xgb.Booster({"nthread": 1})
-            xgb_model.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"][ion_type]))
-            XGB_models[ion_type] = xgb_model
+            xgb_model.load_model(
+                os.path.join(
+                    os.path.expanduser("~"),
+                    ".ms2pip", MODELS[model]["xgboost_model_files"][ion_type]
+                )
+            )
+            xgboost_models[ion_type] = xgb_model
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
@@ -627,10 +632,13 @@ def process_spectra(
                     mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
                     mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
                     if "xgboost_model_files" in MODELS[model].keys():
-                        xgb_vector = np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
+                        xgb_vector = np.array(
+                            ms2pip_pyx.get_vector(peptide, modpeptide, charge),
+                            dtype=np.uint16
+                        )
                         xgb_vector = xgb.DMatrix(xgb_vector)
                         predictions = []
-                        for ion_type, model_file in XGB_models.items():
+                        for ion_type, model_file in xgboost_models.items():
                             preds = model_file.predict(xgb_vector)
                             if ion_type in ["x", "y", "y2", "z"]:
                                 preds = list(np.array(preds[::-1], dtype=np.float32))
@@ -642,7 +650,7 @@ def process_spectra(
                     else:
                         predictions = ms2pip_pyx.get_predictions(
                             peptide, modpeptide, charge, model_id, peaks_version, colen
-                        ) # SD: added colen
+                        )
                     prediction_buf.append(
                         [np.array(p, dtype=np.float32) for p in predictions]
                     )

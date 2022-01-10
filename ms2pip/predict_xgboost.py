@@ -1,23 +1,19 @@
 """Get predictions directly from XGBoost model, within ms2pip framework."""
 
-from genericpath import isfile
-from itertools import islice
+import hashlib
+import logging
 import os
 import urllib.request
-import logging
-
+from itertools import islice
 
 import numpy as np
 import xgboost as xgb
-import hashlib
 
+from ms2pip.exceptions import (InvalidModificationFormattingError,
+                               InvalidXGBoostModelError,
+                               UnknownFragmentationMethodError)
 from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
-from ms2pip.exceptions import (
-    InvalidModificationFormattingError,
-    InvalidXGBoostModelError,
-    UnknownModificationError,
-    UnknownFragmentationMethodError,
-)
+
 logger = logging.getLogger("ms2pip")
 
 
@@ -124,18 +120,15 @@ def apply_mods(peptide, mods, PTMmap):
 
 
 def check_model_presence(model, model_hash):
-    """ Check whether xgboost model is downloaded"""
-
+    """Check whether xgboost model is downloaded."""
     home = os.path.expanduser("~")
     if not os.path.isfile(os.path.join(home, ".ms2pip", model)):
         return False
     return check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash)
 
 
-
 def download_model(model, model_hash):
-    """ Download the xgboost model to user/.ms2pip path"""
-
+    """Download the xgboost model to user/.ms2pip path."""
     logger.info(f"Downloading {model}")
     home = os.path.expanduser("~")
     if not os.path.isdir(os.path.join(home, ".ms2pip")):
@@ -148,8 +141,7 @@ def download_model(model, model_hash):
 
 
 def check_model_integrity(filename, model_hash):
-    """Check that models are correctly downloaded"""
-
+    """Check that models are correctly downloaded."""
     sha1_hash = hashlib.sha1()
     with open(filename, "rb") as modelfile:
         while True:
@@ -157,8 +149,8 @@ def check_model_integrity(filename, model_hash):
             if not chunk:
                 break
             sha1_hash.update(chunk)
-    if sha1_hash.hexdigest() != model_hash:
+    if sha1_hash.hexdigest() == model_hash:
+        return True
+    else:
         logger.warn("Model hash not recognised")
         return False
-    else:
-        return True
