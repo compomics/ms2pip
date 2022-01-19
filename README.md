@@ -319,8 +319,8 @@ next to the predictions for singly charged b- and y-ions.
 | HCDch2 | v20190107 | [MassIVE-KB](https://doi.org/10.1016/j.cels.2018.08.004) (1 623 712) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269) | 0.903786 (+) and 0.644162 (++) |
 | CIDch2 | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947 (+) and 0.813342 (++) |
 | HCD2021 | v20210416 | [Combined dataset] (520 579) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269)  | 0.932361
-| Immuno-HCD | v20210316 | [Combined dataset] (460191) | [PXD005231 (HLA-I)](https://doi.org/10.1101/098780) (46 753) <br>[PXD020011 (HLA-II)](https://doi.org/10.3389/fimmu.2020.01981 ) (23 941) | 0.963736<br>0.942383
-| CID-TMT | v20220104 | [in-house dataset] (72138) | [PXD005890 (IT)](10.1021/acs.jproteome.7b00091) (160902) | 0.874988
+| Immuno-HCD | v20210316 | [Combined dataset] (460 191) | [PXD005231 (HLA-I)](https://doi.org/10.1101/098780) (46 753) <br>[PXD020011 (HLA-II)](https://doi.org/10.3389/fimmu.2020.01981 ) (23 941) | 0.963736<br>0.942383
+| CID-TMT | v20220104 | [in-house dataset] (72 138) | [PXD005890](10.1021/acs.jproteome.7b00091) (69 768) | 0.851085
 
 
 To train custom MS²PIP models, please refer to [Training new MS²PIP models](http://compomics.github.io/projects/ms2pip_c/wiki/Training-new-MS2PIP-models.html) on our Wiki pages.
