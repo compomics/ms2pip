@@ -303,7 +303,7 @@ next to the predictions for singly charged b- and y-ions.
 | HCDch2 | HCD | Orbitrap | Tryptic digest |
 | CIDch2 | CID | Linear ion trap | Tryptic digest |
 | Immuno-HCD | HCD | Orbitrap | Immunopeptides |
-| CID-TMT | CID | Linear ion trap | tryptic digest, TMT-labeled |
+| CID-TMT | CID | Linear ion trap | Tryptic digest, TMT-labeled |
 
 
 ### Models, version numbers, and the train and test datasets used to create each model
