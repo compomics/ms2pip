@@ -28,7 +28,7 @@ from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
-from ms2pip.predict_xgboost import (check_model_presence, download_model,
+from ms2pip.predict_xgboost import (validate_requested_xgb_model, initialize_xgb_models,
                                     process_peptides_xgb)
 from ms2pip.retention_time import RetentionTime
 
@@ -294,17 +294,10 @@ def process_spectra(
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     if "xgboost_model_files" in MODELS[model].keys():
-        xgboost_models = {}
-        xgb.set_config(verbosity=0)
-        for ion_type in MODELS[model]["xgboost_model_files"].keys():
-            xgb_model = xgb.Booster({"nthread": 1})
-            xgb_model.load_model(
-                os.path.join(
-                    os.path.expanduser("~"),
-                    ".ms2pip", MODELS[model]["xgboost_model_files"][ion_type]
-                )
-            )
-            xgboost_models[ion_type] = xgb_model
+        xgboost_models = initialize_xgb_models(
+            MODELS[model]["xgboost_model_files"],
+            1
+        )
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
@@ -816,9 +809,10 @@ class MS2PIP:
         if self.model in MODELS.keys():
             logger.info("using %s models", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
-                for _, model_file in MODELS[self.model]["xgboost_model_files"].items():
-                    if not check_model_presence(model_file, MODELS[self.model]["model_hash"][model_file]):
-                        download_model(model_file, MODELS[self.model]["model_hash"][model_file])
+                validate_requested_xgb_model(
+                    MODELS[self.model]["xgboost_model_files"],
+                    MODELS[self.model]["model_hash"]
+                )
         else:
             raise UnknownFragmentationMethodError(self.model)
 

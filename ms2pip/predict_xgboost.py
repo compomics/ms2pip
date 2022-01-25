@@ -154,3 +154,29 @@ def check_model_integrity(filename, model_hash):
     else:
         logger.warn("Model hash not recognised")
         return False
+
+
+def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes):
+    """Validate requestes xgboost models, and download if neccessary"""
+
+    for _, model_file in xgboost_model_files.items():
+        if not check_model_presence(model_file, xgboost_model_hashes[model_file]):
+            download_model(model_file, xgboost_model_hashes[model_file])
+
+
+def initialize_xgb_models(xgboost_model_files, nthread) -> dict:
+    """Initialize xgboost models and return them in a dict wit ion types as keys"""
+    xgb.set_config(verbosity=0)
+
+    xgboost_models = {}
+    for ion_type in xgboost_model_files.keys():
+        xgb_model = xgb.Booster({"nthread": nthread})
+        xgb_model.load_model(
+            os.path.join(
+                os.path.expanduser("~"),
+                ".ms2pip", xgboost_model_files[ion_type]
+            )
+        )
+        xgboost_models[ion_type] = xgb_model
+
+    return xgboost_models
