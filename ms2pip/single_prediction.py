@@ -140,8 +140,6 @@ class SinglePrediction:
                 [ion_type.lower() + str(i + 1) for i in range(len(mz[MODELS[model]["ion_types"].index(ion_type)]))]
             )
         annotation = np.array(annotation)
-        print(len(mz), mz)
-        print(len(intensity), intensity)
         mz = mz.flatten()
         intensity = self._tic_normalize(self._transform(intensity.flatten()))
         annotation = annotation.flatten()
@@ -280,6 +278,11 @@ def _main(
      - ms2pip-single-prediction -c config.toml NSVPCSR "5|Carbamidomethyl" 3
 
     """
+    root_logger = logging.getLogger()
+    handler = logging.StreamHandler()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+
     if configfile:
         config_parser = ConfigParser(configfile)
         mod_strings = config_parser.config["ms2pip"]["ptm"]
