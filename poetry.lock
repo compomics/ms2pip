@@ -308,6 +308,14 @@ optional = false
 python-versions = ">=3.7"
 
 [[package]]
+name = "llvmlite"
+version = "0.34.0"
+description = "lightweight wrapper around basic LLVM functionality"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "markdown"
 version = "3.3.4"
 description = "Python implementation of Markdown."
@@ -336,6 +344,18 @@ numpy = ">=1.16"
 pillow = ">=6.2.0"
 pyparsing = ">=2.2.1"
 python-dateutil = ">=2.7"
+
+[[package]]
+name = "numba"
+version = "0.51.2"
+description = "compiling Python code using LLVM"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+llvmlite = ">=0.34.0.dev0,<0.35"
+numpy = ">=1.15"
 
 [[package]]
 name = "numexpr"
@@ -609,6 +629,25 @@ optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
+name = "spectrum-utils"
+version = "0.3.5"
+description = "Mass spectrometry utility functions"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+matplotlib = "*"
+numba = ">=0.47"
+numpy = "*"
+pyteomics = "*"
+
+[package.extras]
+dev = ["flake8"]
+docs = ["numpydoc (>=1.1.0)", "sphinx (>=3.5.3)", "sphinx-rtd-theme (>=0.5.1)", "recommonmark (>=0.7.1)"]
+iplot = ["altair", "pandas"]
+
+[[package]]
 name = "sqlalchemy"
 version = "1.4.23"
 description = "Database Abstraction Library"
@@ -691,7 +730,7 @@ python-versions = "*"
 
 [[package]]
 name = "tensorflow"
-version = "2.6.0"
+version = "2.6.1"
 description = "TensorFlow is an open source machine learning framework for everyone."
 category = "main"
 optional = false
@@ -713,7 +752,7 @@ opt-einsum = ">=3.3.0,<3.4.0"
 protobuf = ">=3.9.2"
 six = ">=1.15.0,<1.16.0"
 tensorboard = ">=2.6,<3.0"
-tensorflow-estimator = ">=2.6,<3.0"
+tensorflow-estimator = "<2.7"
 termcolor = ">=1.1.0,<1.2.0"
 typing-extensions = ">=3.7.4,<3.8.0"
 wrapt = ">=1.12.1,<1.13.0"
@@ -807,6 +846,25 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "xgboost"
+version = "1.5.2"
+description = "XGBoost Python Package"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+numpy = "*"
+scipy = "*"
+
+[package.extras]
+dask = ["dask", "pandas", "distributed"]
+datatable = ["datatable"]
+pandas = ["pandas"]
+plotting = ["graphviz", "matplotlib"]
+scikit-learn = ["scikit-learn"]
+
+[[package]]
 name = "zipp"
 version = "3.5.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -821,7 +879,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "0f47e0af06832da598c018e1ead788cbaf7210664d0ae1f7eb10905d2e5c32e0"
+content-hash = "ae3560957d7527a8a82d63f61b097aedf7de68a607781429a0ddd3694ef6db0d"
 
 [metadata.files]
 absl-py = [
@@ -841,6 +899,7 @@ attrs = [
     {file = "attrs-21.2.0.tar.gz", hash = "sha256:ef6aaac3ca6cd92904cdd0d83f629a15f18053ec84e6432106f7a4d04ae4f5fb"},
 ]
 biopython = [
+    {file = "biopython-1.79-cp310-cp310-win_amd64.whl", hash = "sha256:9eadfd4300f534cd4fa39613eeee786d2c3d6b981d373c5c46616fa1a97cad10"},
     {file = "biopython-1.79-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:72a1477cf1701964c7224e506a54fd65d1cc5228da200b634a17992230aa1cbd"},
     {file = "biopython-1.79-cp36-cp36m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:365569543ea58dd07ef205ec351c23b6c1a3200d5d321eb28ceaecd55eb5955e"},
     {file = "biopython-1.79-cp36-cp36m-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:4be31815226052d86d4c2f6a103c40504e34bba3e25cc1b1d687a3203c42fb6e"},
@@ -1146,6 +1205,24 @@ kiwisolver = [
     {file = "kiwisolver-1.3.2-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:bcadb05c3d4794eb9eee1dddf1c24215c92fb7b55a80beae7a60530a91060560"},
     {file = "kiwisolver-1.3.2.tar.gz", hash = "sha256:fc4453705b81d03568d5b808ad8f09c77c47534f6ac2e72e733f9ca4714aa75c"},
 ]
+llvmlite = [
+    {file = "llvmlite-0.34.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:11342e5ac320c953590bdd9d0dec8c52f4b5252c4c6335ba25f1e7b9f91f9325"},
+    {file = "llvmlite-0.34.0-cp36-cp36m-manylinux2010_i686.whl", hash = "sha256:5bdf0ce430adfaf938ced5844d12f80616eb8321b5b9edfc45ef84ada5c5242c"},
+    {file = "llvmlite-0.34.0-cp36-cp36m-manylinux2010_x86_64.whl", hash = "sha256:e08d9d2dc5a31636bfc6b516d2d7daba95632afa3419eb8730dc76a7951e9558"},
+    {file = "llvmlite-0.34.0-cp36-cp36m-win32.whl", hash = "sha256:9ff1dcdad03be0cf953aca5fc8cffdca25ccee2ec9e8ec7e95571722cdc02d55"},
+    {file = "llvmlite-0.34.0-cp36-cp36m-win_amd64.whl", hash = "sha256:5acdc3c3c7ea0ef7a1a6b442272e05d695bc8492e5b07666135ed1cfbf4ab9d2"},
+    {file = "llvmlite-0.34.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:bb96989bc57a1ccb131e7a0e061d07b68139b6f81a98912345d53d9239e231e1"},
+    {file = "llvmlite-0.34.0-cp37-cp37m-manylinux2010_i686.whl", hash = "sha256:6d3f81992f52a94077e7b9b16497029daf5b5eebb2cce56f3c8345bbc9c6308e"},
+    {file = "llvmlite-0.34.0-cp37-cp37m-manylinux2010_x86_64.whl", hash = "sha256:d841248d1c630426c93e3eb3f8c45bca0dab77c09faeb7553b1a500220e362ce"},
+    {file = "llvmlite-0.34.0-cp37-cp37m-win32.whl", hash = "sha256:408b15ffec30696406e821c89da010f1bb1eb0aa572be4561c98eb2536d610ab"},
+    {file = "llvmlite-0.34.0-cp37-cp37m-win_amd64.whl", hash = "sha256:5d1f370bf150db7239204f09cf6a0603292ea28bac984e69b167e16fe160d803"},
+    {file = "llvmlite-0.34.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:132322bc084abf336c80dd106f9357978c8c085911fb656898d3be0d9ff057ea"},
+    {file = "llvmlite-0.34.0-cp38-cp38-manylinux2010_i686.whl", hash = "sha256:8f344102745fceba6eb5bf03c228bb290e9bc79157e9506a4a72878d636f9b3c"},
+    {file = "llvmlite-0.34.0-cp38-cp38-manylinux2010_x86_64.whl", hash = "sha256:05253f3f44fab0148276335b2c1b2c4a78143dfa78e6bafd7f937d6248f297cc"},
+    {file = "llvmlite-0.34.0-cp38-cp38-win32.whl", hash = "sha256:28264f9e2b3df4135cbcfca5a91c5b0b31dd3fc02fa623b4bb13327f0cd4fc80"},
+    {file = "llvmlite-0.34.0-cp38-cp38-win_amd64.whl", hash = "sha256:964f8f7a2184963cb3617d057c2382575953e488b7bb061b632ee014cfef110a"},
+    {file = "llvmlite-0.34.0.tar.gz", hash = "sha256:f03ee0d19bca8f2fe922bb424a909d05c28411983b0c2bc58b020032a0d11f63"},
+]
 markdown = [
     {file = "Markdown-3.3.4-py3-none-any.whl", hash = "sha256:96c3ba1261de2f7547b46a00ea8463832c921d3f9d6aba3f255a6f71386db20c"},
     {file = "Markdown-3.3.4.tar.gz", hash = "sha256:31b5b491868dcc87d6c24b7e3d19a0d730d59d3e46f4eea6430a321bed387a49"},
@@ -1172,6 +1249,24 @@ matplotlib = [
     {file = "matplotlib-3.4.3-pp37-pypy37_pp73-macosx_10_9_x86_64.whl", hash = "sha256:556965514b259204637c360d213de28d43a1f4aed1eca15596ce83f768c5a56f"},
     {file = "matplotlib-3.4.3-pp37-pypy37_pp73-manylinux2010_x86_64.whl", hash = "sha256:54a026055d5f8614f184e588f6e29064019a0aa8448450214c0b60926d62d919"},
     {file = "matplotlib-3.4.3.tar.gz", hash = "sha256:fc4f526dfdb31c9bd6b8ca06bf9fab663ca12f3ec9cdf4496fb44bc680140318"},
+]
+numba = [
+    {file = "numba-0.51.2-cp36-cp36m-macosx_10_14_x86_64.whl", hash = "sha256:af798310eeb318c56cdb83254abbe9a938cc0182d08671d7f9f032dc817e064d"},
+    {file = "numba-0.51.2-cp36-cp36m-manylinux2014_i686.whl", hash = "sha256:93e18350f2094e7432321c1275730a3143b94af012fb609cc180fa376c44867f"},
+    {file = "numba-0.51.2-cp36-cp36m-manylinux2014_x86_64.whl", hash = "sha256:9e2bb1f129bfadd757ad7a9c18ab79c3ab25ce6d6a68e58565d6c52ad07b3566"},
+    {file = "numba-0.51.2-cp36-cp36m-win32.whl", hash = "sha256:31cdf6b6d1301d5fb6c4fcb8b4c711ba5c9f60ba2fca008b550da9b56185367c"},
+    {file = "numba-0.51.2-cp36-cp36m-win_amd64.whl", hash = "sha256:df6edca13c04a31fdb5addf5205199478a7da372712829157ef491e8a6e7031f"},
+    {file = "numba-0.51.2-cp37-cp37m-macosx_10_14_x86_64.whl", hash = "sha256:a628122dacfcba9a3ea68a9e95578c6b6391016e34962c46550ea8e189e0412e"},
+    {file = "numba-0.51.2-cp37-cp37m-manylinux2014_i686.whl", hash = "sha256:106736d5a8dab6bebce989d4ab1b3f169c264582598f172e6e5b736210d2e834"},
+    {file = "numba-0.51.2-cp37-cp37m-manylinux2014_x86_64.whl", hash = "sha256:a12f16fdb4ca5edc94e2ef412e4e768c29217ef9b6fdfc237d064ebe30acfe14"},
+    {file = "numba-0.51.2-cp37-cp37m-win32.whl", hash = "sha256:025b033fd31c44bba17802293c81270084b5454b5b055b8c10c394385c232f00"},
+    {file = "numba-0.51.2-cp37-cp37m-win_amd64.whl", hash = "sha256:081788f584fa500339e9b74bf02e3c5029d408c114e555ada19cae0b92721416"},
+    {file = "numba-0.51.2-cp38-cp38-macosx_10_14_x86_64.whl", hash = "sha256:5416b584183fd599afda11b947b64f89450fcf26a9c15b408167f412b98a3a94"},
+    {file = "numba-0.51.2-cp38-cp38-manylinux2014_i686.whl", hash = "sha256:05da65dca2ac28a192c9d8f20e9e477eb1237205cfc4d131c414f5f8092c6639"},
+    {file = "numba-0.51.2-cp38-cp38-manylinux2014_x86_64.whl", hash = "sha256:aee435e3b7e465dd49971f8ea76aa414532a87736916cb399534e017334d1138"},
+    {file = "numba-0.51.2-cp38-cp38-win32.whl", hash = "sha256:bbbe2432433b11d3fadab0226a84c1a81918cb905ba1aeb022249e8d2ba8856c"},
+    {file = "numba-0.51.2-cp38-cp38-win_amd64.whl", hash = "sha256:259e7c15b24feec4a99fb41eb8c47b5ad49b544d1a5ad40ad0252ef531ba06fd"},
+    {file = "numba-0.51.2.tar.gz", hash = "sha256:16bd59572114adbf5f600ea383880d7b2071ae45477e84a24994e089ea390768"},
 ]
 numexpr = [
     {file = "numexpr-2.7.3-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:74df157ab4577bfc83c14f4e39d14781b06ade5406d3efef049f90c88d8c28ea"},
@@ -1365,13 +1460,19 @@ protobuf = [
     {file = "protobuf-3.17.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:2ae692bb6d1992afb6b74348e7bb648a75bb0d3565a3f5eea5bec8f62bd06d87"},
     {file = "protobuf-3.17.3-cp38-cp38-manylinux2014_aarch64.whl", hash = "sha256:99938f2a2d7ca6563c0ade0c5ca8982264c484fdecf418bd68e880a7ab5730b1"},
     {file = "protobuf-3.17.3-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:6902a1e4b7a319ec611a7345ff81b6b004b36b0d2196ce7a748b3493da3d226d"},
+    {file = "protobuf-3.17.3-cp38-cp38-win32.whl", hash = "sha256:59e5cf6b737c3a376932fbfb869043415f7c16a0cf176ab30a5bbc419cd709c1"},
+    {file = "protobuf-3.17.3-cp38-cp38-win_amd64.whl", hash = "sha256:ebcb546f10069b56dc2e3da35e003a02076aaa377caf8530fe9789570984a8d2"},
     {file = "protobuf-3.17.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:4ffbd23640bb7403574f7aff8368e2aeb2ec9a5c6306580be48ac59a6bac8bde"},
     {file = "protobuf-3.17.3-cp39-cp39-manylinux2014_aarch64.whl", hash = "sha256:26010f693b675ff5a1d0e1bdb17689b8b716a18709113288fead438703d45539"},
     {file = "protobuf-3.17.3-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:e76d9686e088fece2450dbc7ee905f9be904e427341d289acbe9ad00b78ebd47"},
+    {file = "protobuf-3.17.3-cp39-cp39-win32.whl", hash = "sha256:a38bac25f51c93e4be4092c88b2568b9f407c27217d3dd23c7a57fa522a17554"},
+    {file = "protobuf-3.17.3-cp39-cp39-win_amd64.whl", hash = "sha256:85d6303e4adade2827e43c2b54114d9a6ea547b671cb63fafd5011dc47d0e13d"},
     {file = "protobuf-3.17.3-py2.py3-none-any.whl", hash = "sha256:2bfb815216a9cd9faec52b16fd2bfa68437a44b67c56bee59bc3926522ecb04e"},
     {file = "protobuf-3.17.3.tar.gz", hash = "sha256:72804ea5eaa9c22a090d2803813e280fb273b62d5ae497aaf3553d141c4fdd7b"},
 ]
 psycopg2 = [
+    {file = "psycopg2-2.9.1-cp310-cp310-win32.whl", hash = "sha256:25615574419dd9bda6fdfdcd58afb22e721f5b807cb3d5e62f488c8acf8cb754"},
+    {file = "psycopg2-2.9.1-cp310-cp310-win_amd64.whl", hash = "sha256:e5a8ed9dbfca8dc162c4ada5ab017e10d5a66c542b4c73569f103fa5f342f498"},
     {file = "psycopg2-2.9.1-cp36-cp36m-win32.whl", hash = "sha256:7f91312f065df517187134cce8e395ab37f5b601a42446bdc0f0d51773621854"},
     {file = "psycopg2-2.9.1-cp36-cp36m-win_amd64.whl", hash = "sha256:830c8e8dddab6b6716a4bf73a09910c7954a92f40cf1d1e702fb93c8a919cc56"},
     {file = "psycopg2-2.9.1-cp37-cp37m-win32.whl", hash = "sha256:89409d369f4882c47f7ea20c42c5046879ce22c1e4ea20ef3b00a4dfc0a7f188"},
@@ -1474,6 +1575,10 @@ six = [
     {file = "six-1.15.0-py2.py3-none-any.whl", hash = "sha256:8b74bedcbbbaca38ff6d7491d76f2b06b3592611af620f8426e82dddb04a5ced"},
     {file = "six-1.15.0.tar.gz", hash = "sha256:30639c035cdb23534cd4aa2dd52c3bf48f06e5f4a941509c8bafd8ce11080259"},
 ]
+spectrum-utils = [
+    {file = "spectrum_utils-0.3.5-py3-none-any.whl", hash = "sha256:928162eb031590002077c81770f164daf9ebc1e5992c891220414506ae6d8c3e"},
+    {file = "spectrum_utils-0.3.5.tar.gz", hash = "sha256:8f908207177dee1faec161942932a0d2bcdb39203b36331eeee3f91c2cd70682"},
+]
 sqlalchemy = [
     {file = "SQLAlchemy-1.4.23-cp27-cp27m-macosx_10_14_x86_64.whl", hash = "sha256:25e9b2e5ca088879ce3740d9ccd4d58cb9061d49566a0b5e12166f403d6f4da0"},
     {file = "SQLAlchemy-1.4.23-cp27-cp27m-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:d9667260125688c71ccf9af321c37e9fb71c2693575af8210f763bfbbee847c7"},
@@ -1544,18 +1649,18 @@ tensorboard-plugin-wit = [
     {file = "tensorboard_plugin_wit-1.8.0-py3-none-any.whl", hash = "sha256:2a80d1c551d741e99b2f197bb915d8a133e24adb8da1732b840041860f91183a"},
 ]
 tensorflow = [
-    {file = "tensorflow-2.6.0-cp36-cp36m-macosx_10_11_x86_64.whl", hash = "sha256:c67fad296a3a2133b7a14da5f06c9937e7911b02c5d7a3ff6ba52a1d79b6bc9e"},
-    {file = "tensorflow-2.6.0-cp36-cp36m-manylinux2010_x86_64.whl", hash = "sha256:8b5ce09ede0fe45ef100f4dc65cf3f46722194e75139f85d524058315e2ce9fa"},
-    {file = "tensorflow-2.6.0-cp36-cp36m-win_amd64.whl", hash = "sha256:dea97f664246e185d79cbe40a86309527affd4232f06afa8a6500c4fc4b64a03"},
-    {file = "tensorflow-2.6.0-cp37-cp37m-macosx_10_11_x86_64.whl", hash = "sha256:4716c9b25a61a2c79b1f253d1e114f1f8679241559c13ad18c657c626a7d5924"},
-    {file = "tensorflow-2.6.0-cp37-cp37m-manylinux2010_x86_64.whl", hash = "sha256:e45e026a9d08c89cecc1160d8248135e2fb79bdc3267328399e1fb25ce583bd6"},
-    {file = "tensorflow-2.6.0-cp37-cp37m-win_amd64.whl", hash = "sha256:6e38b6969414d16afc560c58ca34e1328cc0a5dbd644b64e060f5be8a6653274"},
-    {file = "tensorflow-2.6.0-cp38-cp38-macosx_10_11_x86_64.whl", hash = "sha256:2a067d22a356c2cd4753bdd16ee492c55a610f5ebc52713e2954c642f070321c"},
-    {file = "tensorflow-2.6.0-cp38-cp38-manylinux2010_x86_64.whl", hash = "sha256:2c9b8c6adc060acfcf805a2ea501db0124b679d95b522fd5983a4c110e8e0264"},
-    {file = "tensorflow-2.6.0-cp38-cp38-win_amd64.whl", hash = "sha256:d6468e05552720100e8f94097feb770de320e4c8c244323a8746bd84e5ba4052"},
-    {file = "tensorflow-2.6.0-cp39-cp39-macosx_10_11_x86_64.whl", hash = "sha256:00b1af0a0c5c102db19caceffac4bd4e6c536e6d7512144c241a4ace4428e7c6"},
-    {file = "tensorflow-2.6.0-cp39-cp39-manylinux2010_x86_64.whl", hash = "sha256:bc73ebdd30c48cfc27ba307271117e6dbb795b37396ed817b2fec9393380b115"},
-    {file = "tensorflow-2.6.0-cp39-cp39-win_amd64.whl", hash = "sha256:bfb255c2b0400bc5b4060dda098d46cd7ddeb53b7cbac1dfa29435612cba828c"},
+    {file = "tensorflow-2.6.1-cp36-cp36m-macosx_10_14_x86_64.whl", hash = "sha256:dd0036a6fdb78958dcab3bdc4b3df23d7b9ab80ca51c03f2a84b4d354bbf36a1"},
+    {file = "tensorflow-2.6.1-cp36-cp36m-manylinux2010_x86_64.whl", hash = "sha256:c2f00e7c874660b1f02efc7c581e96d64da762eb6e784be697e215cdfdb26a20"},
+    {file = "tensorflow-2.6.1-cp36-cp36m-win_amd64.whl", hash = "sha256:b47c987de5fb27f55184089e322e1180691170857a8bc9952f219fb0b13598d6"},
+    {file = "tensorflow-2.6.1-cp37-cp37m-macosx_10_14_x86_64.whl", hash = "sha256:6f2dfc34e1a180c975e64ade21a7c60a752c8f96ddddb36a605f2bd0a13aeda3"},
+    {file = "tensorflow-2.6.1-cp37-cp37m-manylinux2010_x86_64.whl", hash = "sha256:7cbfdeb5122c1ea63653b01bb4ab4a457d0b8f14d00cdc888550e092e1142b8d"},
+    {file = "tensorflow-2.6.1-cp37-cp37m-win_amd64.whl", hash = "sha256:fa522c1061bcfbd4e16034d31e2b9740447447d6603adf8f17079c3036ed420c"},
+    {file = "tensorflow-2.6.1-cp38-cp38-macosx_10_14_x86_64.whl", hash = "sha256:47a91e2ede99ee6e94bab1367ba442e5ff39e761e63bd30ae0634c56aa90663d"},
+    {file = "tensorflow-2.6.1-cp38-cp38-manylinux2010_x86_64.whl", hash = "sha256:9b4f6e70b70de53b90458aefa93fa5cdba479ce9ae14ba09d70fa2fc28f3bd5b"},
+    {file = "tensorflow-2.6.1-cp38-cp38-win_amd64.whl", hash = "sha256:2cb8e993f40474e63bb9c878dc2ebc9b9ae8d92e3d6b9a62275b9a0a57c355da"},
+    {file = "tensorflow-2.6.1-cp39-cp39-macosx_10_14_x86_64.whl", hash = "sha256:27ebfeedbdf275d92f544ccd1fdba65b266c2c42b0551bbe769f506e8e17a878"},
+    {file = "tensorflow-2.6.1-cp39-cp39-manylinux2010_x86_64.whl", hash = "sha256:e05a51a11a94714d875bd7c93e1d3b405edeb31e677dd3ec537bb1edf10719ff"},
+    {file = "tensorflow-2.6.1-cp39-cp39-win_amd64.whl", hash = "sha256:839e6e7d49089ddc544591bd830f82f3e12137ecc4db5a4bd59ebf0b58cf52c0"},
 ]
 tensorflow-estimator = [
     {file = "tensorflow_estimator-2.6.0-py2.py3-none-any.whl", hash = "sha256:cf78528998efdb637ac0abaf525c929bf192767544eb24ae20d9266effcf5afd"},
@@ -1590,6 +1695,13 @@ werkzeug = [
 ]
 wrapt = [
     {file = "wrapt-1.12.1.tar.gz", hash = "sha256:b62ffa81fb85f4332a4f609cab4ac40709470da05643a082ec1eb88e6d9b97d7"},
+]
+xgboost = [
+    {file = "xgboost-1.5.2-py3-none-macosx_10_15_x86_64.macosx_11_0_x86_64.macosx_12_0_x86_64.whl", hash = "sha256:51b5dfe553d78ab92f2c60ccead6abc38196c2961f6952f6ec14b1feba6ffd25"},
+    {file = "xgboost-1.5.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:a449b0d0d8a15e72946c9d07e3d4ea153ac12570d054f6020cc5146cb4979261"},
+    {file = "xgboost-1.5.2-py3-none-manylinux2014_x86_64.whl", hash = "sha256:46e43e06b1de260fe4c67e818720485559dab1bed1d97b82275220fab602a2ba"},
+    {file = "xgboost-1.5.2-py3-none-win_amd64.whl", hash = "sha256:f9d459ad42da74c60136123ead36fa562086fb886f52fca229477d327d60dad0"},
+    {file = "xgboost-1.5.2.tar.gz", hash = "sha256:404dc09dca887ef5a9bc0268f882c54b33bfc16ac365a859a11e7b24d49da387"},
 ]
 zipp = [
     {file = "zipp-3.5.0-py3-none-any.whl", hash = "sha256:957cfda87797e389580cb8b9e3870841ca991e2125350677b2ca83a0e99390a3"},
