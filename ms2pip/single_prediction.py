@@ -1,10 +1,12 @@
 """"Run MS²PIP prediction for single peptide."""
 
 import re
+import logging
 
 import click
 import matplotlib.pyplot as plt
 import numpy as np
+import xgboost as xgb
 import spectrum_utils.plot as sup
 import spectrum_utils.spectrum as sus
 
@@ -13,6 +15,9 @@ from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.exceptions import InvalidModificationFormattingError, InvalidPeptideError
 from ms2pip.ms2pipC import MODELS, apply_mods
 from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_accid_masses
+from ms2pip.predict_xgboost import validate_requested_xgb_model, initialize_xgb_models
+
+logger = logging.getLogger("ms2pip")
 
 
 class SinglePrediction:
@@ -102,14 +107,39 @@ class SinglePrediction:
         ce = 30
 
         mz = np.array(ms2pip_pyx.get_mzs(modpeptide, peaks_version))
-        intensity = np.array(ms2pip_pyx.get_predictions(
-            peptide, modpeptide, charge, model_id, peaks_version, ce
-        ))
-
-        annotation = np.array([
-            ["b" + str(i + 1) for i in range(len(mz[0]))],
-            ["y" + str(i + 1) for i in range(len(mz[1]))],
-        ])
+        if "xgboost_model_files" in MODELS[model].keys():
+            validate_requested_xgb_model(
+                MODELS[model]["xgboost_model_files"],
+                MODELS[model]["model_hash"]
+            )
+            xgboost_models = initialize_xgb_models(
+                MODELS[model]["xgboost_model_files"],
+                1
+            )
+            xgb_vector = np.array(
+                ms2pip_pyx.get_vector(peptide, modpeptide, charge),
+                dtype=np.uint16
+            )
+            xgb_vector = xgb.DMatrix(xgb_vector)
+            intensity = []
+            for ion_type, model_file in xgboost_models.items():
+                preds = model_file.predict(xgb_vector)
+                if ion_type in ["x", "y", "y2", "z"]:
+                    preds = list(np.array(preds[::-1], dtype=np.float32))
+                elif ion_type in ["a", "b", "b2", "c"]:
+                    preds = list(np.array(preds, dtype=np.float32))
+                intensity.append(preds)
+            intensity = np.array(intensity)
+        else:
+            intensity = np.array(ms2pip_pyx.get_predictions(
+                peptide, modpeptide, charge, model_id, peaks_version, ce
+            ))
+        annotation = []
+        for ion_type in MODELS[model]["ion_types"]:
+            annotation.append(
+                [ion_type.lower() + str(i + 1) for i in range(len(mz[MODELS[model]["ion_types"].index(ion_type)]))]
+            )
+        annotation = np.array(annotation)
         mz = mz.flatten()
         intensity = self._tic_normalize(self._transform(intensity.flatten()))
         annotation = annotation.flatten()
@@ -248,6 +278,11 @@ def _main(
      - ms2pip-single-prediction -c config.toml NSVPCSR "5|Carbamidomethyl" 3
 
     """
+    root_logger = logging.getLogger()
+    handler = logging.StreamHandler()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+
     if configfile:
         config_parser = ConfigParser(configfile)
         mod_strings = config_parser.config["ms2pip"]["ptm"]

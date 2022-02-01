@@ -1,23 +1,19 @@
 """Get predictions directly from XGBoost model, within ms2pip framework."""
 
-from genericpath import isfile
-from itertools import islice
+import hashlib
+import logging
 import os
 import urllib.request
-import logging
-
+from itertools import islice
 
 import numpy as np
 import xgboost as xgb
-import hashlib
 
+from ms2pip.exceptions import (InvalidModificationFormattingError,
+                               InvalidXGBoostModelError,
+                               UnknownModificationError)
 from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
-from ms2pip.exceptions import (
-    InvalidModificationFormattingError,
-    InvalidXGBoostModelError,
-    UnknownModificationError,
-    UnknownFragmentationMethodError,
-)
+
 logger = logging.getLogger("ms2pip")
 
 
@@ -40,9 +36,9 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
 
         # Reshape into arrays for each peptide
         preds = _split_list_by_lengths(preds, num_ions)
-        if ion_type in ["x", "y", "z"]:
+        if ion_type in ["x", "y", "y2", "z"]:
             preds = [np.array(x[::-1], dtype=np.float32) for x in preds]
-        elif ion_type in ["a", "b", "c"]:
+        elif ion_type in ["a", "b", "b2", "c"]:
             preds = [np.array(x, dtype=np.float32) for x in preds]
         else:
             raise ValueError(f"Unsupported ion_type: {ion_type}")
@@ -124,20 +120,15 @@ def apply_mods(peptide, mods, PTMmap):
 
 
 def check_model_presence(model, model_hash):
-    """ Check whether xgboost model is downloaded"""
-
+    """Check whether xgboost model is downloaded."""
     home = os.path.expanduser("~")
     if not os.path.isfile(os.path.join(home, ".ms2pip", model)):
         return False
-    elif check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash):
-        return True
-    else:
-        raise UnknownFragmentationMethodError()
+    return check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash)
 
 
 def download_model(model, model_hash):
-    """ Download the xgboost model to user/.ms2pip path"""
-
+    """Download the xgboost model to user/.ms2pip path."""
     logger.info(f"Downloading {model}")
     home = os.path.expanduser("~")
     if not os.path.isdir(os.path.join(home, ".ms2pip")):
@@ -145,12 +136,12 @@ def download_model(model, model_hash):
 
     dowloadpath = os.path.join(home, ".ms2pip", model)
     urllib.request.urlretrieve(os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
-    check_model_integrity(dowloadpath, model_hash)
+    if not check_model_integrity(dowloadpath, model_hash):
+        raise InvalidXGBoostModelError()
 
 
 def check_model_integrity(filename, model_hash):
-    """Check that models are correctly downloaded"""
-
+    """Check that models are correctly downloaded."""
     sha1_hash = hashlib.sha1()
     with open(filename, "rb") as modelfile:
         while True:
@@ -158,7 +149,34 @@ def check_model_integrity(filename, model_hash):
             if not chunk:
                 break
             sha1_hash.update(chunk)
-    if sha1_hash.hexdigest() != model_hash:
-        raise InvalidXGBoostModelError()
-    else:
+    if sha1_hash.hexdigest() == model_hash:
         return True
+    else:
+        logger.warn("Model hash not recognised")
+        return False
+
+
+def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes):
+    """Validate requestes xgboost models, and download if neccessary"""
+
+    for _, model_file in xgboost_model_files.items():
+        if not check_model_presence(model_file, xgboost_model_hashes[model_file]):
+            download_model(model_file, xgboost_model_hashes[model_file])
+
+
+def initialize_xgb_models(xgboost_model_files, nthread) -> dict:
+    """Initialize xgboost models and return them in a dict wit ion types as keys"""
+    xgb.set_config(verbosity=0)
+
+    xgboost_models = {}
+    for ion_type in xgboost_model_files.keys():
+        xgb_model = xgb.Booster({"nthread": nthread})
+        xgb_model.load_model(
+            os.path.join(
+                os.path.expanduser("~"),
+                ".ms2pip", xgboost_model_files[ion_type]
+            )
+        )
+        xgboost_models[ion_type] = xgb_model
+
+    return xgboost_models

@@ -10,12 +10,13 @@ import sys
 from random import shuffle
 
 import numpy as np
-import xgboost as xgb
 import pandas as pd
+import xgboost as xgb
 from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (EmptySpectrumError, FragmentationModelRequiredError,
+from ms2pip.exceptions import (EmptySpectrumError,
+                               FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, MissingConfigurationError,
                                NoValidPeptideSequencesError,
@@ -27,10 +28,9 @@ from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
+from ms2pip.predict_xgboost import (validate_requested_xgb_model, initialize_xgb_models,
+                                    process_peptides_xgb)
 from ms2pip.retention_time import RetentionTime
-from ms2pip.predict_xgboost import (process_peptides_xgb,
-                                    check_model_presence,
-                                    download_model)
 
 logger = logging.getLogger("ms2pip")
 
@@ -47,6 +47,14 @@ MODELS = {
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_CID_train_B.xgboost",
+            "y": "model_20190107_CID_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
+            "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f"
+        }
     },
     "HCD2019": {
         "id": 1,
@@ -59,6 +67,14 @@ MODELS = {
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_TTOF5600_train_B.xgboost",
+            "y": "model_20190107_TTOF5600_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_TTOF5600_train_B.xgboost": "ab2e28dfbc4ee60640253b0b4c127fc272c9d0ed",
+            "model_20190107_TTOF5600_train_Y.xgboost": "f8e9ddd8ca78ace06f67460a2fea0d8fa2623452"
+        }
     },
     "TMT": {
         "id": 3,
@@ -71,12 +87,28 @@ MODELS = {
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_iTRAQ_train_B.xgboost",
+            "y": "model_20190107_iTRAQ_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_iTRAQ_train_B.xgboost": "b8d94ad329a245210c652a5b35d724d2c74d0d50",
+            "model_20190107_iTRAQ_train_Y.xgboost": "56ae87d56fd434b53fcc1d291745cabb7baf463a"
+        }
     },
     "iTRAQphospho": {
         "id": 5,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_iTRAQphospho_train_B.xgboost",
+            "y": "model_20190107_iTRAQphospho_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_iTRAQphospho_train_B.xgboost": "e283b158cc50e219f42f93be624d0d0ac01d6b49",
+            "model_20190107_iTRAQphospho_train_Y.xgboost": "261b2e1810a299ed7ebf193ce1fb81a608c07d3b"
+        }
     },
     # ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
     "HCDch2": {
@@ -90,6 +122,18 @@ MODELS = {
         "ion_types": ["B", "Y", "B2", "Y2"],
         "peaks_version": "ch2",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_CID_train_B.xgboost",
+            "y": "model_20190107_CID_train_Y.xgboost",
+            "b2": "model_20190107_CID_train_B2.xgboost",
+            "y2": "model_20190107_CID_train_Y2.xgboost"
+        },
+        "model_hash": {
+            "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
+            "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f",
+            "model_20190107_CID_train_B2.xgboost": "602f2fc648890aebbbe2646252ade658af3221a3",
+            "model_20190107_CID_train_Y2.xgboost": "4e4ad0f1d4606c17015aae0f74edba69f684d399"
+        }
     },
     "HCD2021": {
         "id": 9,
@@ -117,6 +161,20 @@ MODELS = {
         "model_hash": {
             "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
             "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea"
+        }
+    },
+    "CID-TMT": {
+        "id": 11,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20220104_CID_TMT_B.xgboost",
+            "y": "model_20220104_CID_TMT_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20220104_CID_TMT_B.xgboost": "fa834162761a6ae444bb6523c9c1a174b9738389",
+            "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e"
         }
     },
 }
@@ -236,14 +294,10 @@ def process_spectra(
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     if "xgboost_model_files" in MODELS[model].keys():
-        xgb_B = xgb.Booster({"nthread": 1})
-        xgb_B.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["b"]))
-        xgb_Y = xgb.Booster({"nthread": 1})
-        xgb_Y.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", MODELS[model]["xgboost_model_files"]["y"]))
-        XGB_models = {
-            "b": xgb_B,
-            "y": xgb_Y
-        }
+        xgboost_models = initialize_xgb_models(
+            MODELS[model]["xgboost_model_files"],
+            1
+        )
 
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
@@ -571,14 +625,17 @@ def process_spectra(
                     mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
                     mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
                     if "xgboost_model_files" in MODELS[model].keys():
-                        xgb_vector = np.array(ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16)
+                        xgb_vector = np.array(
+                            ms2pip_pyx.get_vector(peptide, modpeptide, charge),
+                            dtype=np.uint16
+                        )
                         xgb_vector = xgb.DMatrix(xgb_vector)
                         predictions = []
-                        for ion_type, model_file in XGB_models.items():
+                        for ion_type, model_file in xgboost_models.items():
                             preds = model_file.predict(xgb_vector)
-                            if ion_type in ["x", "y", "z"]:
+                            if ion_type in ["x", "y", "y2", "z"]:
                                 preds = list(np.array(preds[::-1], dtype=np.float32))
-                            elif ion_type in ["a", "b", "c"]:
+                            elif ion_type in ["a", "b", "b2", "c"]:
                                 preds = list(np.array(preds, dtype=np.float32))
                             else:
                                 raise ValueError(f"Unsupported ion_type: {ion_type}")
@@ -586,7 +643,7 @@ def process_spectra(
                     else:
                         predictions = ms2pip_pyx.get_predictions(
                             peptide, modpeptide, charge, model_id, peaks_version, colen
-                        ) # SD: added colen
+                        )
                     prediction_buf.append(
                         [np.array(p, dtype=np.float32) for p in predictions]
                     )
@@ -752,9 +809,10 @@ class MS2PIP:
         if self.model in MODELS.keys():
             logger.info("using %s models", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
-                for _, model_file in MODELS[self.model]["xgboost_model_files"].items():
-                    if not check_model_presence(model_file, MODELS[self.model]["model_hash"][model_file]):
-                        download_model(model_file, MODELS[self.model]["model_hash"][model_file])
+                validate_requested_xgb_model(
+                    MODELS[self.model]["xgboost_model_files"],
+                    MODELS[self.model]["model_hash"]
+                )
         else:
             raise UnknownFragmentationMethodError(self.model)
 
