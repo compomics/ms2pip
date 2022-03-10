@@ -112,7 +112,7 @@ def prot_to_peprec(protein):
     peptides = []
 
     for peptide in cleave(
-        str(protein.seq), expasy_rules["trypsin"], params["missed_cleavages"]
+        str(protein.seq), params["cleavage_rule"], params["missed_cleavages"]
     ):
         pep_count += 1
         if validate_peptide(peptide, params["min_peplen"], params["max_peplen"]):
@@ -233,7 +233,7 @@ def add_charges(df_in):
         tmp = df_in.copy()
         tmp["spec_id"] = tmp["spec_id"] + "_{}".format(charge)
         tmp["charge"] = charge
-        df_out = df_out.append(tmp, ignore_index=True)
+        df_out = pd.concat([df_out, tmp], axis=0, ignore_index=True)
     df_out.sort_values(["spec_id", "charge"], inplace=True)
     df_out.reset_index(drop=True, inplace=True)
     return df_out
@@ -339,9 +339,10 @@ def run_batches(peprec, decoy=False):
     # If add_retention_time, initiate DeepLC
     if params["add_retention_time"]:
         logging.debug("Initializing DeepLC predictor")
-        if "deeplc" not in params:
-            params["deeplc"] = {}
-        params["deeplc"]["n_jobs"] = params["num_cpu"]
+        if "deeplc" not in params or not params["deeplc"]:
+            params["deeplc"] = {"calibration_file": None}
+        if not "n_jobs" in params["deeplc"]:
+            params["deeplc"]["n_jobs"] = params["num_cpu"]
         rt_predictor = RetentionTime(config=params)
 
     # Split up into batches to save memory:
@@ -364,8 +365,9 @@ def run_batches(peprec, decoy=False):
         logging.debug("Adding all modification combinations")
         peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
         with multiprocessing.Pool(params["num_cpu"]) as p:
-            peprec_mods = peprec_mods.append(
-                p.map(add_mods, peprec_batch.iterrows()), ignore_index=True
+            peprec_mods = pd.concat(
+                [peprec_mods] + p.map(add_mods, peprec_batch.iterrows()),
+                ignore_index=True
             )
         peprec_batch = peprec_mods
 
@@ -483,8 +485,10 @@ def main():
 
     logging.info("Cleaving proteins, adding peptides to peprec")
     with multiprocessing.Pool(params["num_cpu"]) as p:
-        peprec = peprec.append(
-            p.map(prot_to_peprec, SeqIO.parse(params["fasta_filename"], "fasta")),
+        peprec = pd.concat(
+            [peprec] + p.map(
+                prot_to_peprec, SeqIO.parse(params["fasta_filename"], "fasta")
+            ),
             ignore_index=True,
         )
 
