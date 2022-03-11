@@ -754,7 +754,6 @@ class MS2PIP:
         num_cpu=1,
         params=None,
         output_filename=None,
-        datasetname=None,
         return_results=False,
         limit=None,
         add_retention_time=False,
@@ -763,6 +762,65 @@ class MS2PIP:
         sqldb_uri=None,
         tableau=False,
     ):
+        """
+        MS²PIP peak intensity predictor.
+
+        Parameters
+        ----------
+        pep_file : str or pandas.DataFrame
+            Path to file or DataFrame with peptide information (see
+            https://github.com/compomics/ms2pip_c#peprec-file)
+        spec_file : str, optional
+            Path to spectrum file with target intensities. Provide for
+            prediction evaluation, or in combination with `vector_file` for
+            target extraction.
+        vector_file : str, optional
+            Output filepath for training feature vectors. Provide this to
+            extract feature vectors from `spec_file`. Requires `spec_file`.
+        num_cpu : int, default: 1
+            Number of parallel processes for multiprocessing steps.
+        params : dict
+            Dictonary with `model`, `frag_error` and `modifications`.
+        output_filename : str, optional
+            Filepath prefix for output files
+        return_results : bool, default: False
+            Return results after prediction (`MS2PIP.run()`) instead of writing
+            to output files.
+        limit : int, optional
+            Limit to first N peptides in PEPREC file.
+        add_retention_time : bool, default: False
+            Add retention time predictions with DeepLC.
+        compute_correlations : bool, default: False
+            Compute correlations between predictions and targets. Requires
+            `spec_file`.
+        match_spectra : bool, default: False
+            Match spectra in `spec_file` or `sqldb_uri` to peptides in
+            `pep_file` based on predicted intensities (experimental).
+        sqldb_uri : str, optional
+            URI to SQL database for `match_spectra` feature.
+        tableau : bool, default: False
+            Write results to Tableau file.
+
+        Examples
+        --------
+        >>> from ms2pip.ms2pipC import MS2PIP
+        >>> params = {
+        ...     "ms2pip": {
+        ...         "ptm": [
+        ...             "Oxidation,15.994915,opt,M",
+        ...             "Carbamidomethyl,57.021464,opt,C",
+        ...             "Acetyl,42.010565,opt,N-term",
+        ...         ],
+        ...         "frag_method": "HCD",
+        ...         "frag_error": 0.02,
+        ...         "out": "csv",
+        ...         "sptm": [], "gptm": [],
+        ...     }
+        ... }
+        >>> ms2pip = MS2PIP("test.peprec", params=params)
+        >>> ms2pip.run()
+
+        """
         self.pep_file = pep_file
         self.vector_file = vector_file
         self.num_cpu = num_cpu
@@ -851,6 +909,7 @@ class MS2PIP:
             self.mods.add_from_ms2pip_modstrings(self.params["ms2pip"][mod_type], mod_type=mod_type)
 
     def run(self):
+        """Run initiated MS2PIP based on class configuration."""
         self.afile = write_amino_accid_masses()
         self.modfile = self.mods.write_modifications_file(mod_type='ptm')
         self.modfile2 = self.mods.write_modifications_file(mod_type='sptm')
@@ -903,6 +962,7 @@ class MS2PIP:
                 return all_preds
 
     def cleanup(self):
+        """Cleanup temporary files."""
         if self.afile:
             os.remove(self.afile)
         if self.modfile:

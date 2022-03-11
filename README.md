@@ -113,12 +113,13 @@ pip install --editable .
 
 1. [Fast prediction of large amounts of peptide spectra](#fast-prediction-of-large-amounts-of-peptide-spectra)
     1. [Command line interface](#command-line-interface)
-    2. [Input files](#input-files)
+    2. [Python API](#python-api)
+    3. [Input files](#input-files)
         1. [Config file](#config-file)
         2. [PEPREC file](#peprec-file)
         3. [MGF file (optional)](#mgf-file-(optional))
         4. [Examples](#examples)
-    3. [Output](#output)
+    4. [Output](#output)
 2. [Predict and plot a single peptide spectrum](#predict-and-plot-a-single-peptide-spectrum)
 
 
@@ -136,31 +137,47 @@ MS²PIP predictions can be compared to spectra in an
 To predict a large amount of peptide spectra, use `ms2pip`:
 ```
 usage: ms2pip [-h] -c CONFIG_FILE [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
-              [-r] [-x] [-m] [-t] [-n NUM_CPU] [--sqldb-uri SQLDB_URI]
-              <PEPREC file>
+       [-r] [-x] [-m] [-t] [-n NUM_CPU]
+       [--sqldb-uri SQLDB_URI]
+       <PEPREC file>
 
 positional arguments:
   <PEPREC file>         list of peptides
 
 optional arguments:
   -h, --help            show this help message and exit
-  -c CONFIG_FILE, --config-file CONFIG_FILE
-                        config file
-  -s MGF_FILE, --spectrum-file MGF_FILE
-                        .mgf MS2 spectrum file (optional)
-  -w FEATURE_VECTOR_OUTPUT, --vector-file FEATURE_VECTOR_OUTPUT
-                        write feature vectors to FILE.{pkl,h5} (optional)
-  -r, --retention-time  add retention time predictions (requires DeepLC python
-                        package)
+  -c, --config-file     Configuration file: text-based (extensions `.txt`,
+                        `.config`, or `.ms2pip`) or TOML (extension `.toml`).
+  -s, --spectrum-file   .mgf MS2 spectrum file (optional)
+  -w, --vector-file     write feature vectors to FILE.{pkl,h5} (optional)
+  -r, --retention-time  add retention time predictions (requires DeepLC python package)
   -x, --correlations    calculate correlations (if MGF is given)
-  -m, --match-spectra   match peptides to spectra based on predicted spectra
-                        (if MGF is given)
+  -m, --match-spectra   match peptides to spectra based on predicted spectra (if MGF is given)
   -t, --tableau         create Tableau Reader file
-  -n NUM_CPU, --num-cpu NUM_CPU
-                        number of CPUs to use (default: all available)
-  --sqldb-uri SQLDB_URI
-                        use sql database of observed spectra instead of MGF
-                        files
+  -n, --num-cpu         number of CPUs to use (default: all available)
+  --sqldb-uri           use sql database of observed spectra instead of MGF files
+```
+
+#### Python API
+
+The `MS2PIP` class can be imported from `ms2pip.ms2pipC` and run as follows:
+```python
+>>> from ms2pip.ms2pipC import MS2PIP
+>>> params = {
+...     "ms2pip": {
+...         "ptm": [
+...             "Oxidation,15.994915,opt,M",
+...             "Carbamidomethyl,57.021464,opt,C",
+...             "Acetyl,42.010565,opt,N-term",
+...         ],
+...         "frag_method": "HCD",
+...         "frag_error": 0.02,
+...         "out": "csv",
+...         "sptm": [], "gptm": [],
+...     }
+... }
+>>> ms2pip = MS2PIP("test.peprec", params=params, return_results=True)
+>>> predictions = ms2pip.run()
 ```
 
 #### Input files
