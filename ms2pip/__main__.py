@@ -99,6 +99,12 @@ def argument_parser():
         dest="sqldb_uri",
         help="use sql database of observed spectra instead of MGF files",
     )
+    parser.add_argument(
+        "--model-dir",
+        action="store",
+        dest="model_dir",
+        help="Custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.",
+    )
     args = parser.parse_args()
 
     if not args.num_cpu:
@@ -129,7 +135,8 @@ def main():
             compute_correlations=args.correlations,
             match_spectra=args.match_spectra,
             sqldb_uri=args.sqldb_uri,
-            tableau=args.tableau
+            tableau=args.tableau,
+            model_dir=args.model_dir,
         )
         try:
             ms2pip.run()

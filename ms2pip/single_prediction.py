@@ -1,5 +1,6 @@
 """"Run MS²PIP prediction for single peptide."""
 
+import os
 import re
 import logging
 
@@ -23,7 +24,7 @@ logger = logging.getLogger("ms2pip")
 class SinglePrediction:
     """Run MS²PIP prediction for single peptide."""
 
-    def __init__(self, modification_strings=None) -> None:
+    def __init__(self, modification_strings=None, model_dir=None) -> None:
         """
         Run MS²PIP prediction for single peptide.
 
@@ -33,6 +34,9 @@ class SinglePrediction:
             List of MS²PIP configuration-style modification strings, e.g.
             `Carbamidomethyl,57.02146,opt,C` or `Oxidation,15.994915,opt,M`. See MS²PIP
             README.md for more info.
+        model_dir : str, optional
+            Custom directory for downloaded XGBoost model files. By default,
+            `~/.ms2pip` is used.
 
         Examples
         --------
@@ -50,6 +54,11 @@ class SinglePrediction:
         if not modification_strings:
             modification_strings = []
         self._init_ms2pip(modification_strings)
+
+        if model_dir:
+            self.model_dir = model_dir
+        else:
+            self.model_dir = os.path.join(os.path.expanduser("~"), ".ms2pip")
 
     def _init_ms2pip(self, modification_strings):
         self.mod_info = Modifications()
@@ -110,11 +119,13 @@ class SinglePrediction:
         if "xgboost_model_files" in MODELS[model].keys():
             validate_requested_xgb_model(
                 MODELS[model]["xgboost_model_files"],
-                MODELS[model]["model_hash"]
+                MODELS[model]["model_hash"],
+                self.model_dir,
             )
             xgboost_models = initialize_xgb_models(
                 MODELS[model]["xgboost_model_files"],
-                1
+                self.model_dir,
+                1,
             )
             xgb_vector = np.array(
                 ms2pip_pyx.get_vector(peptide, modpeptide, charge),
@@ -253,6 +264,7 @@ class SinglePrediction:
 @click.argument("charge", type=int)
 @click.option("-m", "--model", type=str, default="HCD", help="")
 @click.option("-c", "--configfile", type=click.Path(exists=True), default=None, help="")
+@click.option("--model-dir", type=click.Path(), default=None, help="")
 @click.option(
     "-o",
     "--output",
@@ -266,6 +278,7 @@ def _main(
     charge,
     model="HCD",
     configfile=None,
+    model_dir=None,
     output="ms2pip_prediction.png",
 ):
     """
@@ -288,7 +301,7 @@ def _main(
         mod_strings = config_parser.config["ms2pip"]["ptm"]
     else:
         mod_strings = None
-    ms2pip_sp = SinglePrediction(mod_strings)
+    ms2pip_sp = SinglePrediction(mod_strings, model_dir)
 
     _, ax = plt.subplots(figsize=(10, 5))
     prediction = ms2pip_sp.predict(peptide, modifications, charge, model=model)

@@ -17,7 +17,7 @@ from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
 logger = logging.getLogger("ms2pip")
 
 
-def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
+def process_peptides_xgb(peprec, model_params, ptm_ids, model_dir, num_cpu=1):
     """Get predictions for peptides directly from XGBoost model."""
     feature_vectors, mzs = _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids)
     feature_vectors = xgb.DMatrix(feature_vectors)
@@ -31,7 +31,7 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, num_cpu=1):
     for ion_type, model_file in model_params["xgboost_model_files"].items():
         # Get predictions from XGBoost model
         bst = xgb.Booster({"nthread": num_cpu})
-        bst.load_model(os.path.join(os.path.expanduser("~"), ".ms2pip", model_file))
+        bst.load_model(os.path.join(model_dir, model_file))
         preds = bst.predict(feature_vectors)
 
         # Reshape into arrays for each peptide
@@ -119,24 +119,26 @@ def apply_mods(peptide, mods, PTMmap):
     return modpeptide
 
 
-def check_model_presence(model, model_hash):
+def check_model_presence(model, model_hash, model_dir):
     """Check whether xgboost model is downloaded."""
-    home = os.path.expanduser("~")
-    if not os.path.isfile(os.path.join(home, ".ms2pip", model)):
+    filename = os.path.join(model_dir, model)
+    if not os.path.isfile(filename):
         return False
-    return check_model_integrity(os.path.join(home, ".ms2pip", model), model_hash)
+    return check_model_integrity(filename, model_hash)
 
 
-def download_model(model, model_hash):
-    """Download the xgboost model to user/.ms2pip path."""
-    logger.info(f"Downloading {model}")
-    home = os.path.expanduser("~")
-    if not os.path.isdir(os.path.join(home, ".ms2pip")):
-        os.mkdir(os.path.join(home, ".ms2pip"))
+def download_model(model, model_hash, model_dir):
+    """Download the xgboost model from the Genesis server."""
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
+    filename = os.path.join(model_dir, model)
 
-    dowloadpath = os.path.join(home, ".ms2pip", model)
-    urllib.request.urlretrieve(os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), dowloadpath)
-    if not check_model_integrity(dowloadpath, model_hash):
+    logger.info(f"Downloading {model} to {filename}...")
+    urllib.request.urlretrieve(
+        os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model),
+        filename
+    )
+    if not check_model_integrity(filename, model_hash):
         raise InvalidXGBoostModelError()
 
 
@@ -156,15 +158,21 @@ def check_model_integrity(filename, model_hash):
         return False
 
 
-def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes):
+def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes, model_dir):
     """Validate requestes xgboost models, and download if neccessary"""
 
     for _, model_file in xgboost_model_files.items():
-        if not check_model_presence(model_file, xgboost_model_hashes[model_file]):
-            download_model(model_file, xgboost_model_hashes[model_file])
+        if not check_model_presence(
+            model_file, xgboost_model_hashes[model_file], model_dir
+        ):
+            download_model(
+                model_file,
+                xgboost_model_hashes[model_file],
+                model_dir
+            )
 
 
-def initialize_xgb_models(xgboost_model_files, nthread) -> dict:
+def initialize_xgb_models(xgboost_model_files, model_dir, nthread) -> dict:
     """Initialize xgboost models and return them in a dict wit ion types as keys"""
     xgb.set_config(verbosity=0)
 
@@ -172,10 +180,7 @@ def initialize_xgb_models(xgboost_model_files, nthread) -> dict:
     for ion_type in xgboost_model_files.keys():
         xgb_model = xgb.Booster({"nthread": nthread})
         xgb_model.load_model(
-            os.path.join(
-                os.path.expanduser("~"),
-                ".ms2pip", xgboost_model_files[ion_type]
-            )
+            os.path.join(model_dir, xgboost_model_files[ion_type])
         )
         xgboost_models[ion_type] = xgb_model
 
