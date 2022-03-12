@@ -156,6 +156,7 @@ optional arguments:
   -t, --tableau         create Tableau Reader file
   -n, --num-cpu         number of CPUs to use (default: all available)
   --sqldb-uri           use sql database of observed spectra instead of MGF files
+  --model-dir           custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.
 ```
 
 #### Python API
