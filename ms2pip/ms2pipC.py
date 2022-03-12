@@ -282,6 +282,7 @@ def process_spectra(
     model,
     fragerror,
     tableau,
+    model_dir,
 ):
     """
     Function for each worker to process a list of spectra. Each peptide's
@@ -296,7 +297,8 @@ def process_spectra(
     if "xgboost_model_files" in MODELS[model].keys():
         xgboost_models = initialize_xgb_models(
             MODELS[model]["xgboost_model_files"],
-            1
+            model_dir,
+            1,
         )
 
     # transform pandas datastructure into dictionary for easy access
@@ -761,6 +763,7 @@ class MS2PIP:
         match_spectra=False,
         sqldb_uri=None,
         tableau=False,
+        model_dir=None,
     ):
         """
         MS²PIP peak intensity predictor.
@@ -800,6 +803,9 @@ class MS2PIP:
             URI to SQL database for `match_spectra` feature.
         tableau : bool, default: False
             Write results to Tableau file.
+        model_dir : str, optional
+            Custom directory for downloaded XGBoost model files. By
+            default, `~/.ms2pip` is used.
 
         Examples
         --------
@@ -832,6 +838,7 @@ class MS2PIP:
         self.match_spectra = match_spectra
         self.sqldb_uri = sqldb_uri
         self.tableau = tableau
+        self.model_dir = model_dir
 
         self.afile = None
         self.modfile = None
@@ -863,13 +870,18 @@ class MS2PIP:
             else:
                 self.out_formats = []
 
+        # Validate model_dir
+        if not self.model_dir:
+            self.model_dir = os.path.join(os.path.expanduser("~"), ".ms2pip")
+
         # Validate requested model
         if self.model in MODELS.keys():
             logger.info("using %s models", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
                 validate_requested_xgb_model(
                     MODELS[self.model]["xgboost_model_files"],
-                    MODELS[self.model]["model_hash"]
+                    MODELS[self.model]["model_hash"],
+                    self.model_dir
                 )
         else:
             raise UnknownFragmentationMethodError(self.model)
@@ -1001,8 +1013,8 @@ class MS2PIP:
         num_pep_filtered = num_pep - len(data)
         if num_pep_filtered > 0:
             logger.info(
-                "Removed %i unsupported peptide sequences (< 3, > 99 \
-    amino acids, or containing B, J, O, U, X or Z).",
+                "Removed %i unsupported peptide sequences (< 3, > 99 amino "
+                "acids, or containing B, J, O, U, X or Z).",
                 num_pep_filtered,
             )
 
@@ -1048,6 +1060,7 @@ class MS2PIP:
                 self.model,
                 self.fragerror,
                 self.tableau,
+                self.model_dir,
             ),
         )
 
@@ -1153,7 +1166,11 @@ class MS2PIP:
         ms2pip_pyx.ms2pip_init(self.afile, self.modfile, self.modfile2)
 
         return process_peptides_xgb(
-            self.data, MODELS[self.model], self.mods.ptm_ids, self.num_cpu
+            self.data,
+            MODELS[self.model],
+            self.mods.ptm_ids,
+            self.model_dir,
+            self.num_cpu
         )
 
     def _write_predictions(self, all_preds):
