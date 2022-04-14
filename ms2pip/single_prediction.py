@@ -243,7 +243,7 @@ class SinglePrediction:
             elif loc == "-1":
                 return "C-term"
             else:
-                return int(loc)
+                return int(loc) - 1
 
         m_split = [modifications.split("|")[i::2] for i in [0, 1]]
         mods_dict = {parse_loc(loc): name for loc, name in zip(m_split[0], m_split[1])}
