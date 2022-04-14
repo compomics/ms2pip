@@ -46,16 +46,14 @@ INSTALL_REQUIRES = [
     "numpy>=1.16,<2",
     "pandas>=0.24,<2",
     "pyteomics>=3.5,<5",
-    "scipy>=1.2,<2",
     "tqdm>=4,<5",
     "tables>=3.4",
     "tomlkit>=0.5,<1",
     "sqlalchemy>=1.3,<2",
-    "spectrum-utils>=0.3,<2",
+    "spectrum-utils==0.3.5",
     "click>=7,<9",
     "xgboost>=1.3,<2"
     "matplotlib>=3.0",
-    "spectrum_utils>=0.3.5"
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
