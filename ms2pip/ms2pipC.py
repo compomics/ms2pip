@@ -12,7 +12,6 @@ from random import shuffle
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.exceptions import (EmptySpectrumError,
@@ -604,7 +603,7 @@ def process_spectra(
                             len(modpeptide) - 2,
                             len(msms),
                             tic,
-                            pearsonr(ts, ps)[0],
+                            np.corrcoef(ts, ps)[0][1],
                             numby,
                             numall,
                             explainedby,
