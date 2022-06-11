@@ -42,7 +42,11 @@ class InvalidAminoAcidError(Exception):
     pass
 
 
-class EmptySpectrumError(Exception):
+class InvalidSpectrumError(Exception):
+    pass
+
+
+class EmptySpectrumError(InvalidSpectrumError):
     pass
 
 
