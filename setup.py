@@ -55,7 +55,8 @@ INSTALL_REQUIRES = [
     "click>=7,<9",
     "xgboost>=1.3,<2"
     "matplotlib>=3.0",
-    "spectrum_utils>=0.3.5"
+    "spectrum_utils>=0.3.5",
+    "lxml>=4",
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 

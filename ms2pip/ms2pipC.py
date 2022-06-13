@@ -19,6 +19,7 @@ from ms2pip.exceptions import (FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, MissingConfigurationError,
                                NoValidPeptideSequencesError,
+                               NoMatchingSpectraFound,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
                                UnknownOutputFormatError)
@@ -30,7 +31,7 @@ from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
 from ms2pip.predict_xgboost import (validate_requested_xgb_model, initialize_xgb_models,
                                     process_peptides_xgb)
 from ms2pip.retention_time import RetentionTime
-from ms2pip.spectrum import read_mgf, scan_spectrum_file
+from ms2pip.spectrum import read_mgf, read_spectrum_file, scan_spectrum_file
 
 logger = logging.getLogger("ms2pip")
 
@@ -342,7 +343,7 @@ def process_spectra(
         ft2 = open("stats_tableau.%i" % worker_num, "w")
 
     for pcount, spectrum in enumerate(
-        read_mgf(spec_file, peptide_titles=peptides)
+        read_spectrum_file(spec_file, peptide_titles=peptides)
     ):
         # process current spectrum
         if spectrum.title not in peptides:
@@ -989,7 +990,8 @@ class MS2PIP:
         the empirical one.
         """
         logger.info("scanning spectrum file...")
-        titles = scan_spectrum_file(self.spec_file)
+        titles = self.data["spec_id"].to_list()
+
         return self._execute_in_pool(
             titles,
             process_spectra,
@@ -1060,6 +1062,13 @@ class MS2PIP:
             pepid_bufs.extend(pepid_buf)
             if target_buf:
                 target_bufs.extend(target_buf)
+
+        # Validate number of results
+        if not mz_bufs:
+            raise NoMatchingSpectraFound(
+                "No spectra matching titles/IDs from PEPREC could be found in "
+                "provided spectrum file."
+            )
 
         # Reconstruct DataFrame
         num_ion_types = len(MODELS[self.model]["ion_types"])
