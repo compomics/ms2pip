@@ -69,22 +69,6 @@ class Spectrum:
         self.peaks = np.log2(self.peaks + 0.001)
 
 
-def scan_spectrum_file(filename) -> List[str]:
-    """Iterate over MGF file and return list with all spectrum titles."""
-    titles = []
-    f = open(filename)
-    while 1:
-        rows = f.readlines(10000)
-        if not rows:
-            break
-        for row in rows:
-            if row[0] == "T":
-                if row[:5] == "TITLE":
-                    titles.append(row.rstrip()[6:])
-    f.close()
-    return titles
-
-
 def read_mgf(
     spec_file, peptide_titles: List[str] = None
 ) -> Generator[Spectrum, None, None]:

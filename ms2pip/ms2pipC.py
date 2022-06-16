@@ -31,7 +31,7 @@ from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
 from ms2pip.predict_xgboost import (validate_requested_xgb_model, initialize_xgb_models,
                                     process_peptides_xgb)
 from ms2pip.retention_time import RetentionTime
-from ms2pip.spectrum import read_mgf, read_spectrum_file, scan_spectrum_file
+from ms2pip.spectrum import read_spectrum_file
 
 logger = logging.getLogger("ms2pip")
 
