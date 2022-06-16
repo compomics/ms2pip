@@ -85,74 +85,6 @@ def scan_spectrum_file(filename) -> List[str]:
     return titles
 
 
-def read_mgf_legacy(
-    spec_file, peptide_titles: List[str] = None
-) -> Generator[Spectrum, None, None]:
-    """
-    Read MGF file (legacy code).
-
-    Parameters
-    ----------
-    spec_file: str
-        Path to MGF file.
-    peptide_titles: list[str], optional
-        List with peptide `spec_id` values which correspond to MGF TITLE field
-        values.
-
-    """
-
-    # Initiate properties for first spectrum
-    title = ""
-    pepmass = 0
-    charge = 0
-    msms = []
-    peaks = []
-
-    f = open(spec_file)
-    skip = False
-
-    # Iterate over spectra
-    with open(spec_file, "rt") as f:
-        while True:
-            rows = f.readlines(50000)
-            if not rows:
-                break
-            for row in rows:
-                row = row.rstrip()
-                if row == "":
-                    continue
-                if skip:
-                    if row[0] == "B":
-                        if row[:10] == "BEGIN IONS":
-                            skip = False
-                    else:
-                        continue
-                if row == "":
-                    continue
-                if row[0] == "T":
-                    if row[:5] == "TITLE":
-                        title = row[6:]
-                        if peptide_titles and title not in peptide_titles:
-                            skip = True
-                            continue
-                elif row[0].isdigit():
-                    tmp = row.split()
-                    msms.append(float(tmp[0]))
-                    peaks.append(float(tmp[1]))
-                elif row[0] == "B":
-                    if row[:10] == "BEGIN IONS":
-                        msms = []
-                        peaks = []
-                elif row[0] == "C":
-                    if row[:6] == "CHARGE":
-                        charge = int(row[7:9].replace("+", ""))
-                elif row[0] == "P":
-                    if row[:7] == "PEPMASS":
-                        pepmass = float(row.split("=")[1].split(" ")[0])
-                elif row[:8] == "END IONS":
-                    yield Spectrum(title, charge, pepmass, msms, peaks)
-
-
 def read_mgf(
     spec_file, peptide_titles: List[str] = None
 ) -> Generator[Spectrum, None, None]:
@@ -168,8 +100,14 @@ def read_mgf(
         values.
 
     """
-    # TODO check most optimal mgf.read options
-    with mgf.read(spec_file) as mgf_file:
+    with mgf.read(
+        spec_file,
+        convert_arrays=1,
+        read_charges=False,
+        read_ions=False,
+        dtype=np.float32,
+        use_index=False,
+    ) as mgf_file:
         for spectrum in mgf_file:
             spec_id = spectrum["params"]["title"]
             if peptide_titles and spec_id not in peptide_titles:
@@ -200,7 +138,14 @@ def read_mzml(
 
     """
 
-    with mzml.read(spec_file) as mzml_file:
+    with mzml.read(
+        spec_file,
+        read_schema=False,
+        iterative=True,
+        use_index=False,
+        dtype=np.float32,
+        decode_binary=True,
+    ) as mzml_file:
         for spectrum in mzml_file:
             if spectrum["ms level"] == 2:
                 spec_id = spectrum["id"]
