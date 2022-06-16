@@ -15,11 +15,11 @@ import xgboost as xgb
 from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (EmptySpectrumError,
-                               FragmentationModelRequiredError,
+from ms2pip.exceptions import (FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, MissingConfigurationError,
                                NoValidPeptideSequencesError,
+                               NoMatchingSpectraFound,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
                                UnknownOutputFormatError)
@@ -31,6 +31,7 @@ from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
 from ms2pip.predict_xgboost import (validate_requested_xgb_model, initialize_xgb_models,
                                     process_peptides_xgb)
 from ms2pip.retention_time import RetentionTime
+from ms2pip.spectrum import read_spectrum_file
 
 logger = logging.getLogger("ms2pip")
 
@@ -294,6 +295,9 @@ def process_spectra(
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
+    model_id = MODELS[model]["id"]
+    peaks_version = MODELS[model]["peaks_version"]
+
     if "xgboost_model_files" in MODELS[model].keys():
         xgboost_models = initialize_xgb_models(
             MODELS[model]["xgboost_model_files"],
@@ -338,324 +342,284 @@ def process_spectra(
         ft = open("ms2pip_tableau.%i" % worker_num, "w")
         ft2 = open("stats_tableau.%i" % worker_num, "w")
 
-    title = ""
-    charge = 0
-    msms = []
-    peaks = []
-    pepmass = 0
-    f = open(spec_file)
-    skip = False
-    pcount = 0
-    while 1:
-        rows = f.readlines(50000)
-        if not rows:
-            break
-        for row in rows:
-            row = row.rstrip()
-            if row == "":
+    for pcount, spectrum in enumerate(
+        read_spectrum_file(spec_file, peptide_titles=peptides)
+    ):
+        # process current spectrum
+        if spectrum.title not in peptides:
+            continue
+
+        peptide = peptides[spectrum.title]
+        peptide = peptide.replace("L", "I")
+        mods = modifications[spectrum.title]
+
+        if "mut" in mods:
+            continue
+
+        # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
+        if len(peptide) > 100:
+            continue
+
+        # convert peptide string to integer list to speed up C code
+        peptide = np.array(
+            [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
+        )
+
+        try:
+            modpeptide = apply_mods(peptide, mods, PTMmap)
+        except UnknownModificationError as e:
+            logger.warn("Unknown modification: %s", e)
+            continue
+
+        # Spectrum preprocessing:
+        # Remove reporter ions and percursor peak, normalize, tranform
+        for label_type in ["iTRAQ", "TMT"]:
+            if label_type in model:
+                spectrum.remove_reporter_ions("iTRAQ")
+        # spectrum.remove_precursor()
+        spectrum.tic_norm()
+        spectrum.log2_transform()
+
+        # TODO: Check if 30 is good default CE!
+        # RG: removed `if ce == 0` in get_vector, split up into two functions
+        colen = 30
+        if "ce" in data.columns:
+            try:
+                colen = int(float(ces[spectrum.title]))
+            except:
+                logger.warn("Could not parse collision energy!")
                 continue
-            if skip:
-                if row[0] == "B":
-                    if row[:10] == "BEGIN IONS":
-                        skip = False
-                else:
-                    continue
-            if row == "":
-                continue
-            if row[0] == "T":
-                if row[:5] == "TITLE":
-                    title = row[6:]
-                    if title not in peptides:
-                        skip = True
-                        continue
-            elif row[0].isdigit():
-                tmp = row.split()
-                msms.append(float(tmp[0]))
-                peaks.append(float(tmp[1]))
-            elif row[0] == "B":
-                if row[:10] == "BEGIN IONS":
-                    msms = []
-                    peaks = []
-            elif row[0] == "C":
-                if row[:6] == "CHARGE":
-                    charge = int(row[7:9].replace("+", ""))
-            elif row[0] == "P":
-                if row[:7] == "PEPMASS":
-                    pepmass = float(row.split("=")[1].split(" ")[0])
-            elif row[:8] == "END IONS":
-                # process current spectrum
-                if title not in peptides:
-                    continue
 
-                peptide = peptides[title]
-                peptide = peptide.replace("L", "I")
-                mods = modifications[title]
-
-                if "mut" in mods:
-                    continue
-
-                # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
-                if len(peptide) > 100:
-                    continue
-
-                # convert peptide string to integer list to speed up C code
-                peptide = np.array(
-                    [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
+        if vector_file:
+            # get targets
+            targets = ms2pip_pyx.get_targets(
+                modpeptide, spectrum.msms, spectrum.peaks,
+                float(fragerror), peaks_version
+            )
+            psmids.extend([spectrum.title] * (len(targets[0])))
+            if "ce" in data.columns:
+                dvectors.append(
+                    np.array(
+                        ms2pip_pyx.get_vector_ce(
+                            peptide, modpeptide, spectrum.charge, colen
+                        ),
+                        dtype=np.uint16,
+                    )
+                )  # SD: added collision energy
+            else:
+                dvectors.append(
+                    np.array(
+                        ms2pip_pyx.get_vector(
+                            peptide, modpeptide, spectrum.charge
+                        ),
+                        dtype=np.uint16,
+                    )
                 )
 
-                try:
-                    modpeptide = apply_mods(peptide, mods, PTMmap)
-                except UnknownModificationError as e:
-                    logger.warn("Unknown modification: %s", e)
-                    continue
-
-                # remove reporter ions
-                if "iTRAQ" in model:
-                    for mi, mp in enumerate(msms):
-                        if (mp >= 113) & (mp <= 118):
-                            peaks[mi] = 0
-
-                # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
-                if "TMT" in model:
-                    for mi, mp in enumerate(msms):
-                        if (mp >= 125) & (mp <= 132):
-                            peaks[mi] = 0
-
-                # remove percursor peak
-                # for mi, mp in enumerate(msms):
-                #   if (mp >= pepmass-0.02) & (mp <= pepmass+0.02):
-                #       peaks[mi] = 0
-
-                # normalize and convert MS2 peaks
-                msms = np.array(msms, dtype=np.float32)
-                tic = np.sum(peaks)
-                peaks = peaks / tic
-                peaks = np.log2(np.array(peaks) + 0.001)
-                peaks = peaks.astype(np.float32)
-
-                if (len(peaks) == 0) or (len(msms) == 0):
-                    raise EmptySpectrumError()
-
-                model_id = MODELS[model]["id"]
-                peaks_version = MODELS[model]["peaks_version"]
-
-                # TODO: Check if 30 is good default CE!
-                # RG: removed `if ce == 0` in get_vector, split up into two functions
-                colen = 30
-                if "ce" in data.columns:
-                    try:
-                        colen = int(float(ces[title]))
-                    except:
-                        logger.warn("Could not parse collision energy!")
-                        continue
-
-                if vector_file:
-                    # get targets
-                    targets = ms2pip_pyx.get_targets(
-                        modpeptide, msms, peaks, float(fragerror), peaks_version
-                    )
-                    psmids.extend([title] * (len(targets[0])))
-                    if "ce" in data.columns:
-                        dvectors.append(
-                            np.array(
-                                ms2pip_pyx.get_vector_ce(
-                                    peptide, modpeptide, charge, colen
-                                ),
-                                dtype=np.uint16,
-                            )
-                        )  # SD: added collision energy
+            # Collecting targets to dict; works for variable number of ion types
+            # For C-term ion types (y, y++, z), flip the order of targets,
+            # for correct order in vectors DataFrame
+            for i, t in enumerate(targets):
+                if i in dtargets.keys():
+                    if i % 2 == 0:
+                        dtargets[i].extend(t)
                     else:
-                        dvectors.append(
-                            np.array(
-                                ms2pip_pyx.get_vector(peptide, modpeptide, charge),
-                                dtype=np.uint16,
-                            )
-                        )
-
-                    # Collecting targets to dict; works for variable number of ion types
-                    # For C-term ion types (y, y++, z), flip the order of targets,
-                    # for correct order in vectors DataFrame
-                    for i, t in enumerate(targets):
-                        if i in dtargets.keys():
-                            if i % 2 == 0:
-                                dtargets[i].extend(t)
-                            else:
-                                dtargets[i].extend(t[::-1])
-                        else:
-                            if i % 2 == 0:
-                                dtargets[i] = [t]
-                            else:
-                                dtargets[i] = [t[::-1]]
-                elif tableau:
-                    numby = 0
-                    numall = 0
-                    explainedby = 0
-                    explainedall = 0
-                    ts = []
-                    ps = []
-                    predictions = ms2pip_pyx.get_predictions(
-                        peptide, modpeptide, charge, model_id, peaks_version, colen
-                    )
-                    for m, p in zip(msms, peaks):
-                        ft.write("%s;%f;%f;;;0\n" % (title, m, 2 ** p))
-                    # get targets
-                    mzs, targets = ms2pip_pyx.get_targets_all(
-                        modpeptide, msms, peaks, float(fragerror), "all"
-                    )
-                    # get mean by intensity values to normalize!; WRONG !!!
-                    maxt = 0.0
-                    maxp = 0.0
-                    it = 0
-                    for cion in [1, 2]:
-                        for ionnumber in range(len(modpeptide) - 3):
-                            for lion in ["a", "b-h2o", "b-nh3", "b", "c"]:
-                                if (lion == "b") & (cion == 1):
-                                    if maxt < (2 ** targets[it]) - 0.001:
-                                        maxt = (2 ** targets[it]) - 0.001
-                                    if maxp < (2 ** predictions[0][ionnumber]) - 0.001:
-                                        maxp = (2 ** predictions[0][ionnumber]) - 0.001
-                                it += 1
-                    for cion in [1, 2]:
-                        for ionnumber in range(len(modpeptide) - 3):
-                            for lion in ["y-h2o", "z", "y", "x"]:
-                                if (lion == "y") & (cion == 1):
-                                    if maxt < (2 ** targets[it]) - 0.001:
-                                        maxt = (2 ** targets[it]) - 0.001
-                                    if maxp < (2 ** predictions[1][ionnumber]) - 0.001:
-                                        maxp = (2 ** predictions[1][ionnumber]) - 0.001
-                                it += 1
-                    # b
-                    it = 0
-                    for cion in [1, 2]:
-                        for ionnumber in range(len(modpeptide) - 3):
-                            for lion in ["a", "b-h2o", "b-nh3", "b", "c"]:
-                                if mzs[it] > 0:
-                                    numall += 1
-                                    explainedall += (2 ** targets[it]) - 0.001
-                                ft.write(
-                                    "%s;%f;%f;%s;%i;%i;1\n"
-                                    % (
-                                        title,
-                                        mzs[it],
-                                        (2 ** targets[it]) / maxt,
-                                        lion,
-                                        cion,
-                                        ionnumber,
-                                    )
-                                )
-                                if (lion == "b") & (cion == 1):
-                                    ts.append(targets[it])
-                                    ps.append(predictions[0][ionnumber])
-                                    if mzs[it] > 0:
-                                        numby += 1
-                                        explainedby += (2 ** targets[it]) - 0.001
-                                    ft.write(
-                                        "%s;%f;%f;%s;%i;%i;2\n"
-                                        % (
-                                            title,
-                                            mzs[it],
-                                            (2 ** (predictions[0][ionnumber])) / maxp,
-                                            lion,
-                                            cion,
-                                            ionnumber,
-                                        )
-                                    )
-                                it += 1
-                    # y
-                    for cion in [1, 2]:
-                        for ionnumber in range(len(modpeptide) - 3):
-                            for lion in ["y-h2o", "z", "y", "x"]:
-                                if mzs[it] > 0:
-                                    numall += 1
-                                    explainedall += (2 ** targets[it]) - 0.001
-                                ft.write(
-                                    "%s;%f;%f;%s;%i;%i;1\n"
-                                    % (
-                                        title,
-                                        mzs[it],
-                                        (2 ** targets[it]) / maxt,
-                                        lion,
-                                        cion,
-                                        ionnumber,
-                                    )
-                                )
-                                if (lion == "y") & (cion == 1):
-                                    ts.append(targets[it])
-                                    ps.append(predictions[1][ionnumber])
-                                    if mzs[it] > 0:
-                                        numby += 1
-                                        explainedby += (2 ** targets[it]) - 0.001
-                                    ft.write(
-                                        "%s;%f;%f;%s;%i;%i;2\n"
-                                        % (
-                                            title,
-                                            mzs[it],
-                                            (2 ** (predictions[1][ionnumber])) / maxp,
-                                            lion,
-                                            cion,
-                                            ionnumber,
-                                        )
-                                    )
-                                it += 1
-                    ft2.write(
-                        "%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"
-                        % (
-                            title,
-                            len(modpeptide) - 2,
-                            len(msms),
-                            tic,
-                            pearsonr(ts, ps)[0],
-                            numby,
-                            numall,
-                            explainedby,
-                            explainedall,
-                            float(numby) / (2 * (len(peptide) - 3)),
-                            float(numall) / (18 * (len(peptide) - 3)),
-                        )
-                    )
+                        dtargets[i].extend(t[::-1])
                 else:
-                    # Predict the b- and y-ion intensities from the peptide
-                    pepid_buf.append(title)
-                    peplen_buf.append(len(peptide) - 2)
-                    charge_buf.append(charge)
-
-                    # get/append ion mzs, targets and predictions
-                    targets = ms2pip_pyx.get_targets(
-                        modpeptide, msms, peaks, float(fragerror), peaks_version
-                    )
-                    target_buf.append([np.array(t, dtype=np.float32) for t in targets])
-                    mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
-                    mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
-                    if "xgboost_model_files" in MODELS[model].keys():
-                        xgb_vector = np.array(
-                            ms2pip_pyx.get_vector(peptide, modpeptide, charge),
-                            dtype=np.uint16
-                        )
-                        xgb_vector = xgb.DMatrix(xgb_vector)
-                        predictions = []
-                        for ion_type, model_file in xgboost_models.items():
-                            preds = model_file.predict(xgb_vector)
-                            if ion_type in ["x", "y", "y2", "z"]:
-                                preds = list(np.array(preds[::-1], dtype=np.float32))
-                            elif ion_type in ["a", "b", "b2", "c"]:
-                                preds = list(np.array(preds, dtype=np.float32))
-                            else:
-                                raise ValueError(f"Unsupported ion_type: {ion_type}")
-                            predictions.append(preds)
+                    if i % 2 == 0:
+                        dtargets[i] = [t]
                     else:
-                        predictions = ms2pip_pyx.get_predictions(
-                            peptide, modpeptide, charge, model_id, peaks_version, colen
+                        dtargets[i] = [t[::-1]]
+        elif tableau:
+            numby = 0
+            numall = 0
+            explainedby = 0
+            explainedall = 0
+            ts = []
+            ps = []
+
+            predictions = ms2pip_pyx.get_predictions(
+                peptide,
+                modpeptide,
+                spectrum.charge,
+                model_id,
+                peaks_version,
+                colen
+            )
+            for m, p in zip(spectrum.msms, spectrum.peaks):
+                ft.write("%s;%f;%f;;;0\n" % (spectrum.title, m, 2 ** p))
+
+            # get targets
+            mzs, targets = ms2pip_pyx.get_targets_all(
+                modpeptide,
+                spectrum.msms,
+                spectrum.peaks,
+                float(fragerror),
+                "all"
+            )
+
+            # get mean by intensity values to normalize!; WRONG !!!
+            maxt = 0.0
+            maxp = 0.0
+            it = 0
+            for cion in [1, 2]:
+                for ionnumber in range(len(modpeptide) - 3):
+                    for lion in ["a", "b-h2o", "b-nh3", "b", "c"]:
+                        if (lion == "b") & (cion == 1):
+                            if maxt < (2 ** targets[it]) - 0.001:
+                                maxt = (2 ** targets[it]) - 0.001
+                            if maxp < (2 ** predictions[0][ionnumber]) - 0.001:
+                                maxp = (2 ** predictions[0][ionnumber]) - 0.001
+                        it += 1
+            for cion in [1, 2]:
+                for ionnumber in range(len(modpeptide) - 3):
+                    for lion in ["y-h2o", "z", "y", "x"]:
+                        if (lion == "y") & (cion == 1):
+                            if maxt < (2 ** targets[it]) - 0.001:
+                                maxt = (2 ** targets[it]) - 0.001
+                            if maxp < (2 ** predictions[1][ionnumber]) - 0.001:
+                                maxp = (2 ** predictions[1][ionnumber]) - 0.001
+                        it += 1
+            # b
+            it = 0
+            for cion in [1, 2]:
+                for ionnumber in range(len(modpeptide) - 3):
+                    for lion in ["a", "b-h2o", "b-nh3", "b", "c"]:
+                        if mzs[it] > 0:
+                            numall += 1
+                            explainedall += (2 ** targets[it]) - 0.001
+                        ft.write(
+                            "%s;%f;%f;%s;%i;%i;1\n"
+                            % (
+                                spectrum.title,
+                                mzs[it],
+                                (2 ** targets[it]) / maxt,
+                                lion,
+                                cion,
+                                ionnumber,
+                            )
                         )
-                    prediction_buf.append(
-                        [np.array(p, dtype=np.float32) for p in predictions]
-                    )
+                        if (lion == "b") & (cion == 1):
+                            ts.append(targets[it])
+                            ps.append(predictions[0][ionnumber])
+                            if mzs[it] > 0:
+                                numby += 1
+                                explainedby += (2 ** targets[it]) - 0.001
+                            ft.write(
+                                "%s;%f;%f;%s;%i;%i;2\n"
+                                % (
+                                    spectrum.title,
+                                    mzs[it],
+                                    (2 ** (predictions[0][ionnumber])) / maxp,
+                                    lion,
+                                    cion,
+                                    ionnumber,
+                                )
+                            )
+                        it += 1
+            # y
+            for cion in [1, 2]:
+                for ionnumber in range(len(modpeptide) - 3):
+                    for lion in ["y-h2o", "z", "y", "x"]:
+                        if mzs[it] > 0:
+                            numall += 1
+                            explainedall += (2 ** targets[it]) - 0.001
+                        ft.write(
+                            "%s;%f;%f;%s;%i;%i;1\n"
+                            % (
+                                spectrum.title,
+                                mzs[it],
+                                (2 ** targets[it]) / maxt,
+                                lion,
+                                cion,
+                                ionnumber,
+                            )
+                        )
+                        if (lion == "y") & (cion == 1):
+                            ts.append(targets[it])
+                            ps.append(predictions[1][ionnumber])
+                            if mzs[it] > 0:
+                                numby += 1
+                                explainedby += (2 ** targets[it]) - 0.001
+                            ft.write(
+                                "%s;%f;%f;%s;%i;%i;2\n"
+                                % (
+                                    spectrum.title,
+                                    mzs[it],
+                                    (2 ** (predictions[1][ionnumber])) / maxp,
+                                    lion,
+                                    cion,
+                                    ionnumber,
+                                )
+                            )
+                        it += 1
+            ft2.write(
+                "%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"
+                % (
+                    spectrum.title,
+                    len(modpeptide) - 2,
+                    len(spectrum.msms),
+                    spectrum.tic,
+                    pearsonr(ts, ps)[0],
+                    numby,
+                    numall,
+                    explainedby,
+                    explainedall,
+                    float(numby) / (2 * (len(peptide) - 3)),
+                    float(numall) / (18 * (len(peptide) - 3)),
+                )
+            )
+        else:
+            # Predict the b- and y-ion intensities from the peptide
+            pepid_buf.append(spectrum.title)
+            peplen_buf.append(len(peptide) - 2)
+            charge_buf.append(spectrum.charge)
 
-                pcount += 1
-                if (pcount % 500) == 0:
-                    sys.stdout.write("(%i)%i " % (worker_num, pcount))
-                    sys.stdout.flush()
+            # get/append ion mzs, targets and predictions
+            targets = ms2pip_pyx.get_targets(
+                modpeptide,
+                spectrum.msms,
+                spectrum.peaks,
+                float(fragerror),
+                peaks_version
+            )
+            target_buf.append([np.array(t, dtype=np.float32) for t in targets])
+            mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+            mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+            if "xgboost_model_files" in MODELS[model].keys():
+                xgb_vector = np.array(
+                    ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
+                    dtype=np.uint16
+                )
+                xgb_vector = xgb.DMatrix(xgb_vector)
+                predictions = []
+                for ion_type, model_file in xgboost_models.items():
+                    preds = model_file.predict(xgb_vector)
+                    if ion_type in ["x", "y", "y2", "z"]:
+                        preds = list(np.array(preds[::-1], dtype=np.float32))
+                    elif ion_type in ["a", "b", "b2", "c"]:
+                        preds = list(np.array(preds, dtype=np.float32))
+                    else:
+                        raise ValueError(f"Unsupported ion_type: {ion_type}")
+                    predictions.append(preds)
+            else:
+                predictions = ms2pip_pyx.get_predictions(
+                    peptide,
+                    modpeptide,
+                    spectrum.charge,
+                    model_id,
+                    peaks_version,
+                    colen
+                )
+            prediction_buf.append(
+                [np.array(p, dtype=np.float32) for p in predictions]
+            )
 
-    f.close()
+        pcount += 1
+        if (pcount % 500) == 0:
+            sys.stdout.write("(%i)%i " % (worker_num, pcount))
+            sys.stdout.flush()
+
     if tableau:
         ft.close()
         ft2.close()
@@ -673,26 +637,6 @@ def process_spectra(
         return psmids, df, dtargets
 
     return mz_buf, prediction_buf, target_buf, peplen_buf, charge_buf, pepid_buf
-
-
-def scan_spectrum_file(filename):
-    """
-    go over mgf file and return list with all spectrum titles
-    """
-    titles = []
-    f = open(filename)
-    while 1:
-        rows = f.readlines(10000)
-        if not rows:
-            break
-        for row in rows:
-            if row[0] == "T":
-                if row[:5] == "TITLE":
-                    titles.append(
-                        row.rstrip()[6:]
-                    )  # .replace(" ", "") # unnecessary? creates issues when PEPREC spec_id has spaces
-    f.close()
-    return titles
 
 
 def prepare_titles(titles, num_cpu):
@@ -1046,7 +990,8 @@ class MS2PIP:
         the empirical one.
         """
         logger.info("scanning spectrum file...")
-        titles = scan_spectrum_file(self.spec_file)
+        titles = self.data["spec_id"].to_list()
+
         return self._execute_in_pool(
             titles,
             process_spectra,
@@ -1117,6 +1062,13 @@ class MS2PIP:
             pepid_bufs.extend(pepid_buf)
             if target_buf:
                 target_bufs.extend(target_buf)
+
+        # Validate number of results
+        if not mz_bufs:
+            raise NoMatchingSpectraFound(
+                "No spectra matching titles/IDs from PEPREC could be found in "
+                "provided spectrum file."
+            )
 
         # Reconstruct DataFrame
         num_ion_types = len(MODELS[self.model]["ion_types"])

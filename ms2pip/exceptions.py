@@ -42,7 +42,19 @@ class InvalidAminoAcidError(Exception):
     pass
 
 
-class EmptySpectrumError(Exception):
+class UnsupportedSpectrumFiletypeError(Exception):
+    pass
+
+
+class InvalidSpectrumError(Exception):
+    pass
+
+
+class EmptySpectrumError(InvalidSpectrumError):
+    pass
+
+
+class NoMatchingSpectraFound(MS2PIPError):
     pass
 
 
