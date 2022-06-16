@@ -1,7 +1,7 @@
 BEGIN IONS
 TITLE=peptide1
 CHARGE=2
-PEPMASS=475.137295 # just summed each amino acid mass
+PEPMASS=475.137295
 72.044440 101 # b1
 89.070980 103 # c1
 132.03503 304 # z1
