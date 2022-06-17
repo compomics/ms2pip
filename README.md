@@ -117,7 +117,7 @@ pip install --editable .
     3. [Input files](#input-files)
         1. [Config file](#config-file)
         2. [PEPREC file](#peprec-file)
-        3. [MGF file (optional)](#mgf-file-(optional))
+        3. [Spectrum file (optional)](#spectrum-file-optional)
         4. [Examples](#examples)
     4. [Output](#output)
 2. [Predict and plot a single peptide spectrum](#predict-and-plot-a-single-peptide-spectrum)
@@ -129,14 +129,14 @@ MS²PIP comes with [pre-trained models](#specialized-prediction-models) for a
 variety of fragmentation methods and modifications. These models can easily be
 applied by configuring MS²PIP in the [config file](#config-file) and providing a
 list of peptides in the form of a [PEPREC file](#peprec-file). Optionally,
-MS²PIP predictions can be compared to spectra in an
-[MGF file](#MGF-file-optional).
+MS²PIP predictions can be compared to observed spectra in an
+[MGF or mzmL file](#spectrum-file-optional).
 
 #### Command line interface
 
 To predict a large amount of peptide spectra, use `ms2pip`:
 ```
-usage: ms2pip [-h] -c CONFIG_FILE [-s MGF_FILE] [-w FEATURE_VECTOR_OUTPUT]
+usage: ms2pip [-h] -c CONFIG_FILE [-s SPECTRUM_FILE] [-w FEATURE_VECTOR_OUTPUT]
        [-r] [-x] [-m] [-t] [-n NUM_CPU]
        [--sqldb-uri SQLDB_URI]
        <PEPREC file>
@@ -148,14 +148,14 @@ optional arguments:
   -h, --help            show this help message and exit
   -c, --config-file     Configuration file: text-based (extensions `.txt`,
                         `.config`, or `.ms2pip`) or TOML (extension `.toml`).
-  -s, --spectrum-file   .mgf MS2 spectrum file (optional)
+  -s, --spectrum-file   MGF or mzML spectrum file (optional)
   -w, --vector-file     write feature vectors to FILE.{pkl,h5} (optional)
   -r, --retention-time  add retention time predictions (requires DeepLC python package)
-  -x, --correlations    calculate correlations (if MGF is given)
-  -m, --match-spectra   match peptides to spectra based on predicted spectra (if MGF is given)
+  -x, --correlations    calculate correlations (if spectrum file is given)
+  -m, --match-spectra   match peptides to spectra based on predicted spectra (if spectrum file is given)
   -t, --tableau         create Tableau Reader file
   -n, --num-cpu         number of CPUs to use (default: all available)
-  --sqldb-uri           use sql database of observed spectra instead of MGF files
+  --sqldb-uri           use sql database of observed spectra instead of spectrum files
   --model-dir           custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.
 ```
 
@@ -187,7 +187,7 @@ Several MS²PIP options need to be set in this config file.
 - `model=X` where X is one of the currently supported MS²PIP models (see
 [Specialized prediction models](#specialized-prediction-models)).
 - `frag_error=X` where is X is the fragmentation spectrum mass tolerance in Da
-(only relevant if an MGF file is passed).
+(only relevant if a spectrum file is passed).
 - `out=X` where X is a comma-separated list of a selection of the currently
 supported output file formats: `csv`, `mgf`, `msp`, `spectronaut`, or
 `bibliospec` (SSL/MS2, also for Skyline). For example: `out=csv,msp`.
@@ -208,7 +208,8 @@ peak intensities. The file is space separated and contains at least the
 following four columns:
 
 - `spec_id`: unique id (string) for the peptide/spectrum. This must match the
-TITLE field in the corresponding MGF file, if given.
+`TITLE` field in the corresponding MGF file, or `nativeID` (MS:1000767) in the
+corresponding mzML file, if given.
 - `modifications`: Amino acid modifications for the given peptide. Every
 modification is listed as `location|name`, separated by a pipe (`|`) between the
 location, the name, and other modifications. `location` is an integer counted
@@ -231,12 +232,12 @@ output files to a PEPREC file.
 To start from a FASTA file, see [fasta2speclib](http://compomics.github.io/projects/ms2pip_c/wiki/fasta2speclib).
 
 
-##### MGF file (optional)
-Optionally, an MGF file with measured spectra can be passed to MS²PIP. In this
+##### Spectrum file (optional)
+Optionally, an MGF or mzML file with measured spectra can be passed to MS²PIP. In this
 case, MS²PIP will calculate correlations between the measured and predicted
-peak intensities. Make sure that the PEPREC `spec_id` matches the mgf `TITLE`
-field. Spectra present in the MGF file, but missing in the PEPREC file (and
-vice versa) will be skipped.
+peak intensities. Make sure that the PEPREC `spec_id` matches the MGF `TITLE`
+field or mzML `nativeID`. Spectra present in the spectrum file, but missing in the
+PEPREC file (and vice versa) will be skipped.
 
 ##### Examples
 Suppose the **config file** contains the following lines

@@ -45,10 +45,10 @@ def argument_parser():
     )
     parser.add_argument(
         "-s", "--spectrum-file",
-        metavar="MGF_FILE",
+        metavar="SPECTRUM_FILE",
         action="store",
         dest="spec_file",
-        help=".mgf MS2 spectrum file (optional)",
+        help="MGF or mzML spectrum file (optional)",
     )
     parser.add_argument(
         "-w", "--vector-file",
@@ -69,14 +69,14 @@ def argument_parser():
         action="store_true",
         default=False,
         dest="correlations",
-        help="calculate correlations (if MGF is given)",
+        help="calculate correlations (if spectrum file is given)",
     )
     parser.add_argument(
         "-m", "--match-spectra",
         action="store_true",
         default=False,
         dest="match_spectra",
-        help="match peptides to spectra based on predicted spectra (if MGF is given)",
+        help="match peptides to spectra based on predicted spectra (if spectrum file is given)",
     )
     parser.add_argument(
         "-t", "--tableau",
@@ -97,7 +97,7 @@ def argument_parser():
         "--sqldb-uri",
         action="store",
         dest="sqldb_uri",
-        help="use sql database of observed spectra instead of MGF files",
+        help="use sql database of observed spectra instead of spectrum files",
     )
     parser.add_argument(
         "--model-dir",
