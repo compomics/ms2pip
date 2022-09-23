@@ -844,6 +844,8 @@ class MS2PIP:
         if multiprocessing.current_process().daemon:
             logger.warn("MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children.")
             self.myPool = multiprocessing.dummy.Pool(1)
+        elif "xgboost_model_files" in MODELS[model].keys():
+            self.myPool = multiprocessing.dummy.Pool(1)
         else:
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
