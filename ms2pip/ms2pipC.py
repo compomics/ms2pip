@@ -284,6 +284,7 @@ def process_spectra(
     fragerror,
     tableau,
     model_dir,
+    num_cpu
 ):
     """
     Function for each worker to process a list of spectra. Each peptide's
@@ -302,7 +303,7 @@ def process_spectra(
         xgboost_models = initialize_xgb_models(
             MODELS[model]["xgboost_model_files"],
             model_dir,
-            1,
+            num_cpu,
         )
 
     # transform pandas datastructure into dictionary for easy access
@@ -844,7 +845,7 @@ class MS2PIP:
         if multiprocessing.current_process().daemon:
             logger.warn("MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children.")
             self.myPool = multiprocessing.dummy.Pool(1)
-        elif "xgboost_model_files" in MODELS[model].keys():
+        elif "xgboost_model_files" in MODELS[self.model].keys():
             self.myPool = multiprocessing.dummy.Pool(1)
         else:
             self.myPool = multiprocessing.Pool(self.num_cpu)
@@ -904,7 +905,7 @@ class MS2PIP:
             self._write_matched_spectra(matched_spectra)
         else:
             if "xgboost_model_files" in MODELS[self.model]:
-                results = self._process_peptides_xgb()
+                results = self._process_peptides_xgb(num_cpu=self.num_cpu)
             else:
                 results = self._process_peptides()
 
@@ -1008,6 +1009,7 @@ class MS2PIP:
                 self.fragerror,
                 self.tableau,
                 self.model_dir,
+                self.num_cpu
             ),
         )
 
