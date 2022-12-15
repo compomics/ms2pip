@@ -299,13 +299,6 @@ def process_spectra(
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
 
-    if "xgboost_model_files" in MODELS[model].keys():
-        xgboost_models = initialize_xgb_models(
-            MODELS[model]["xgboost_model_files"],
-            model_dir,
-            num_cpu,
-        )
-
     # transform pandas datastructure into dictionary for easy access
     if "ce" in data.columns:
         specdict = (
@@ -346,7 +339,6 @@ def process_spectra(
     for pcount, spectrum in enumerate(
         read_spectrum_file(spec_file, peptide_titles=peptides)
     ):
-        # process current spectrum
         if spectrum.title not in peptides:
             continue
 
@@ -588,21 +580,12 @@ def process_spectra(
             mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
             mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
             if "xgboost_model_files" in MODELS[model].keys():
-                xgb_vector = np.array(
-                    ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
-                    dtype=np.uint16
+                dvectors.append(
+                    np.array(
+                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
+                        dtype=np.uint16,
+                    )
                 )
-                xgb_vector = xgb.DMatrix(xgb_vector)
-                predictions = []
-                for ion_type, model_file in xgboost_models.items():
-                    preds = model_file.predict(xgb_vector)
-                    if ion_type in ["x", "y", "y2", "z"]:
-                        preds = list(np.array(preds[::-1], dtype=np.float32))
-                    elif ion_type in ["a", "b", "b2", "c"]:
-                        preds = list(np.array(preds, dtype=np.float32))
-                    else:
-                        raise ValueError(f"Unsupported ion_type: {ion_type}")
-                    predictions.append(preds)
             else:
                 predictions = ms2pip_pyx.get_predictions(
                     peptide,
@@ -612,9 +595,9 @@ def process_spectra(
                     peaks_version,
                     colen
                 )
-            prediction_buf.append(
-                [np.array(p, dtype=np.float32) for p in predictions]
-            )
+                prediction_buf.append(
+                    [np.array(p, dtype=np.float32) for p in predictions]
+                )
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -905,7 +888,7 @@ class MS2PIP:
             self._write_matched_spectra(matched_spectra)
         else:
             if "xgboost_model_files" in MODELS[self.model]:
-                results = self._process_peptides_xgb(num_cpu=self.num_cpu)
+                results = self._process_peptides_xgb()
             else:
                 results = self._process_peptides()
 
