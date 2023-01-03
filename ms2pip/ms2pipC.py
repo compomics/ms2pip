@@ -18,8 +18,8 @@ from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.exceptions import (FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, MissingConfigurationError,
-                               NoValidPeptideSequencesError,
                                NoMatchingSpectraFound,
+                               NoValidPeptideSequencesError,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
                                UnknownOutputFormatError)
@@ -28,8 +28,8 @@ from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
 from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
                              write_amino_accid_masses)
-from ms2pip.predict_xgboost import (validate_requested_xgb_model, initialize_xgb_models,
-                                    process_peptides_xgb)
+from ms2pip.predict_xgboost import (get_predictions_xgb, process_peptides_xgb,
+                                    validate_requested_xgb_model)
 from ms2pip.retention_time import RetentionTime
 from ms2pip.spectrum import read_spectrum_file
 
@@ -283,7 +283,6 @@ def process_spectra(
     model,
     fragerror,
     tableau,
-    model_dir,
 ):
     """
     Function for each worker to process a list of spectra. Each peptide's
@@ -298,14 +297,7 @@ def process_spectra(
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
 
-    if "xgboost_model_files" in MODELS[model].keys():
-        xgboost_models = initialize_xgb_models(
-            MODELS[model]["xgboost_model_files"],
-            model_dir,
-            1,
-        )
-
-    # transform pandas datastructure into dictionary for easy access
+    # transform pandas data structure into dictionary for easy access
     if "ce" in data.columns:
         specdict = (
             data[["spec_id", "peptide", "modifications", "ce"]]
@@ -586,22 +578,15 @@ def process_spectra(
             target_buf.append([np.array(t, dtype=np.float32) for t in targets])
             mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
             mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+
+            # If using xgboost model file, get feature vectors to predict outside of MP
+            # `prediction_buf` here functions as `vector_buf` to be overwritten by the
+            # `_merge_results` function.
             if "xgboost_model_files" in MODELS[model].keys():
-                xgb_vector = np.array(
+                prediction_buf.append(np.array(
                     ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
-                    dtype=np.uint16
-                )
-                xgb_vector = xgb.DMatrix(xgb_vector)
-                predictions = []
-                for ion_type, model_file in xgboost_models.items():
-                    preds = model_file.predict(xgb_vector)
-                    if ion_type in ["x", "y", "y2", "z"]:
-                        preds = list(np.array(preds[::-1], dtype=np.float32))
-                    elif ion_type in ["a", "b", "b2", "c"]:
-                        preds = list(np.array(preds, dtype=np.float32))
-                    else:
-                        raise ValueError(f"Unsupported ion_type: {ion_type}")
-                    predictions.append(preds)
+                    dtype=np.uint16,
+                ))
             else:
                 predictions = ms2pip_pyx.get_predictions(
                     peptide,
@@ -611,9 +596,9 @@ def process_spectra(
                     peaks_version,
                     colen
                 )
-            prediction_buf.append(
-                [np.array(p, dtype=np.float32) for p in predictions]
-            )
+                prediction_buf.append(
+                    [np.array(p, dtype=np.float32) for p in predictions]
+                )
 
         pcount += 1
         if (pcount % 500) == 0:
@@ -879,7 +864,7 @@ class MS2PIP:
             if self.vector_file:
                 self._write_vector_file(results)
             else:
-                all_preds = self._predict_spec(results)
+                all_preds = self._merge_predictions(results)
 
                 logger.info("writing file %s_pred_and_emp.csv...", self.output_filename)
                 all_preds.to_csv(
@@ -910,7 +895,7 @@ class MS2PIP:
                 self._predict_retention_times()
 
             logger.info("merging results ...")
-            all_preds = self._predict_spec(results)
+            all_preds = self._merge_predictions(results)
 
             if not self.return_results:
                 self._write_predictions(all_preds)
@@ -1005,7 +990,6 @@ class MS2PIP:
                 self.model,
                 self.fragerror,
                 self.tableau,
-                self.model_dir,
             ),
         )
 
@@ -1039,7 +1023,7 @@ class MS2PIP:
 
         return all_results
 
-    def _predict_spec(self, results):
+    def _merge_predictions(self, results):
         mz_bufs = []
         prediction_bufs = []
         target_bufs = []
@@ -1062,6 +1046,20 @@ class MS2PIP:
             pepid_bufs.extend(pepid_buf)
             if target_buf:
                 target_bufs.extend(target_buf)
+
+        # If XGBoost model files are used, first predict outside of MP
+        # Temporary hack to move XGB prediction step out of MP; ultimately does not
+        # make sense to do this in the `_merge_results` step...
+        if self.spec_file and "xgboost_model_files" in MODELS[self.model].keys():
+            xgb_vector = xgb.DMatrix(np.vstack(prediction_bufs))
+            num_ions = [l - 1 for l in peplen_bufs]
+            prediction_bufs = get_predictions_xgb(
+                xgb_vector,
+                num_ions,
+                MODELS[self.model],
+                self.model_dir,
+                num_cpu=self.num_cpu
+            )
 
         # Validate number of results
         if not mz_bufs:

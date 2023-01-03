@@ -9,30 +9,67 @@ from itertools import islice
 import numpy as np
 import xgboost as xgb
 
-from ms2pip.exceptions import (InvalidModificationFormattingError,
-                               InvalidXGBoostModelError,
-                               UnknownModificationError)
+from ms2pip.exceptions import (
+    InvalidModificationFormattingError,
+    InvalidXGBoostModelError,
+    UnknownModificationError,
+)
 from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
 
 logger = logging.getLogger("ms2pip")
 
 
 def process_peptides_xgb(peprec, model_params, ptm_ids, model_dir, num_cpu=1):
-    """Get predictions for peptides directly from XGBoost model."""
-    feature_vectors, mzs = _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids)
-    feature_vectors = xgb.DMatrix(feature_vectors)
+    """Get predictions starting from peprec DataFrame and return _MultiprocessingResultSpoofer."""
+    features, mzs = _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids)
+    features = xgb.DMatrix(features)
 
     num_ions = (peprec["peptide"].str.len() - 1).to_list()
     peptide_lengths = peprec["peptide"].str.len().to_list()
     charges = peprec["charge"].to_list()
     spec_ids = peprec["spec_id"].to_list()
 
+    predictions = get_predictions_xgb(
+        features, num_ions, model_params, model_dir, num_cpu
+    )
+
+    # List of objects with `get` method is expected, use spoofer class
+    return [
+        _MultiprocessingResultSpoofer(
+            (mzs, predictions, None, peptide_lengths, charges, spec_ids)
+        )
+    ]
+
+
+def get_predictions_xgb(features, num_ions, model_params, model_dir, num_cpu=1):
+    """
+    Get predictions starting from feature vectors in DMatrix object.
+
+    Parameters
+    ----------
+    features: xgb.DMatrix
+        Feature vectors in DMatrix object
+    num_ions: list[int]
+        List with number of ions (per series) for each peptide, i.e. peptide length - 1
+    model_params: dict
+        Model configuration as defined in ms2pip.ms2pipC.MODELS.
+    model_dir: str
+        Directory where model files are stored.
+    num_cpu: int
+        Number of CPUs to use in multiprocessing
+
+    """
+    # Init models
+    xgboost_models = initialize_xgb_models(
+        model_params["xgboost_model_files"],
+        model_dir,
+        num_cpu,
+    )
+
     preds_list = []
-    for ion_type, model_file in model_params["xgboost_model_files"].items():
+    for ion_type, xgb_model in xgboost_models.items():
         # Get predictions from XGBoost model
-        bst = xgb.Booster({"nthread": num_cpu})
-        bst.load_model(os.path.join(model_dir, model_file))
-        preds = bst.predict(feature_vectors)
+        preds = xgb_model.predict(features)
 
         # Reshape into arrays for each peptide
         preds = _split_list_by_lengths(preds, num_ions)
@@ -45,13 +82,7 @@ def process_peptides_xgb(peprec, model_params, ptm_ids, model_dir, num_cpu=1):
         preds_list.append(preds)
 
     predictions = [list(t) for t in zip(*preds_list)]
-
-    # List of objects with `get` method is expected, use spoofer class
-    return [
-        _MultiprocessingResultSpoofer(
-            (mzs, predictions, None, peptide_lengths, charges, spec_ids)
-        )
-    ]
+    return predictions
 
 
 def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
@@ -135,8 +166,7 @@ def download_model(model, model_hash, model_dir):
 
     logger.info(f"Downloading {model} to {filename}...")
     urllib.request.urlretrieve(
-        os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model),
-        filename
+        os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), filename
     )
     if not check_model_integrity(filename, model_hash):
         raise InvalidXGBoostModelError()
@@ -165,23 +195,17 @@ def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes, mode
         if not check_model_presence(
             model_file, xgboost_model_hashes[model_file], model_dir
         ):
-            download_model(
-                model_file,
-                xgboost_model_hashes[model_file],
-                model_dir
-            )
+            download_model(model_file, xgboost_model_hashes[model_file], model_dir)
 
 
 def initialize_xgb_models(xgboost_model_files, model_dir, nthread) -> dict:
-    """Initialize xgboost models and return them in a dict wit ion types as keys"""
+    """Initialize xgboost models and return them in a dict with ion types as keys."""
     xgb.set_config(verbosity=0)
 
     xgboost_models = {}
     for ion_type in xgboost_model_files.keys():
         xgb_model = xgb.Booster({"nthread": nthread})
-        xgb_model.load_model(
-            os.path.join(model_dir, xgboost_model_files[ion_type])
-        )
+        xgb_model.load_model(os.path.join(model_dir, xgboost_model_files[ion_type]))
         xgboost_models[ion_type] = xgb_model
 
     return xgboost_models
