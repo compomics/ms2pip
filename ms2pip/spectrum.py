@@ -69,9 +69,7 @@ class Spectrum:
         self.peaks = np.log2(self.peaks + 0.001)
 
 
-def read_mgf(
-    spec_file, peptide_titles: List[str] = None
-) -> Generator[Spectrum, None, None]:
+def read_mgf(spec_file) -> Generator[Spectrum, None, None]:
     """
     Read MGF file.
 
@@ -79,9 +77,6 @@ def read_mgf(
     ----------
     spec_file: str
         Path to MGF file.
-    peptide_titles: list[str], optional
-        List with peptide `spec_id` values which correspond to MGF TITLE field
-        values.
 
     """
     with mgf.read(
@@ -94,8 +89,6 @@ def read_mgf(
     ) as mgf_file:
         for spectrum in mgf_file:
             spec_id = spectrum["params"]["title"]
-            if peptide_titles and spec_id not in peptide_titles:
-                continue
             peaks = spectrum["intensity array"]
             msms = spectrum["m/z array"]
             precursor_mz = spectrum["params"]["pepmass"][0]
@@ -106,9 +99,7 @@ def read_mgf(
             yield parsed_spectrum
 
 
-def read_mzml(
-    spec_file, peptide_titles: List[str] = None
-) -> Generator[Spectrum, None, None]:
+def read_mzml(spec_file) -> Generator[Spectrum, None, None]:
     """
     Read mzML file.
 
@@ -116,12 +107,8 @@ def read_mzml(
     ----------
     spec_file: str
         Path to mzML file.
-    peptide_titles: list[str], optional
-        List with peptide `spec_id` values which correspond to mzML spectrum id
-        values.
 
     """
-
     with mzml.read(
         spec_file,
         read_schema=False,
@@ -133,8 +120,6 @@ def read_mzml(
         for spectrum in mzml_file:
             if spectrum["ms level"] == 2:
                 spec_id = spectrum["id"]
-                if peptide_titles and spec_id not in peptide_titles:
-                    continue
                 peaks = spectrum["intensity array"]
                 msms = spectrum["m/z array"]
                 precursor = spectrum["precursorList"]["precursor"][0][
@@ -148,9 +133,7 @@ def read_mzml(
                 yield parsed_spectrum
 
 
-def read_spectrum_file(
-    spec_file, peptide_titles: List[str] = None
-) -> Generator[Spectrum, None, None]:
+def read_spectrum_file(spec_file) -> Generator[Spectrum, None, None]:
     """
     Read MGF or mzML file; infer type from filename extension.
 
@@ -163,16 +146,12 @@ def read_spectrum_file(
         values.
 
     """
-
     filetype = Path(spec_file).suffix.lower()
-
     if filetype == ".mzml":
-        for spectrum in read_mzml(spec_file, peptide_titles):
+        for spectrum in read_mzml(spec_file):
             yield spectrum
-
     elif filetype == ".mgf":
-        for spectrum in read_mgf(spec_file, peptide_titles):
+        for spectrum in read_mgf(spec_file):
             yield spectrum
-
     else:
         raise UnsupportedSpectrumFiletypeError(filetype)

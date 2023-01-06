@@ -57,6 +57,8 @@ class EmptySpectrumError(InvalidSpectrumError):
 class NoMatchingSpectraFound(MS2PIPError):
     pass
 
+class TitlePatternError(MS2PIPError):
+    pass
 
-class InvalidXGBoostModelError(Exception):
+class InvalidXGBoostModelError(MS2PIPError):
     pass

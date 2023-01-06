@@ -6,30 +6,37 @@ import logging
 import multiprocessing
 import multiprocessing.dummy
 import os
-import sys
+import re
 from random import shuffle
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from rich.progress import track
 from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (FragmentationModelRequiredError,
-                               InvalidModificationFormattingError,
-                               InvalidPEPRECError, MissingConfigurationError,
-                               NoMatchingSpectraFound,
-                               NoValidPeptideSequencesError,
-                               UnknownFragmentationMethodError,
-                               UnknownModificationError,
-                               UnknownOutputFormatError)
+from ms2pip.exceptions import (
+    FragmentationModelRequiredError,
+    InvalidModificationFormattingError,
+    InvalidPEPRECError,
+    MissingConfigurationError,
+    NoMatchingSpectraFound,
+    NoValidPeptideSequencesError,
+    TitlePatternError,
+    UnknownFragmentationMethodError,
+    UnknownModificationError,
+    UnknownOutputFormatError,
+)
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
-from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
-                             write_amino_accid_masses)
-from ms2pip.predict_xgboost import (get_predictions_xgb, process_peptides_xgb,
-                                    validate_requested_xgb_model)
+from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_accid_masses
+from ms2pip.predict_xgboost import (
+    get_predictions_xgb,
+    process_peptides_xgb,
+    validate_requested_xgb_model,
+)
 from ms2pip.retention_time import RetentionTime
 from ms2pip.spectrum import read_spectrum_file
 
@@ -54,8 +61,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
-            "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f"
-        }
+            "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f",
+        },
     },
     "HCD2019": {
         "id": 1,
@@ -74,8 +81,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20190107_TTOF5600_train_B.xgboost": "ab2e28dfbc4ee60640253b0b4c127fc272c9d0ed",
-            "model_20190107_TTOF5600_train_Y.xgboost": "f8e9ddd8ca78ace06f67460a2fea0d8fa2623452"
-        }
+            "model_20190107_TTOF5600_train_Y.xgboost": "f8e9ddd8ca78ace06f67460a2fea0d8fa2623452",
+        },
     },
     "TMT": {
         "id": 3,
@@ -94,8 +101,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20190107_iTRAQ_train_B.xgboost": "b8d94ad329a245210c652a5b35d724d2c74d0d50",
-            "model_20190107_iTRAQ_train_Y.xgboost": "56ae87d56fd434b53fcc1d291745cabb7baf463a"
-        }
+            "model_20190107_iTRAQ_train_Y.xgboost": "56ae87d56fd434b53fcc1d291745cabb7baf463a",
+        },
     },
     "iTRAQphospho": {
         "id": 5,
@@ -108,8 +115,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20190107_iTRAQphospho_train_B.xgboost": "e283b158cc50e219f42f93be624d0d0ac01d6b49",
-            "model_20190107_iTRAQphospho_train_Y.xgboost": "261b2e1810a299ed7ebf193ce1fb81a608c07d3b"
-        }
+            "model_20190107_iTRAQphospho_train_Y.xgboost": "261b2e1810a299ed7ebf193ce1fb81a608c07d3b",
+        },
     },
     # ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
     "HCDch2": {
@@ -127,14 +134,14 @@ MODELS = {
             "b": "model_20190107_CID_train_B.xgboost",
             "y": "model_20190107_CID_train_Y.xgboost",
             "b2": "model_20190107_CID_train_B2.xgboost",
-            "y2": "model_20190107_CID_train_Y2.xgboost"
+            "y2": "model_20190107_CID_train_Y2.xgboost",
         },
         "model_hash": {
             "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
             "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f",
             "model_20190107_CID_train_B2.xgboost": "602f2fc648890aebbbe2646252ade658af3221a3",
-            "model_20190107_CID_train_Y2.xgboost": "4e4ad0f1d4606c17015aae0f74edba69f684d399"
-        }
+            "model_20190107_CID_train_Y2.xgboost": "4e4ad0f1d4606c17015aae0f74edba69f684d399",
+        },
     },
     "HCD2021": {
         "id": 9,
@@ -147,8 +154,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20210416_HCD2021_B.xgboost": "c086c599f618b199bbb36e2411701fb2866b24c8",
-            "model_20210416_HCD2021_Y.xgboost": "22a5a137e29e69fa6d4320ed7d701b61cbdc4fcf"
-        }
+            "model_20210416_HCD2021_Y.xgboost": "22a5a137e29e69fa6d4320ed7d701b61cbdc4fcf",
+        },
     },
     "Immuno-HCD": {
         "id": 10,
@@ -161,8 +168,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20210316_Immuno_HCD_B.xgboost": "977466d378de2e89c6ae15b4de8f07800d17a7b7",
-            "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea"
-        }
+            "model_20210316_Immuno_HCD_Y.xgboost": "71948e1b9d6c69cb69b9baf84d361a9f80986fea",
+        },
     },
     "CID-TMT": {
         "id": 11,
@@ -175,8 +182,8 @@ MODELS = {
         },
         "model_hash": {
             "model_20220104_CID_TMT_B.xgboost": "fa834162761a6ae444bb6523c9c1a174b9738389",
-            "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e"
-        }
+            "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e",
+        },
     },
 }
 MODELS["HCD"] = MODELS["HCD2021"]
@@ -221,7 +228,14 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     charges = specdict["charge"]
     del specdict
 
-    for pepid in pepids:
+    # Track progress for only one worker (good approximation of all workers' progress)
+    iterator = (
+        track(pepids, transient=True, description="Predicting spectra...")
+        if worker_num == 0
+        else pepids
+    )
+
+    for pepid in iterator:
         peptide = peptides[pepid]
         peptide = peptide.replace("L", "I")
         mods = modifications[pepid]
@@ -236,7 +250,9 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
             continue
 
         # convert peptide string to integer list to speed up C code
-        peptide = np.array([0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16)
+        peptide = np.array(
+            [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
+        )
         modpeptide = apply_mods(peptide, mods, PTMmap)
 
         pepid_buf.append(pepid)
@@ -263,11 +279,6 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         )  # SD: added colen
         prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
-        pcount += 1
-        if (pcount % 500) == 0:
-            sys.stdout.write("(%i)%i " % (worker_num, pcount))
-            sys.stdout.flush()
-
     return mz_buf, prediction_buf, None, peplen_buf, charge_buf, pepid_buf
 
 
@@ -282,6 +293,7 @@ def process_spectra(
     PTMmap,
     model,
     fragerror,
+    spectrum_id_pattern,
     tableau,
 ):
     """
@@ -334,16 +346,32 @@ def process_spectra(
         ft = open("ms2pip_tableau.%i" % worker_num, "w")
         ft2 = open("stats_tableau.%i" % worker_num, "w")
 
-    for pcount, spectrum in enumerate(
-        read_spectrum_file(spec_file, peptide_titles=peptides)
+    # Track progress for only one worker (good approximation of all workers' progress)
+    for spectrum in track(
+        read_spectrum_file(spec_file),
+        total=len(peptides),
+        disable=worker_num != 0,
+        transient=True,
+        description="Parsing spectra...",
     ):
-        # process current spectrum
-        if spectrum.title not in peptides:
+        # Match title with regex
+        spectrum_id_pattern = ".*scan=(\d+)$"
+        match = re.search(spectrum_id_pattern, spectrum.title)
+        try:
+            title = match[1]
+        except (TypeError, IndexError):
+            raise TitlePatternError(
+                "Spectrum title pattern could not be matched to spectrum IDs "
+                f"`{spectrum.title}`. "
+                " Are you sure that the regex contains a capturing group?"
+            )
+
+        if title not in peptides:
             continue
 
-        peptide = peptides[spectrum.title]
+        peptide = peptides[title]
         peptide = peptide.replace("L", "I")
-        mods = modifications[spectrum.title]
+        mods = modifications[title]
 
         if "mut" in mods:
             continue
@@ -377,7 +405,7 @@ def process_spectra(
         colen = 30
         if "ce" in data.columns:
             try:
-                colen = int(float(ces[spectrum.title]))
+                colen = int(float(ces[title]))
             except:
                 logger.warn("Could not parse collision energy!")
                 continue
@@ -385,10 +413,13 @@ def process_spectra(
         if vector_file:
             # get targets
             targets = ms2pip_pyx.get_targets(
-                modpeptide, spectrum.msms, spectrum.peaks,
-                float(fragerror), peaks_version
+                modpeptide,
+                spectrum.msms,
+                spectrum.peaks,
+                float(fragerror),
+                peaks_version,
             )
-            psmids.extend([spectrum.title] * (len(targets[0])))
+            psmids.extend([title] * (len(targets[0])))
             if "ce" in data.columns:
                 dvectors.append(
                     np.array(
@@ -401,9 +432,7 @@ def process_spectra(
             else:
                 dvectors.append(
                     np.array(
-                        ms2pip_pyx.get_vector(
-                            peptide, modpeptide, spectrum.charge
-                        ),
+                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
                         dtype=np.uint16,
                     )
                 )
@@ -431,23 +460,14 @@ def process_spectra(
             ps = []
 
             predictions = ms2pip_pyx.get_predictions(
-                peptide,
-                modpeptide,
-                spectrum.charge,
-                model_id,
-                peaks_version,
-                colen
+                peptide, modpeptide, spectrum.charge, model_id, peaks_version, colen
             )
             for m, p in zip(spectrum.msms, spectrum.peaks):
-                ft.write("%s;%f;%f;;;0\n" % (spectrum.title, m, 2 ** p))
+                ft.write("%s;%f;%f;;;0\n" % (title, m, 2**p))
 
             # get targets
             mzs, targets = ms2pip_pyx.get_targets_all(
-                modpeptide,
-                spectrum.msms,
-                spectrum.peaks,
-                float(fragerror),
-                "all"
+                modpeptide, spectrum.msms, spectrum.peaks, float(fragerror), "all"
             )
 
             # get mean by intensity values to normalize!; WRONG !!!
@@ -483,7 +503,7 @@ def process_spectra(
                         ft.write(
                             "%s;%f;%f;%s;%i;%i;1\n"
                             % (
-                                spectrum.title,
+                                title,
                                 mzs[it],
                                 (2 ** targets[it]) / maxt,
                                 lion,
@@ -500,7 +520,7 @@ def process_spectra(
                             ft.write(
                                 "%s;%f;%f;%s;%i;%i;2\n"
                                 % (
-                                    spectrum.title,
+                                    title,
                                     mzs[it],
                                     (2 ** (predictions[0][ionnumber])) / maxp,
                                     lion,
@@ -519,7 +539,7 @@ def process_spectra(
                         ft.write(
                             "%s;%f;%f;%s;%i;%i;1\n"
                             % (
-                                spectrum.title,
+                                title,
                                 mzs[it],
                                 (2 ** targets[it]) / maxt,
                                 lion,
@@ -536,7 +556,7 @@ def process_spectra(
                             ft.write(
                                 "%s;%f;%f;%s;%i;%i;2\n"
                                 % (
-                                    spectrum.title,
+                                    title,
                                     mzs[it],
                                     (2 ** (predictions[1][ionnumber])) / maxp,
                                     lion,
@@ -548,7 +568,7 @@ def process_spectra(
             ft2.write(
                 "%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"
                 % (
-                    spectrum.title,
+                    title,
                     len(modpeptide) - 2,
                     len(spectrum.msms),
                     spectrum.tic,
@@ -563,7 +583,7 @@ def process_spectra(
             )
         else:
             # Predict the b- and y-ion intensities from the peptide
-            pepid_buf.append(spectrum.title)
+            pepid_buf.append(title)
             peplen_buf.append(len(peptide) - 2)
             charge_buf.append(spectrum.charge)
 
@@ -573,37 +593,29 @@ def process_spectra(
                 spectrum.msms,
                 spectrum.peaks,
                 float(fragerror),
-                peaks_version
+                peaks_version,
             )
             target_buf.append([np.array(t, dtype=np.float32) for t in targets])
             mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
             mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
             # If using xgboost model file, get feature vectors to predict outside of MP
-            # `prediction_buf` here functions as `vector_buf` to be overwritten by the
-            # `_merge_results` function.
+            # `prediction_buf` here functions as `vector_buf` to be overwritten later in
+            #  the `_merge_results` function with actual predictions.
             if "xgboost_model_files" in MODELS[model].keys():
-                prediction_buf.append(np.array(
-                    ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
-                    dtype=np.uint16,
-                ))
+                prediction_buf.append(
+                    np.array(
+                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
+                        dtype=np.uint16,
+                    )
+                )
             else:
                 predictions = ms2pip_pyx.get_predictions(
-                    peptide,
-                    modpeptide,
-                    spectrum.charge,
-                    model_id,
-                    peaks_version,
-                    colen
+                    peptide, modpeptide, spectrum.charge, model_id, peaks_version, colen
                 )
                 prediction_buf.append(
                     [np.array(p, dtype=np.float32) for p in predictions]
                 )
-
-        pcount += 1
-        if (pcount % 500) == 0:
-            sys.stdout.write("(%i)%i " % (worker_num, pcount))
-            sys.stdout.flush()
 
     if tableau:
         ft.close()
@@ -638,7 +650,7 @@ def prepare_titles(titles, num_cpu):
         for i in range(num_cpu)
     ]
     logger.debug(
-        "{} spectra (~{:.0f} per cpu)\n".format(
+        "{} spectra (~{:.0f} per cpu)".format(
             len(titles), np.mean([len(a) for a in split_titles])
         )
     )
@@ -681,6 +693,7 @@ class MS2PIP:
         self,
         pep_file,
         spec_file=None,
+        spectrum_id_pattern="(.*)",
         vector_file=None,
         num_cpu=1,
         params=None,
@@ -706,6 +719,9 @@ class MS2PIP:
             Path to spectrum file with target intensities. Provide for
             prediction evaluation, or in combination with `vector_file` for
             target extraction.
+        spectrum_id_pattern : str, optional
+            Regular expression pattern to apply to spectrum titles before matching to
+            peptide file entries.
         vector_file : str, optional
             Output filepath for training feature vectors. Provide this to
             extract feature vectors from `spec_file`. Requires `spec_file`.
@@ -758,6 +774,7 @@ class MS2PIP:
         """
         self.pep_file = pep_file
         self.vector_file = vector_file
+        self.spectrum_id_pattern = spectrum_id_pattern
         self.num_cpu = num_cpu
         self.params = params
         self.return_results = return_results
@@ -805,12 +822,12 @@ class MS2PIP:
 
         # Validate requested model
         if self.model in MODELS.keys():
-            logger.info("using %s models", self.model)
+            logger.info("Using %s models", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
                 validate_requested_xgb_model(
                     MODELS[self.model]["xgboost_model_files"],
                     MODELS[self.model]["model_hash"],
-                    self.model_dir
+                    self.model_dir,
                 )
         else:
             raise UnknownFragmentationMethodError(self.model)
@@ -823,11 +840,15 @@ class MS2PIP:
             self.output_filename = output_filename
 
         logger.debug(
-            "starting workers (num_cpu=%d) ...",
+            "Starting workers (num_cpu=%d) ...",
             self.num_cpu,
         )
         if multiprocessing.current_process().daemon:
-            logger.warn("MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children.")
+            logger.warn(
+                "MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children."
+            )
+            self.myPool = multiprocessing.dummy.Pool(1)
+        elif self.num_cpu == 1:
             self.myPool = multiprocessing.dummy.Pool(1)
         else:
             self.myPool = multiprocessing.Pool(self.num_cpu)
@@ -846,45 +867,61 @@ class MS2PIP:
             self.spec_files = None
 
         self.mods = Modifications()
-        for mod_type in ('sptm', 'ptm'):
-            self.mods.add_from_ms2pip_modstrings(self.params["ms2pip"][mod_type], mod_type=mod_type)
+        for mod_type in ("sptm", "ptm"):
+            self.mods.add_from_ms2pip_modstrings(
+                self.params["ms2pip"][mod_type], mod_type=mod_type
+            )
 
     def run(self):
         """Run initiated MS2PIP based on class configuration."""
         self.afile = write_amino_accid_masses()
-        self.modfile = self.mods.write_modifications_file(mod_type='ptm')
-        self.modfile2 = self.mods.write_modifications_file(mod_type='sptm')
+        self.modfile = self.mods.write_modifications_file(mod_type="ptm")
+        self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
 
         self._read_peptide_information()
 
+        # Spectrum file mode
         if self.spec_file:
             results = self._process_spectra()
-
             logger.debug("Merging results")
+            # Feature vectors requested
             if self.vector_file:
                 self._write_vector_file(results)
+            # Predictions (and targets) requested
             else:
                 all_preds = self._merge_predictions(results)
-
-                logger.info("writing file %s_pred_and_emp.csv...", self.output_filename)
-                all_preds.to_csv(
-                    "{}_pred_and_emp.csv".format(self.output_filename), index=False
-                )
-
+                # Correlations also requested
                 if self.compute_correlations:
-                    logger.info("computing correlations")
+                    logger.info("Computing correlations")
                     correlations = calc_correlations.calc_correlations(all_preds)
-                    correlations.to_csv(
-                        "{}_correlations.csv".format(self.output_filename), index=True
-                    )
                     logger.info(
-                        "median correlations: \n%s",
+                        "Median correlations: \n%s",
                         str(correlations.groupby("ion")["pearsonr"].median()),
                     )
+                    if not self.return_results:
+                        correlations.to_csv(
+                            "{}_correlations.csv".format(self.output_filename),
+                            index=True,
+                        )
+                    else:
+                        return correlations
+                if not self.return_results:
+                    logger.info(
+                        "Writing file %s_pred_and_emp.csv...", self.output_filename
+                    )
+                    all_preds.to_csv(
+                        "{}_pred_and_emp.csv".format(self.output_filename), index=False
+                    )
+                else:
+                    return all_preds
+
+        # Match spectra mode
         elif self.match_spectra:
             results = self._process_peptides()
             matched_spectra = self._match_spectra(results)
             self._write_matched_spectra(matched_spectra)
+
+        # Predictions-only mode
         else:
             if "xgboost_model_files" in MODELS[self.model]:
                 results = self._process_peptides_xgb()
@@ -894,7 +931,7 @@ class MS2PIP:
             if self.add_retention_time:
                 self._predict_retention_times()
 
-            logger.info("merging results ...")
+            logger.info("Merging results ...")
             all_preds = self._merge_predictions(results)
 
             if not self.return_results:
@@ -959,13 +996,12 @@ class MS2PIP:
             tmp = split_titles[i]
             results.append(
                 self.myPool.apply_async(
-                    func, args=(i, self.data[self.data.spec_id.isin(tmp)], *args),
+                    func,
+                    args=(i, self.data[self.data.spec_id.isin(tmp)], *args),
                 )
             )
-            # """
         self.myPool.close()
         self.myPool.join()
-        sys.stdout.write("\n")
         return results
 
     def _process_spectra(self):
@@ -974,7 +1010,7 @@ class MS2PIP:
         train models with or writes a file with the predicted spectra next to
         the empirical one.
         """
-        logger.info("scanning spectrum file...")
+        logger.info("Processing spectrum file...")
         titles = self.data["spec_id"].to_list()
 
         return self._execute_in_pool(
@@ -989,6 +1025,7 @@ class MS2PIP:
                 self.mods.ptm_ids,
                 self.model,
                 self.fragerror,
+                self.spectrum_id_pattern,
                 self.tableau,
             ),
         )
@@ -1010,7 +1047,7 @@ class MS2PIP:
         # Only concat DataFrames with content (we get empty ones if more cpu's than peptides)
         all_results = pd.concat([df for df in all_results if len(df) != 0])
 
-        logger.info("writing vector file %s...", self.vector_file)
+        logger.info("Writing vector file %s...", self.vector_file)
         # write result. write format depends on extension:
         ext = self.vector_file.split(".")[-1]
         if ext == "pkl":
@@ -1047,25 +1084,26 @@ class MS2PIP:
             if target_buf:
                 target_bufs.extend(target_buf)
 
+        # Validate number of results
+        if not mz_bufs:
+            raise NoMatchingSpectraFound(
+                "No spectra matching titles/IDs from PEPREC could be found in "
+                "provided spectrum file."
+            )
+
         # If XGBoost model files are used, first predict outside of MP
         # Temporary hack to move XGB prediction step out of MP; ultimately does not
         # make sense to do this in the `_merge_results` step...
         if self.spec_file and "xgboost_model_files" in MODELS[self.model].keys():
             xgb_vector = xgb.DMatrix(np.vstack(prediction_bufs))
             num_ions = [l - 1 for l in peplen_bufs]
+            logger.debug("Predicting intensities from XGBoost model file...")
             prediction_bufs = get_predictions_xgb(
                 xgb_vector,
                 num_ions,
                 MODELS[self.model],
                 self.model_dir,
-                num_cpu=self.num_cpu
-            )
-
-        # Validate number of results
-        if not mz_bufs:
-            raise NoMatchingSpectraFound(
-                "No spectra matching titles/IDs from PEPREC could be found in "
-                "provided spectrum file."
+                num_cpu=self.num_cpu,
             )
 
         # Reconstruct DataFrame
@@ -1092,8 +1130,9 @@ class MS2PIP:
         if target_bufs:
             all_preds["target"] = np.concatenate(target_bufs, axis=None)
         if "rt" in self.data:
-            # TODO: might be a good idea to index the dataframes on spec_id
-            all_preds = all_preds.merge(self.data[["spec_id", "rt"]], on="spec_id", copy=False)
+            all_preds = all_preds.merge(
+                self.data[["spec_id", "rt"]], on="spec_id", copy=False
+            )
 
         return all_preds
 
@@ -1120,23 +1159,28 @@ class MS2PIP:
             MODELS[self.model],
             self.mods.ptm_ids,
             self.model_dir,
-            self.num_cpu
+            self.num_cpu,
         )
 
     def _write_predictions(self, all_preds):
         spec_out = spectrum_output.SpectrumOutput(
-            all_preds, self.data, self.params["ms2pip"], output_filename=self.output_filename,
+            all_preds,
+            self.data,
+            self.params["ms2pip"],
+            output_filename=self.output_filename,
         )
         spec_out.write_results(self.out_formats)
 
     def _match_spectra(self, results):
         mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
 
-        match_spectra = MatchSpectra(self.data,
-                                     self.mods,
-                                     itertools.chain.from_iterable(pepid_bufs),
-                                     itertools.chain.from_iterable(mz_bufs),
-                                     itertools.chain.from_iterable(prediction_bufs))
+        match_spectra = MatchSpectra(
+            self.data,
+            self.mods,
+            itertools.chain.from_iterable(pepid_bufs),
+            itertools.chain.from_iterable(mz_bufs),
+            itertools.chain.from_iterable(prediction_bufs),
+        )
         if self.spec_files:
             return match_spectra.match_mgfs(self.spec_files)
         elif self.sqldb_uri:
@@ -1146,10 +1190,10 @@ class MS2PIP:
 
     def _write_matched_spectra(self, matched_spectra):
         filename = f"{self.output_filename}_matched_spectra.csv"
-        logger.info("writing file %s...", filename)
+        logger.info("Writing file %s...", filename)
 
         with open(filename, mode="w") as csv_file:
             csv_writer = csv.writer(csv_file)
-            csv_writer.writerow(('spec_id', 'matched_file' 'matched_title'))
+            csv_writer.writerow(("spec_id", "matched_file" "matched_title"))
             for pep, spec_file, spec in matched_spectra:
-                csv_writer.writerow((pep, spec_file, spec['params']['title']))
+                csv_writer.writerow((pep, spec_file, spec["params"]["title"]))
