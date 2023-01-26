@@ -235,7 +235,7 @@ class SpectrumOutput:
                     all_peaks.append(
                         (
                             peak[1],
-                            f'{peak[1]:.6f}{sep}{intensity_type(peak[2])}{sep}"{ion_type.lower()}{peak[0]}"',
+                            f'{peak[1]:.6f}{sep}{intensity_type(peak[2])}{sep}"{ion_type.lower()}{peak[0]}/0.0"',
                         )
                     )
                 else:
@@ -258,6 +258,7 @@ class SpectrumOutput:
                 mods = modifications.split("|")
                 mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
                 mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
+                mods = sorted(mods)
                 mods = [(str(x), sequence[x], y) for (x, y) in mods]
                 msp_modifications = "/".join([",".join(list(x)) for x in mods])
                 msp_modifications = f"{len(mods)}/{msp_modifications}"
@@ -356,7 +357,7 @@ class SpectrumOutput:
 
             if self.has_rt:
                 rt = self.peprec_dict[spec_id]["rt"]
-                comment_line += f" RTINSECONDS={rt}"
+                comment_line += f" RetentionTime={rt}"
 
             comment_line += f' MS2PIP_ID="{spec_id}"'
 
