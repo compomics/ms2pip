@@ -16,7 +16,7 @@ from ms2pip.exceptions import (
 )
 from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
 
-logger = logging.getLogger("ms2pip")
+logger = logging.getLogger(__name__)
 
 
 def process_peptides_xgb(peprec, model_params, ptm_ids, model_dir, num_cpu=1):
@@ -70,6 +70,7 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, num_cpu=1):
     for ion_type, xgb_model in xgboost_models.items():
         # Get predictions from XGBoost model
         preds = xgb_model.predict(features)
+        xgb_model.__del__()
 
         # Reshape into arrays for each peptide
         preds = _split_list_by_lengths(preds, num_ions)
@@ -86,7 +87,7 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, num_cpu=1):
 
 
 def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
-    """Get feature vectors and mz values for all peptides in self.data."""
+    """Get feature vectors and mz values for all peptides in peprec."""
     peaks_version = model_params["peaks_version"]
 
     vector_list = []
@@ -151,7 +152,7 @@ def apply_mods(peptide, mods, PTMmap):
 
 
 def check_model_presence(model, model_hash, model_dir):
-    """Check whether xgboost model is downloaded."""
+    """Check whether XGBoost model file is downloaded."""
     filename = os.path.join(model_dir, model)
     if not os.path.isfile(filename):
         return False
@@ -175,22 +176,21 @@ def download_model(model, model_hash, model_dir):
 def check_model_integrity(filename, model_hash):
     """Check that models are correctly downloaded."""
     sha1_hash = hashlib.sha1()
-    with open(filename, "rb") as modelfile:
+    with open(filename, "rb") as model_file:
         while True:
-            chunk = modelfile.read(16 * 1024)
+            chunk = model_file.read(16 * 1024)
             if not chunk:
                 break
             sha1_hash.update(chunk)
     if sha1_hash.hexdigest() == model_hash:
         return True
     else:
-        logger.warn("Model hash not recognised")
+        logger.warn("Model hash not recognized.")
         return False
 
 
 def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes, model_dir):
-    """Validate requestes xgboost models, and download if neccessary"""
-
+    """Validate requested XGBoost models, and download if necessary"""
     for _, model_file in xgboost_model_files.items():
         if not check_model_presence(
             model_file, xgboost_model_hashes[model_file], model_dir
@@ -201,11 +201,11 @@ def validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes, mode
 def initialize_xgb_models(xgboost_model_files, model_dir, nthread) -> dict:
     """Initialize xgboost models and return them in a dict with ion types as keys."""
     xgb.set_config(verbosity=0)
-
     xgboost_models = {}
     for ion_type in xgboost_model_files.keys():
+        model_file = os.path.join(model_dir, xgboost_model_files[ion_type])
+        logger.debug(f"Initializing model from file: `{model_file}`")
         xgb_model = xgb.Booster({"nthread": nthread})
-        xgb_model.load_model(os.path.join(model_dir, xgboost_model_files[ion_type]))
+        xgb_model.load_model(model_file)
         xgboost_models[ion_type] = xgb_model
-
     return xgboost_models

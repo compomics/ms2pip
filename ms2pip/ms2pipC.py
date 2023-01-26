@@ -40,7 +40,7 @@ from ms2pip.predict_xgboost import (
 from ms2pip.retention_time import RetentionTime
 from ms2pip.spectrum import read_spectrum_file
 
-logger = logging.getLogger("ms2pip")
+logger = logging.getLogger(__name__)
 
 # Supported output formats
 SUPPORTED_OUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut", "dlib"]
@@ -979,9 +979,9 @@ class MS2PIP:
         num_pep_filtered = num_pep - len(data)
         if num_pep_filtered > 0:
             logger.info(
-                "Removed %i unsupported peptide sequences (< 3, > 99 amino "
-                "acids, or containing B, J, O, U, X or Z).",
-                num_pep_filtered,
+                f"Removed {num_pep_filtered} unsupported peptide sequences (< 3, > 99 "
+                f"amino acids, or containing B, J, O, U, X or Z). Retained "
+                f"{len(data)} entries."
             )
 
         if len(data) == 0:
@@ -1090,11 +1090,13 @@ class MS2PIP:
                 "No spectra matching titles/IDs from PEPREC could be found in "
                 "provided spectrum file."
             )
+        logger.debug(f"Gathered data for {len(mz_bufs)} peptides/spectra.")
 
         # If XGBoost model files are used, first predict outside of MP
         # Temporary hack to move XGB prediction step out of MP; ultimately does not
         # make sense to do this in the `_merge_results` step...
         if self.spec_file and "xgboost_model_files" in MODELS[self.model].keys():
+            logger.debug("Converting feature vectors to XGBoost DMatrix...")
             xgb_vector = xgb.DMatrix(np.vstack(prediction_bufs))
             num_ions = [l - 1 for l in peplen_bufs]
             logger.debug("Predicting intensities from XGBoost model file...")
