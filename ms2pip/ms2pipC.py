@@ -347,6 +347,7 @@ def process_spectra(
         ft2 = open("stats_tableau.%i" % worker_num, "w")
 
     # Track progress for only one worker (good approximation of all workers' progress)
+    spectrum_id_regex = re.compile(spectrum_id_pattern)
     for spectrum in track(
         read_spectrum_file(spec_file),
         total=len(peptides),
@@ -355,8 +356,7 @@ def process_spectra(
         description="Parsing spectra...",
     ):
         # Match title with regex
-        spectrum_id_pattern = ".*scan=(\d+)$"
-        match = re.search(spectrum_id_pattern, spectrum.title)
+        match = spectrum_id_regex.search(spectrum.title)
         try:
             title = match[1]
         except (TypeError, IndexError):
