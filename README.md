@@ -153,7 +153,6 @@ optional arguments:
   -r, --retention-time  add retention time predictions (requires DeepLC python package)
   -x, --correlations    calculate correlations (if spectrum file is given)
   -m, --match-spectra   match peptides to spectra based on predicted spectra (if spectrum file is given)
-  -t, --tableau         create Tableau Reader file
   -n, --num-cpu         number of CPUs to use (default: all available)
   --sqldb-uri           use sql database of observed spectra instead of spectrum files
   --model-dir           custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.

@@ -301,7 +301,6 @@ def process_spectra(
     model,
     fragerror,
     spectrum_id_pattern,
-    tableau,
 ):
     """
     Function for each worker to process a list of spectra. Each peptide's
@@ -352,10 +351,6 @@ def process_spectra(
     vector_buf = []
 
     spectrum_id_regex = re.compile(spectrum_id_pattern)
-
-    if tableau:
-        ft = open("ms2pip_tableau.%i" % worker_num, "w")
-        ft2 = open("stats_tableau.%i" % worker_num, "w")
 
     # Track progress for only one worker (good approximation of all workers' progress)
     for spectrum in track(
@@ -461,136 +456,7 @@ def process_spectra(
                         dtargets[i] = [t]
                     else:
                         dtargets[i] = [t[::-1]]
-        elif tableau:
-            numby = 0
-            numall = 0
-            explainedby = 0
-            explainedall = 0
-            ts = []
-            ps = []
 
-            predictions = ms2pip_pyx.get_predictions(
-                peptide, modpeptide, spectrum.charge, model_id, peaks_version, colen
-            )
-            for m, p in zip(spectrum.msms, spectrum.peaks):
-                ft.write("%s;%f;%f;;;0\n" % (title, m, 2**p))
-
-            # get targets
-            mzs, targets = ms2pip_pyx.get_targets_all(
-                modpeptide, spectrum.msms, spectrum.peaks, float(fragerror), "all"
-            )
-
-            # get mean by intensity values to normalize!; WRONG !!!
-            maxt = 0.0
-            maxp = 0.0
-            it = 0
-            for cion in [1, 2]:
-                for ionnumber in range(len(modpeptide) - 3):
-                    for lion in ["a", "b-h2o", "b-nh3", "b", "c"]:
-                        if (lion == "b") & (cion == 1):
-                            if maxt < (2 ** targets[it]) - 0.001:
-                                maxt = (2 ** targets[it]) - 0.001
-                            if maxp < (2 ** predictions[0][ionnumber]) - 0.001:
-                                maxp = (2 ** predictions[0][ionnumber]) - 0.001
-                        it += 1
-            for cion in [1, 2]:
-                for ionnumber in range(len(modpeptide) - 3):
-                    for lion in ["y-h2o", "z", "y", "x"]:
-                        if (lion == "y") & (cion == 1):
-                            if maxt < (2 ** targets[it]) - 0.001:
-                                maxt = (2 ** targets[it]) - 0.001
-                            if maxp < (2 ** predictions[1][ionnumber]) - 0.001:
-                                maxp = (2 ** predictions[1][ionnumber]) - 0.001
-                        it += 1
-            # b
-            it = 0
-            for cion in [1, 2]:
-                for ionnumber in range(len(modpeptide) - 3):
-                    for lion in ["a", "b-h2o", "b-nh3", "b", "c"]:
-                        if mzs[it] > 0:
-                            numall += 1
-                            explainedall += (2 ** targets[it]) - 0.001
-                        ft.write(
-                            "%s;%f;%f;%s;%i;%i;1\n"
-                            % (
-                                title,
-                                mzs[it],
-                                (2 ** targets[it]) / maxt,
-                                lion,
-                                cion,
-                                ionnumber,
-                            )
-                        )
-                        if (lion == "b") & (cion == 1):
-                            ts.append(targets[it])
-                            ps.append(predictions[0][ionnumber])
-                            if mzs[it] > 0:
-                                numby += 1
-                                explainedby += (2 ** targets[it]) - 0.001
-                            ft.write(
-                                "%s;%f;%f;%s;%i;%i;2\n"
-                                % (
-                                    title,
-                                    mzs[it],
-                                    (2 ** (predictions[0][ionnumber])) / maxp,
-                                    lion,
-                                    cion,
-                                    ionnumber,
-                                )
-                            )
-                        it += 1
-            # y
-            for cion in [1, 2]:
-                for ionnumber in range(len(modpeptide) - 3):
-                    for lion in ["y-h2o", "z", "y", "x"]:
-                        if mzs[it] > 0:
-                            numall += 1
-                            explainedall += (2 ** targets[it]) - 0.001
-                        ft.write(
-                            "%s;%f;%f;%s;%i;%i;1\n"
-                            % (
-                                title,
-                                mzs[it],
-                                (2 ** targets[it]) / maxt,
-                                lion,
-                                cion,
-                                ionnumber,
-                            )
-                        )
-                        if (lion == "y") & (cion == 1):
-                            ts.append(targets[it])
-                            ps.append(predictions[1][ionnumber])
-                            if mzs[it] > 0:
-                                numby += 1
-                                explainedby += (2 ** targets[it]) - 0.001
-                            ft.write(
-                                "%s;%f;%f;%s;%i;%i;2\n"
-                                % (
-                                    title,
-                                    mzs[it],
-                                    (2 ** (predictions[1][ionnumber])) / maxp,
-                                    lion,
-                                    cion,
-                                    ionnumber,
-                                )
-                            )
-                        it += 1
-            ft2.write(
-                "%s;%i;%i;%f;%f;%i;%i;%f;%f;%f;%f\n"
-                % (
-                    title,
-                    len(modpeptide) - 2,
-                    len(spectrum.msms),
-                    spectrum.tic,
-                    pearsonr(ts, ps)[0],
-                    numby,
-                    numall,
-                    explainedby,
-                    explainedall,
-                    float(numby) / (2 * (len(peptide) - 3)),
-                    float(numall) / (18 * (len(peptide) - 3)),
-                )
-            )
         else:
             # Predict the b- and y-ion intensities from the peptide
             pepid_buf.append(title)
@@ -626,15 +492,13 @@ def process_spectra(
                     [np.array(p, dtype=np.float32) for p in predictions]
                 )
 
-    if tableau:
-        ft.close()
-        ft2.close()
-
+    # If feature vectors requested, return specific data
     if vector_file:
-        # If num_cpu > number of spectra, dvectors can be empty
         if dvectors:
-            # Concatenating dvectors into a 2D ndarray before making DataFrame saves lots of memory!
+            # If num_cpu > number of spectra, dvectors can be empty
             if len(dvectors) >= 1:
+                # Concatenate dvectors into 2D ndarray before making DataFrame to reduce
+                # memory usage
                 dvectors = np.concatenate(dvectors)
             df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
             df.columns = df.columns.astype(str)
@@ -642,6 +506,7 @@ def process_spectra(
             df = pd.DataFrame()
         return psmids, df, dtargets
 
+    # Else, return general data
     return (
         pepid_buf,
         peplen_buf,
@@ -721,7 +586,6 @@ class MS2PIP:
         compute_correlations=False,
         match_spectra=False,
         sqldb_uri=None,
-        tableau=False,
         model_dir=None,
     ):
         """
@@ -763,8 +627,6 @@ class MS2PIP:
             `pep_file` based on predicted intensities (experimental).
         sqldb_uri : str, optional
             URI to SQL database for `match_spectra` feature.
-        tableau : bool, default: False
-            Write results to Tableau file.
         model_dir : str, optional
             Custom directory for downloaded XGBoost model files. By
             default, `~/.ms2pip` is used.
@@ -800,7 +662,6 @@ class MS2PIP:
         self.compute_correlations = compute_correlations
         self.match_spectra = match_spectra
         self.sqldb_uri = sqldb_uri
-        self.tableau = tableau
         self.model_dir = model_dir
 
         self.afile = None
@@ -1041,7 +902,6 @@ class MS2PIP:
                 self.model,
                 self.fragerror,
                 self.spectrum_id_pattern,
-                self.tableau,
             ),
         )
 

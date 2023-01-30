@@ -87,14 +87,6 @@ def argument_parser():
         help="match peptides to spectra based on predicted spectra (if spectrum file is given)",
     )
     parser.add_argument(
-        "-t",
-        "--tableau",
-        action="store_true",
-        default=False,
-        dest="tableau",
-        help="create Tableau Reader file",
-    )
-    parser.add_argument(
         "-n",
         "--num-cpu",
         metavar="NUM_CPU",
@@ -150,7 +142,6 @@ def main():
             compute_correlations=args.correlations,
             match_spectra=args.match_spectra,
             sqldb_uri=args.sqldb_uri,
-            tableau=args.tableau,
             model_dir=args.model_dir,
         )
         try:
