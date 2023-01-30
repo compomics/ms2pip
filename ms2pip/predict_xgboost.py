@@ -9,36 +9,9 @@ from itertools import islice
 import numpy as np
 import xgboost as xgb
 
-from ms2pip.exceptions import (
-    InvalidModificationFormattingError,
-    InvalidXGBoostModelError,
-    UnknownModificationError,
-)
-from ms2pip.ms2pipC import AMINO_ACID_IDS, ms2pip_pyx
+from ms2pip.exceptions import InvalidXGBoostModelError
 
 logger = logging.getLogger(__name__)
-
-
-def process_peptides_xgb(peprec, model_params, ptm_ids, model_dir, num_cpu=1):
-    """Get predictions starting from peprec DataFrame and return _MultiprocessingResultSpoofer."""
-    features, mzs = _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids)
-    features = xgb.DMatrix(features)
-
-    num_ions = (peprec["peptide"].str.len() - 1).to_list()
-    peptide_lengths = peprec["peptide"].str.len().to_list()
-    charges = peprec["charge"].to_list()
-    spec_ids = peprec["spec_id"].to_list()
-
-    predictions = get_predictions_xgb(
-        features, num_ions, model_params, model_dir, num_cpu
-    )
-
-    # List of objects with `get` method is expected, use spoofer class
-    return [
-        _MultiprocessingResultSpoofer(
-            (mzs, predictions, None, peptide_lengths, charges, spec_ids)
-        )
-    ]
 
 
 def get_predictions_xgb(features, num_ions, model_params, model_dir, num_cpu=1):
@@ -66,6 +39,7 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, num_cpu=1):
         num_cpu,
     )
 
+    logger.debug("Predicting intensities from XGBoost model files...")
     preds_list = []
     for ion_type, xgb_model in xgboost_models.items():
         # Get predictions from XGBoost model
@@ -86,69 +60,9 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, num_cpu=1):
     return predictions
 
 
-def _get_ms2pip_data_for_xgb(peprec, model_params, ptm_ids):
-    """Get feature vectors and mz values for all peptides in peprec."""
-    peaks_version = model_params["peaks_version"]
-
-    vector_list = []
-    mz_list = []
-    for row in peprec.to_dict(orient="records"):
-
-        peptide = np.array(
-            [0] + [AMINO_ACID_IDS[x] for x in row["peptide"].replace("L", "I")] + [0],
-            dtype=np.uint16,
-        )
-        modpeptide = apply_mods(peptide, row["modifications"], ptm_ids)
-        charge = row["charge"]
-
-        vector_list.append(
-            np.array(
-                ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16
-            )
-        )
-        mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
-        mz_list.append([np.array(m, dtype=np.float32) for m in mzs])
-
-    feature_vectors = np.vstack(vector_list)
-
-    return feature_vectors, mz_list
-
-
 def _split_list_by_lengths(list_in, lengths):
     list_in = iter(list_in)
     return [list(islice(list_in, elem)) for elem in lengths]
-
-
-class _MultiprocessingResultSpoofer:
-    """Spoof result structure of multiprocessing, for direct XGB predictions."""
-
-    def __init__(self, contents):
-        self.contents = contents
-
-    def get(self):
-        return self.contents
-
-
-def apply_mods(peptide, mods, PTMmap):
-    """
-    Takes a peptide sequence and a set of modifications. Returns the modified
-    version of the peptide sequence, c- and n-term modifications. This modified
-    version are hard coded in ms2pipfeatures_c.c for now.
-    """
-    modpeptide = np.array(peptide[:], dtype=np.uint16)
-
-    if mods != "-":
-        l = mods.split("|")
-        if len(l) % 2 != 0:
-            raise InvalidModificationFormattingError(mods)
-        for i in range(0, len(l), 2):
-            tl = l[i + 1]
-            if tl in PTMmap:
-                modpeptide[int(l[i])] = PTMmap[tl]
-            else:
-                raise UnknownModificationError(tl)
-
-    return modpeptide
 
 
 def check_model_presence(model, model_hash, model_dir):

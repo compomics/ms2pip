@@ -600,11 +600,11 @@ class SpectrumOutput:
         # Write to file or stringbuffer
         if self.return_stringbuffer:
             file_object = StringIO()
-            logger.info("writing results to StringIO using %s", write_function.__name__)
+            logger.info("Writing results to StringIO using %s", write_function.__name__)
         else:
             f_name = self.output_filename + file_suffix
             file_object = open(f_name, self.write_mode)
-            logger.info("writing results to %s", f_name)
+            logger.info("Writing results to %s", f_name)
 
         write_function(self, file_object)
 
@@ -787,7 +787,7 @@ class SpectrumOutput:
             self._generate_diff_modification_mapping(precision)
 
         filename = "{}.dlib".format(self.output_filename)
-        logger.info("writing results to %s", filename)
+        logger.info("Writing results to %s", filename)
 
         logger.debug(
             "write mode is ignored for DLIB at the file mode, although append or not is respected"
@@ -827,11 +827,11 @@ class SpectrumOutput:
         # Write to file or stringbuffer
         if self.return_stringbuffer:
             file_object = StringIO()
-            logger.info("writing results to StringIO using %s", "write_csv")
+            logger.info("Writing results to StringIO using %s", "write_csv")
         else:
             f_name = "{}_predictions.csv".format(self.output_filename)
             file_object = open(f_name, self.write_mode)
-            logger.info("writing results to %s", f_name)
+            logger.info("Writing results to %s", f_name)
 
         self.all_preds.to_csv(file_object, float_format="%.6g", index=False)
         return file_object

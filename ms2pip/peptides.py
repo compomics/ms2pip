@@ -69,7 +69,7 @@ class Modifications:
         self._ptm_ids = None
         self._next_mod_id = 38  # Omega compatibility (mutations)
 
-    def add_from_ms2pip_modstrings(self, modstrings, mod_type='ptm'):
+    def add_from_ms2pip_modstrings(self, modstrings, mod_type="ptm"):
         """
         Add modifications from MS2PIP modstring list
 
@@ -110,7 +110,7 @@ class Modifications:
                 "mass_shift": float(mass_shift),
                 "amino_acid": amino_acid,
                 "amino_acid_id": amino_acid_id,
-                "mod_id": self._next_mod_id
+                "mod_id": self._next_mod_id,
             }
             self._next_mod_id += 1
 
@@ -128,8 +128,9 @@ class Modifications:
         Return modification name -> mass shift mapping.
         """
         if not self._mass_shifts:
-            self._mass_shifts = {name: mod["mass_shift"]
-                                 for name, mod in self._all_modifications}
+            self._mass_shifts = {
+                name: mod["mass_shift"] for name, mod in self._all_modifications
+            }
         return self._mass_shifts
 
     @property
@@ -138,16 +139,19 @@ class Modifications:
         Return modification name -> modification id mapping.
         """
         if not self._ptm_ids:
-            self._ptm_ids = {name: mod["mod_id"]
-                             for name, mod in self._all_modifications}
+            self._ptm_ids = {
+                name: mod["mod_id"] for name, mod in self._all_modifications
+            }
         return self._ptm_ids
 
-    def write_modifications_file(self, mod_type='ptm'):
+    def write_modifications_file(self, mod_type="ptm"):
         mod_file = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="\n")
         mod_file.write("{}\n".format(len(self.modifications[mod_type])))
         for name, mod in self.modifications[mod_type].items():
             mod_file.write(
-                "{},1,{},{}\n".format(mod["mass_shift"], mod['amino_acid_id'], mod['mod_id'])
+                "{},1,{},{}\n".format(
+                    mod["mass_shift"], mod["amino_acid_id"], mod["mod_id"]
+                )
             )
         mod_file.close()
         return mod_file.name
@@ -186,10 +190,8 @@ class Modifications:
         return prec_mass, prec_mz
 
 
-def write_amino_accid_masses():
-    # Create amino acid MASSES file
-    # to be compatible with Omega
-    # that might have fixed modifications
+def write_amino_acid_masses():
+    # Includes fixed/variable information for Omega compatibility
     amino_file = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="\n")
     for m in AMINO_ACID_MASSES:
         amino_file.write("{}\n".format(m))
