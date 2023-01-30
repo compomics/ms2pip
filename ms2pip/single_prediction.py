@@ -1,22 +1,22 @@
 """"Run MS²PIP prediction for single peptide."""
 
+import logging
 import os
 import re
-import logging
 
 import click
 import matplotlib.pyplot as plt
 import numpy as np
-import xgboost as xgb
 import spectrum_utils.plot as sup
 import spectrum_utils.spectrum as sus
+import xgboost as xgb
 
 from ms2pip.config_parser import ConfigParser
 from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.exceptions import InvalidModificationFormattingError, InvalidPeptideError
 from ms2pip.ms2pipC import MODELS, apply_mods
-from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_accid_masses
-from ms2pip.predict_xgboost import validate_requested_xgb_model, initialize_xgb_models
+from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_acid_masses
+from ms2pip.predict_xgboost import initialize_xgb_models, validate_requested_xgb_model
 
 logger = logging.getLogger("ms2pip")
 
@@ -64,13 +64,18 @@ class SinglePrediction:
         self.mod_info = Modifications()
         self.mod_info.modifications = {"ptm": {}, "sptm": {}}
         self.mod_info.add_from_ms2pip_modstrings(modification_strings)
-        afile = write_amino_accid_masses()
+        afile = write_amino_acid_masses()
         modfile = self.mod_info.write_modifications_file(mod_type="ptm")
         modfile2 = self.mod_info.write_modifications_file(mod_type="sptm")
         ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     def predict(
-        self, peptide, modifications, charge, model="HCD", validate_input=True,
+        self,
+        peptide,
+        modifications,
+        charge,
+        model="HCD",
+        validate_input=True,
     ):
         """
         Predict single peptide spectrum with MS²PIP.
@@ -128,8 +133,7 @@ class SinglePrediction:
                 1,
             )
             xgb_vector = np.array(
-                ms2pip_pyx.get_vector(peptide, modpeptide, charge),
-                dtype=np.uint16
+                ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16
             )
             xgb_vector = xgb.DMatrix(xgb_vector)
             intensity = []
@@ -142,13 +146,18 @@ class SinglePrediction:
                 intensity.append(preds)
             intensity = np.array(intensity)
         else:
-            intensity = np.array(ms2pip_pyx.get_predictions(
-                peptide, modpeptide, charge, model_id, peaks_version, ce
-            ))
+            intensity = np.array(
+                ms2pip_pyx.get_predictions(
+                    peptide, modpeptide, charge, model_id, peaks_version, ce
+                )
+            )
         annotation = []
         for ion_type in MODELS[model]["ion_types"]:
             annotation.append(
-                [ion_type.lower() + str(i + 1) for i in range(len(mz[MODELS[model]["ion_types"].index(ion_type)]))]
+                [
+                    ion_type.lower() + str(i + 1)
+                    for i in range(len(mz[MODELS[model]["ion_types"].index(ion_type)]))
+                ]
             )
         annotation = np.array(annotation)
         mz = mz.flatten()
@@ -157,7 +166,13 @@ class SinglePrediction:
         return mz, intensity, annotation
 
     def plot_prediction(
-        self, peptide, modifications, charge, prediction=None, ax=None, filename=None,
+        self,
+        peptide,
+        modifications,
+        charge,
+        prediction=None,
+        ax=None,
+        filename=None,
     ):
         """
         Plot MS²PIP-predicted spectrum with spectrum_utils.
@@ -237,6 +252,7 @@ class SinglePrediction:
     @staticmethod
     def _modifications_to_dict(modifications):
         """Convert ms2pip modification notation to spectrum_utils dict."""
+
         def parse_loc(loc):
             if loc == "0":
                 return "N-term"
@@ -306,7 +322,12 @@ def _main(
     _, ax = plt.subplots(figsize=(10, 5))
     prediction = ms2pip_sp.predict(peptide, modifications, charge, model=model)
     ms2pip_sp.plot_prediction(
-        peptide, modifications, charge, prediction=prediction, ax=ax, filename=output,
+        peptide,
+        modifications,
+        charge,
+        prediction=prediction,
+        ax=ax,
+        filename=output,
     )
 
 
