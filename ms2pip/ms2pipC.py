@@ -228,7 +228,7 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
         total=len(pepids),
         disable=worker_num != 0,
         transient=True,
-        description="Processing peptides...",
+        description="",
     ):
         peptide = peptides[pepid]
         peptide = peptide.replace("L", "I")
@@ -358,7 +358,7 @@ def process_spectra(
         total=len(peptides),
         disable=worker_num != 0,
         transient=True,
-        description="Parsing spectra...",
+        description="",
     ):
         # Match title with regex
         match = spectrum_id_regex.search(spectrum.title)
@@ -689,7 +689,7 @@ class MS2PIP:
                     raise UnknownOutputFormatError(o)
         else:
             if not return_results:
-                logger.debug("No output format specified; defaulting to csv")
+                logger.info("No output format specified; defaulting to csv")
                 self.out_formats = ["csv"]
             else:
                 self.out_formats = []
@@ -717,10 +717,7 @@ class MS2PIP:
         else:
             self.output_filename = output_filename
 
-        logger.debug(
-            "Starting workers (num_cpu=%d) ...",
-            self.num_cpu,
-        )
+        logger.debug(f"Starting workers (num_cpu={self.num_cpu})...")
         if multiprocessing.current_process().daemon:
             logger.warn(
                 "MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children."
@@ -740,7 +737,7 @@ class MS2PIP:
                 self.spec_files = glob.glob("{}/*.mgf".format(spec_file))
             else:
                 self.spec_files = [spec_file]
-            logger.debug("use spec files %s", self.spec_files)
+            logger.debug("Using spectrum files %s", self.spec_files)
         else:
             self.spec_file = spec_file
             self.spec_files = None
@@ -759,15 +756,21 @@ class MS2PIP:
 
         self._read_peptide_information()
 
+        if self.add_retention_time:
+            logger.info("Adding retention time predictions")
+            rt_predictor = RetentionTime(config=self.params)
+            rt_predictor.add_rt_predictions(self.data)
+
         # Spectrum file mode
         if self.spec_file:
+            logger.info("Processing spectra and peptides...")
             results = self._process_spectra()
-            logger.debug("Merging results")
             # Feature vectors requested
             if self.vector_file:
                 self._write_vector_file(results)
             # Predictions (and targets) requested
             else:
+                logger.debug("Merging results")
                 all_preds = self._merge_predictions(results)
                 # Correlations also requested
                 if self.compute_correlations:
@@ -778,19 +781,15 @@ class MS2PIP:
                         str(correlations.groupby("ion")["pearsonr"].median()),
                     )
                     if not self.return_results:
-                        correlations.to_csv(
-                            "{}_correlations.csv".format(self.output_filename),
-                            index=True,
-                        )
+                        corr_filename = self.output_filename + "_correlations.csv"
+                        logger.info(f"Writing file {corr_filename}")
+                        correlations.to_csv(corr_filename, index=True)
                     else:
                         return correlations
                 if not self.return_results:
-                    logger.info(
-                        "Writing file %s_pred_and_emp.csv...", self.output_filename
-                    )
-                    all_preds.to_csv(
-                        "{}_pred_and_emp.csv".format(self.output_filename), index=False
-                    )
+                    pae_filename = self.output_filename + "_pred_and_emp.csv"
+                    logger.info(f"Writing file {pae_filename}...")
+                    all_preds.to_csv(pae_filename, index=False)
                 else:
                     return all_preds
 
@@ -802,12 +801,10 @@ class MS2PIP:
 
         # Predictions-only mode
         else:
+            logger.info("Processing peptides...")
             results = self._process_peptides()
 
-            if self.add_retention_time:
-                self._predict_retention_times()
-
-            logger.info("Merging results ...")
+            logger.debug("Merging results ...")
             all_preds = self._merge_predictions(results)
 
             if not self.return_results:
@@ -854,7 +851,7 @@ class MS2PIP:
         ].copy()
         num_pep_filtered = num_pep - len(data)
         if num_pep_filtered > 0:
-            logger.info(
+            logger.warning(
                 f"Removed {num_pep_filtered} unsupported peptide sequences (< 3, > 99 "
                 f"amino acids, or containing B, J, O, U, X or Z). Retained "
                 f"{len(data)} entries."
@@ -886,7 +883,6 @@ class MS2PIP:
         train models with or writes a file with the predicted spectra next to
         the empirical one.
         """
-        logger.info("Processing spectrum file...")
         titles = self.data["spec_id"].to_list()
 
         return self._execute_in_pool(
@@ -1017,11 +1013,6 @@ class MS2PIP:
             )
 
         return all_preds
-
-    def _predict_retention_times(self):
-        logging.info("Adding retention time predictions")
-        rt_predictor = RetentionTime(config=self.params)
-        rt_predictor.add_rt_predictions(self.data)
 
     def _process_peptides(self):
         titles = self.data.spec_id.tolist()
