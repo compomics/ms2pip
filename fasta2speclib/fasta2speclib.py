@@ -23,21 +23,21 @@ import argparse
 import json
 import logging
 import multiprocessing
-from itertools import combinations
+from itertools import product
 from math import ceil
 
 # Third party libraries
 import numpy as np
 import pandas as pd
-from pyteomics import mass
-from pyteomics.parser import cleave, expasy_rules
 from Bio import SeqIO
+from pyteomics.parser import cleave
+
+from ms2pip.ms2pip_tools import spectrum_output
+from ms2pip.ms2pip_tools.get_elude_predictions import get_elude_predictions
 
 # MS2PIP
 from ms2pip.ms2pipC import MS2PIP
 from ms2pip.retention_time import RetentionTime
-from ms2pip.ms2pip_tools import spectrum_output
-from ms2pip.ms2pip_tools.get_elude_predictions import get_elude_predictions
 
 
 def ArgParse():
@@ -78,7 +78,10 @@ def get_params():
         params = json.load(config_file)
 
     params.update(
-        {"fasta_filename": args.fasta_filename, "log_level": logging.INFO,}
+        {
+            "fasta_filename": args.fasta_filename,
+            "log_level": logging.INFO,
+        }
     )
 
     if args.output_filename:
@@ -96,6 +99,7 @@ def get_params():
 
 def prot_to_peprec(protein):
     """Cleave protein and return pd.DataFrame with valid peptides."""
+
     def validate_peptide(peptide, min_length, max_length):
         """Validate peptide by length and amino acids."""
         peplen = len(peptide)
@@ -142,80 +146,112 @@ def get_protein_list(df):
     return df
 
 
+def get_modifications_by_target(modifications):
+    """Restructure modifications configuration to options per side chain or terminus."""
+    mods_sidechain = {}
+    mods_nterm = {}
+
+    for mod in modifications:
+        if mod["fixed"]:
+            continue
+        elif mod["n_term"]:
+            if mod["amino_acid"]:
+                if mod["amino_acid"] in mods_nterm:
+                    mods_nterm[mod["amino_acid"]].append(mod["name"])
+                else:
+                    mods_nterm[mod["amino_acid"]] = [mod["name"]]
+            else:
+                if "any" in mods_nterm:
+                    mods_nterm["any"].append(mod["name"])
+                else:
+                    mods_nterm["any"] = [mod["name"]]
+        elif mod["amino_acid"]:
+            if mod["amino_acid"] in mods_sidechain:
+                mods_sidechain[mod["amino_acid"]].append(mod["name"])
+            else:
+                mods_sidechain[mod["amino_acid"]] = [mod["name"]]
+
+    for aa, mods in mods_sidechain.items():
+        mods.append(None)
+    if "any" in mods_nterm:
+        mods_nterm["any"].append(None)
+    else:
+        mods_nterm["any"] = [None]
+
+    return mods_sidechain, mods_nterm
+
+
+def get_modification_versions(
+    peptide, modifications, mods_sidechain, mods_nterm, max_mods=3
+):
+    """Get MS²PIP modification strings for all potential versions."""
+    possibilities_by_site = dict()
+
+    # Assign possible modifications per residue (side chains)
+    for pos, aa in enumerate(peptide):
+        if aa in mods_sidechain:
+            possibilities_by_site[pos + 1] = mods_sidechain[aa]
+
+    # Assign possible modifications for N terminus
+    if mods_nterm:
+        possibilities_by_site[0] = []
+    for site, mods in mods_nterm.items():
+        if site == "any":
+            possibilities_by_site[0].extend(mods)
+        elif peptide[0] == site:
+            possibilities_by_site[0].extend(mods)
+
+    # Override with fixed modifications
+    for mod in modifications:
+        if not mod["fixed"]:
+            continue
+        if mod["n_term"]:
+            if (mod["amino_acid"] and peptide[0] == mod["amino_acid"]) or not mod[
+                "amino_acid"
+            ]:
+                possibilities_by_site[0] = [mod["name"]]
+        elif mod["amino_acid"]:
+            for pos, aa in enumerate(peptide):
+                if aa == mod["amino_acid"]:
+                    possibilities_by_site[pos] = [mod["name"]]
+
+    # Get all possible combinations of modifications for all sites
+    mod_permutations = list(product(*possibilities_by_site.values()))
+    mod_positions = possibilities_by_site.keys()
+
+    # Get MS²PIP modifications strings for each combination
+    mod_strings = []
+    for perm in mod_permutations:
+        mods = sorted(zip(mod_positions, perm))  # Zip permutations with positions
+        mods = "|".join(
+            f"{m[0]}|{m[1]}" for m in mods if m[1]
+        )  # Make str for modified sites
+        mod_strings.append(mods)
+
+    # Filter by max modified sites (avoiding combinatorial explosion)
+    mod_strings = list(
+        filter(lambda x: (x.count("|") + 1) / 2 <= max_mods, mod_strings)
+    )
+
+    return mod_strings
+
+
 def add_mods(tup):
     """
     See fasta2speclib_config.md for more information.
     """
     _, row = tup
     params = get_params()
-    mod_versions = [dict()]
 
-    # First add all fixed modifications
-    for mod in params["modifications"]:
-        if mod["fixed"]:
-            if not mod["n_term"] and mod["amino_acid"]:
-                mod_versions[0].update(
-                    {
-                        i: mod["name"]
-                        for i, aa in enumerate(row["peptide"])
-                        if aa == mod["amino_acid"]
-                    }
-                )
-            elif mod["n_term"]:
-                if mod["amino_acid"]:
-                    if row["peptide"][0] == mod["amino_acid"]:
-                        mod_versions[0]["N"] = mod["name"]
-                else:
-                    mod_versions[0]["N"] = mod["name"]
-
-    # Continue with variable modifications
-    for mod in params["modifications"]:
-        if mod["fixed"]:
-            continue
-
-        # List all positions with specific amino acid, to avoid combinatorial explotion,
-        # limit to 4 positions
-        all_pos = [i for i, aa in enumerate(row["peptide"]) if aa == mod["amino_acid"]]
-        if len(all_pos) > 4:
-            all_pos = all_pos[:4]
-        for version in mod_versions:
-            # For non-position-specific mods:
-            if not mod["n_term"]:
-                pos = [p for p in all_pos if p not in version.keys()]
-                combos = [
-                    x for l in range(1, len(pos) + 1) for x in combinations(pos, l)
-                ]
-                for combo in combos:
-                    new_version = version.copy()
-                    for pos in combo:
-                        new_version[pos] = mod["name"]
-                    mod_versions.append(new_version)
-
-            # For N-term mods and N-term is not yet modified:
-            elif mod["n_term"] and "N" not in version.keys():
-                # N-term with specific first AA:
-                if mod["amino_acid"]:
-                    if row["peptide"][0] == mod["amino_acid"]:
-                        new_version = version.copy()
-                        new_version["N"] = mod["name"]
-                        mod_versions.append(new_version)
-                # N-term without specific first AA:
-                else:
-                    new_version = version.copy()
-                    new_version["N"] = mod["name"]
-                    mod_versions.append(new_version)
+    # TODO: Do not hardcode max_mods
+    # TODO: Do not include fixed modifications in max_mods
+    mods_sidechain, mods_nterm = get_modifications_by_target(params["modifications"])
+    mod_versions = get_modification_versions(
+        row["peptide"], params["modifications"], mods_sidechain, mods_nterm, max_mods=3
+    )
 
     df_out = pd.DataFrame(columns=row.index)
-    df_out["modifications"] = [
-        "|".join(
-            "{}|{}".format(0, value) if key == "N" else "{}|{}".format(key + 1, value)
-            for key, value in version.items()
-        )
-        for version in mod_versions
-    ]
-    df_out["modifications"] = [
-        "-" if not mods else mods for mods in df_out["modifications"]
-    ]
+    df_out["modifications"] = ["-" if not mods else mods for mods in mod_versions]
     df_out["spec_id"] = [
         "{}_{:03d}".format(row["spec_id"], i) for i in range(len(mod_versions))
     ]
@@ -326,7 +362,9 @@ def run_batches(peprec, decoy=False):
             "frag_error": 0.02,
             # Modify fasta2speclib modifications dict to MS2PIP params PTMs entry
             "ptm": [
-                "{},{},opt,{}".format(mods["name"], mods["mass_shift"], mods["amino_acid"])
+                "{},{},opt,{}".format(
+                    mods["name"], mods["mass_shift"], mods["amino_acid"]
+                )
                 if not mods["n_term"]
                 else "{},{},opt,N-term".format(mods["name"], mods["mass_shift"])
                 for mods in params["modifications"]
@@ -367,7 +405,7 @@ def run_batches(peprec, decoy=False):
         with multiprocessing.Pool(params["num_cpu"]) as p:
             peprec_mods = pd.concat(
                 [peprec_mods] + p.map(add_mods, peprec_batch.iterrows()),
-                ignore_index=True
+                ignore_index=True,
             )
         peprec_batch = peprec_mods
 
@@ -486,9 +524,8 @@ def main():
     logging.info("Cleaving proteins, adding peptides to peprec")
     with multiprocessing.Pool(params["num_cpu"]) as p:
         peprec = pd.concat(
-            [peprec] + p.map(
-                prot_to_peprec, SeqIO.parse(params["fasta_filename"], "fasta")
-            ),
+            [peprec]
+            + p.map(prot_to_peprec, SeqIO.parse(params["fasta_filename"], "fasta")),
             ignore_index=True,
         )
 
@@ -519,9 +556,6 @@ def main():
 
     run_batches(peprec, decoy=False)
 
-    # For testing
-    # peprec_nonmod = pd.read_hdf('data/uniprot_proteome_yeast_head_nonexpanded.peprec.hdf', key='table')
-
     if params["decoy"]:
         logging.info("Reversing sequences for decoy peptides")
         peprec_decoy = create_decoy_peprec(peprec_nonmod, move_mods=False)
@@ -530,7 +564,7 @@ def main():
         logging.info("Predicting spectra for decoy peptides")
         run_batches(peprec_decoy, decoy=True)
 
-    logging.info("Fasta2SpecLib is ready!")
+    logging.info("fasta2speclib is ready!")
 
 
 if __name__ == "__main__":

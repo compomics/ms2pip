@@ -235,7 +235,7 @@ class SpectrumOutput:
                     all_peaks.append(
                         (
                             peak[1],
-                            f'{peak[1]:.6f}{sep}{intensity_type(peak[2])}{sep}"{ion_type.lower()}{peak[0]}"',
+                            f'{peak[1]:.6f}{sep}{intensity_type(peak[2])}{sep}"{ion_type.lower()}{peak[0]}/0.0"',
                         )
                     )
                 else:
@@ -258,6 +258,7 @@ class SpectrumOutput:
                 mods = modifications.split("|")
                 mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
                 mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
+                mods = sorted(mods)
                 mods = [(str(x), sequence[x], y) for (x, y) in mods]
                 msp_modifications = "/".join([",".join(list(x)) for x in mods])
                 msp_modifications = f"{len(mods)}/{msp_modifications}"
@@ -356,7 +357,7 @@ class SpectrumOutput:
 
             if self.has_rt:
                 rt = self.peprec_dict[spec_id]["rt"]
-                comment_line += f" RTINSECONDS={rt}"
+                comment_line += f" RetentionTime={rt}"
 
             comment_line += f' MS2PIP_ID="{spec_id}"'
 
@@ -599,11 +600,11 @@ class SpectrumOutput:
         # Write to file or stringbuffer
         if self.return_stringbuffer:
             file_object = StringIO()
-            logger.info("writing results to StringIO using %s", write_function.__name__)
+            logger.info("Writing results to StringIO using %s", write_function.__name__)
         else:
             f_name = self.output_filename + file_suffix
             file_object = open(f_name, self.write_mode)
-            logger.info("writing results to %s", f_name)
+            logger.info("Writing results to %s", f_name)
 
         write_function(self, file_object)
 
@@ -786,7 +787,7 @@ class SpectrumOutput:
             self._generate_diff_modification_mapping(precision)
 
         filename = "{}.dlib".format(self.output_filename)
-        logger.info("writing results to %s", filename)
+        logger.info("Writing results to %s", filename)
 
         logger.debug(
             "write mode is ignored for DLIB at the file mode, although append or not is respected"
@@ -826,11 +827,11 @@ class SpectrumOutput:
         # Write to file or stringbuffer
         if self.return_stringbuffer:
             file_object = StringIO()
-            logger.info("writing results to StringIO using %s", "write_csv")
+            logger.info("Writing results to StringIO using %s", "write_csv")
         else:
             f_name = "{}_predictions.csv".format(self.output_filename)
             file_object = open(f_name, self.write_mode)
-            logger.info("writing results to %s", f_name)
+            logger.info("Writing results to %s", f_name)
 
         self.all_preds.to_csv(file_object, float_format="%.6g", index=False)
         return file_object

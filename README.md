@@ -1,13 +1,14 @@
 [<img src="https://github.com/compomics/ms2pip_c/raw/releases/img/ms2pip_logo_1000px.png" width="150" height="150" />](https://iomics.ugent.be/ms2pip/)
 <br/><br/>
 
-[![GitHub release](https://flat.badgen.net/github/release/compomics/ms2pip_c/stable)](https://github.com/compomics/ms2pip_c/releases/latest/)
-[![PyPI](https://flat.badgen.net/pypi/v/ms2pip)](https://pypi.org/project/ms2pip/)
-[![GitHub Workflow Status](https://flat.badgen.net/github/checks/compomics/ms2pip_c/releases)](https://github.com/compomics/ms2pip_c/actions/)
-[![Last commit](https://flat.badgen.net/github/open-issues/compomics/ms2pip_c)](https://github.com/compomics/ms2pip_c/issues/)
-[![Last commit](https://flat.badgen.net/github/last-commit/compomics/ms2pip_c/releases)](https://github.com/compomics/ms2pip_c/commits/releases/)
-[![GitHub](https://flat.badgen.net/github/license/compomics/ms2pip_c)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Twitter](https://flat.badgen.net/twitter/follow/compomics?icon=twitter)](https://twitter.com/compomics)
+[![GitHub release](https://img.shields.io/github/v/release/compomics/ms2pip_c?include_prereleases&style=flat-square)](https://github.com/compomics/ms2pip_c/releases/latest/)
+[![PyPI](https://img.shields.io/pypi/v/ms2pip?style=flat-square)](https://pypi.org/project/ms2pip/)
+[![Tests](https://img.shields.io/github/actions/workflow/status/compomics/ms2pip_c/test.yml?branch=releases&label=tests&style=flat-square)](https://github.com/compomics/ms2pip_c/actions/workflows/test.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/compomics/ms2pip_c/build_and_publish.yml?style=flat-square)](https://github.com/compomics/ms2pip_c/actions/workflows/build_and_publish.yml)
+[![Open issues](https://img.shields.io/github/issues/compomics/ms2pip_c?style=flat-square)](https://github.com/compomics/ms2pip_c/issues/)
+[![Last commit](https://img.shields.io/github/last-commit/compomics/ms2pip_c?style=flat-square)](https://github.com/compomics/ms2pip_c/commits/releases/)
+[![GitHub](https://img.shields.io/github/license/compomics/ms2pip_c?style=flat-square)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Twitter](https://img.shields.io/twitter/follow/compomics?style=social)](https://twitter.com/compomics)
 
 MS²PIP: MS² Peak Intensity Prediction - Fast and accurate peptide fragmention
 spectrum prediction for multiple fragmentation methods, instruments and labeling techniques.
@@ -44,13 +45,15 @@ Fasta2speclib was developed in collaboration with the ProGenTomics group for the
 [MS²PIP for DIA](https://github.com/brvpuyve/MS2PIP-for-DIA) project.
 
 To improve the sensitivity of your peptide identification pipeline with MS²PIP
-predictions, check out [MS²ReScore](https://github.com/compomics/ms2rescore/).
+predictions, check out [MS²Rescore](https://github.com/compomics/ms2rescore/).
 
-If you use MS²PIP for your research, please cite the following articles:
+If you use MS²PIP for your research, please cite the following publication:
 - Gabriels, R., Martens, L., & Degroeve, S. (2019). Updated MS²PIP web server
 delivers fast and accurate MS² peak intensity prediction for multiple
 fragmentation methods, instruments and labeling techniques. *Nucleic Acids
 Research* [doi:10.1093/nar/gkz299](https://doi.org/10.1093/nar/gkz299)
+
+Prior MS²PIP publications:
 - Degroeve, S., Maddelein, D., & Martens, L. (2015). MS²PIP prediction server:
 compute and visualize MS² peak intensity predictions for CID and HCD
 fragmentation. *Nucleic Acids Research*, 43(W1), W326–W330.
@@ -59,7 +62,7 @@ fragmentation. *Nucleic Acids Research*, 43(W1), W326–W330.
 prediction. *Bioinformatics (Oxford, England)*, 29(24), 3199–203.
 [doi:10.1093/bioinformatics/btt544](https://doi.org/10.1093/bioinformatics/btt544)
 
-Please also take note of and mention the MS²PIP-version you used.
+Please also take note of, and mention, the MS²PIP version you used.
 
 ---
 
@@ -78,7 +81,7 @@ pip install ms2pip
 
 Compiled wheels are available for Python 3.6, 3.7, and 3.8, on 64bit Linux,
 Windows, and macOS. This should install MS²PIP in a few seconds. For other
-platforms, MS²PIP can be built from source, although it can take up to one hour
+platforms, MS²PIP can be built from source, although it can take a while
 to compile the large prediction models.
 
 We recommend using a [venv](https://docs.python.org/3/library/venv.html) or
@@ -153,7 +156,6 @@ optional arguments:
   -r, --retention-time  add retention time predictions (requires DeepLC python package)
   -x, --correlations    calculate correlations (if spectrum file is given)
   -m, --match-spectra   match peptides to spectra based on predicted spectra (if spectrum file is given)
-  -t, --tableau         create Tableau Reader file
   -n, --num-cpu         number of CPUs to use (default: all available)
   --sqldb-uri           use sql database of observed spectra instead of spectrum files
   --model-dir           custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.

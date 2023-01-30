@@ -1,26 +1,26 @@
-import os
 import platform
 from glob import glob
 
+import numpy
+from Cython.Distutils import build_ext
 from setuptools import setup
 from setuptools.extension import Extension
-from Cython.Distutils import build_ext
-import numpy
 
-
-VERSION = "3.9.0"
+VERSION = "3.10.0"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
 DESCRIPTION = "MS²PIP: MS² Peak Intensity Prediction"
-AUTHOR = "Sven Degroeve, Ralf Gabriels, Kevin Velghe, Ana Sílvia C. Silva"
+AUTHOR = (
+    "Sven Degroeve, Ralf Gabriels, Kevin Velghe, Ana Sílvia C. Silva, Arthur Declercq"
+)
 AUTHOR_EMAIL = "sven.degroeve@vib-ugent.be"
 URL = "https://www.github.com/compomics/ms2pip_c"
 PROJECT_URLS = {
     "Documentation": "http://compomics.github.io/projects/ms2pip_c",
     "Source": "https://github.com/compomics/ms2pip_c",
     "Tracker": "https://github.com/compomics/ms2pip_c/issues",
-    "Webserver": "https://iomics.ugent.be/ms2pip/",
+    "Web server": "https://iomics.ugent.be/ms2pip/",
     "Publication": "https://doi.org/10.1093/nar/gkz299/",
 }
 KEYWORDS = [
@@ -57,6 +57,7 @@ INSTALL_REQUIRES = [
     "matplotlib>=3.0",
     "spectrum_utils>=0.3.5",
     "lxml>=4",
+    "rich>=13",
 ]
 PYTHON_REQUIRES = ">=3.6,<4"
 
@@ -67,7 +68,7 @@ to_remove = [
     "ms2pip/cython_modules/ms2pip_pyx.c*",
     "ms2pip/cython_modules/ms2pip_pyx.so",
 ]
-#_ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
+# _ = [[os.remove(f) for f in glob(pat)] for pat in to_remove]
 
 # Large machine-written C model files require optimization to be disabled
 compile_args = {
@@ -87,7 +88,7 @@ compile_args = {
         "/GL-",
         "/bigobj",
         "/wd4244",
-    ]
+    ],
 }
 
 extensions = [

@@ -3,16 +3,18 @@ import logging
 import multiprocessing
 import sys
 
+from rich.console import Console
+from rich.logging import RichHandler
+
 from ms2pip.config_parser import ConfigParser
-from ms2pip.exceptions import (FragmentationModelRequiredError,
+from ms2pip.exceptions import (EmptySpectrumError,
+                               FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
                                InvalidPEPRECError, InvalidXGBoostModelError,
                                NoValidPeptideSequencesError,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
-                               UnknownOutputFormatError,
-                               InvalidXGBoostModelError,
-                               EmptySpectrumError)
+                               UnknownOutputFormatError)
 from ms2pip.ms2pipC import MODELS, MS2PIP, SUPPORTED_OUT_FORMATS
 
 
@@ -36,7 +38,8 @@ def argument_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("pep_file", metavar="<PEPREC file>", help="list of peptides")
     parser.add_argument(
-        "-c", "--config-file",
+        "-c",
+        "--config-file",
         metavar="CONFIG_FILE",
         action="store",
         required=True,
@@ -44,49 +47,48 @@ def argument_parser():
         help="Configuration file: text-based (extensions `.txt`, `.config`, or `.ms2pip`) or TOML (extension `.toml`).",
     )
     parser.add_argument(
-        "-s", "--spectrum-file",
+        "-s",
+        "--spectrum-file",
         metavar="SPECTRUM_FILE",
         action="store",
         dest="spec_file",
         help="MGF or mzML spectrum file (optional)",
     )
     parser.add_argument(
-        "-w", "--vector-file",
+        "-w",
+        "--vector-file",
         metavar="FEATURE_VECTOR_OUTPUT",
         action="store",
         dest="vector_file",
         help="write feature vectors to FILE.{pkl,h5} (optional)",
     )
     parser.add_argument(
-        "-r", "--retention-time",
+        "-r",
+        "--retention-time",
         action="store_true",
         default=False,
         dest="add_retention_time",
         help="add retention time predictions (requires DeepLC python package)",
     )
     parser.add_argument(
-        "-x", "--correlations",
+        "-x",
+        "--correlations",
         action="store_true",
         default=False,
         dest="correlations",
         help="calculate correlations (if spectrum file is given)",
     )
     parser.add_argument(
-        "-m", "--match-spectra",
+        "-m",
+        "--match-spectra",
         action="store_true",
         default=False,
         dest="match_spectra",
         help="match peptides to spectra based on predicted spectra (if spectrum file is given)",
     )
     parser.add_argument(
-        "-t", "--tableau",
-        action="store_true",
-        default=False,
-        dest="tableau",
-        help="create Tableau Reader file",
-    )
-    parser.add_argument(
-        "-n", "--num-cpu",
+        "-n",
+        "--num-cpu",
         metavar="NUM_CPU",
         action="store",
         dest="num_cpu",
@@ -103,7 +105,7 @@ def argument_parser():
         "--model-dir",
         action="store",
         dest="model_dir",
-        help="Custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.",
+        help="Custom directory for downloaded XGBoost model files, default: `~/.ms2pip`",
     )
     args = parser.parse_args()
 
@@ -114,10 +116,15 @@ def argument_parser():
 
 
 def main():
-    root_logger = logging.getLogger()
-    handler = logging.StreamHandler()
-    root_logger.addHandler(handler)
-    root_logger.setLevel(logging.DEBUG)
+    logging.basicConfig(
+        format="%(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        level=logging.DEBUG,
+        handlers=[RichHandler(
+            rich_tracebacks=True, console=Console(), show_level=True, show_path=False
+        )],
+    )
+    logger = logging.getLogger(__name__)
 
     print_logo()
 
@@ -135,7 +142,6 @@ def main():
             compute_correlations=args.correlations,
             match_spectra=args.match_spectra,
             sqldb_uri=args.sqldb_uri,
-            tableau=args.tableau,
             model_dir=args.model_dir,
         )
         try:
@@ -143,32 +149,40 @@ def main():
         finally:
             ms2pip.cleanup()
     except InvalidPEPRECError:
-        root_logger.error("PEPREC file should start with header column")
+        logger.critical("PEPREC file should start with header column")
         sys.exit(1)
     except NoValidPeptideSequencesError:
-        root_logger.error("No peptides for which to predict intensities. \
-            please provide at least one valid peptide sequence.")
+        logger.critical(
+            "No peptides for which to predict intensities. \
+            please provide at least one valid peptide sequence."
+        )
         sys.exit(1)
     except UnknownModificationError as e:
-        root_logger.error("Unknown modification: %s", e)
+        logger.critical("Unknown modification: %s", e)
         sys.exit(1)
     except InvalidModificationFormattingError as e:
-        root_logger.error("Invalid formatting of modifications: %s", e)
+        logger.critical("Invalid formatting of modifications: %s", e)
         sys.exit(1)
     except UnknownOutputFormatError as o:
-        root_logger.error("Unknown output format: '%s' (supported formats: %s)", o, SUPPORTED_OUT_FORMATS)
+        logger.critical(
+            f"Unknown output format: `{o}` (supported formats: `{SUPPORTED_OUT_FORMATS}`)"
+        )
         sys.exit(1)
     except UnknownFragmentationMethodError as f:
-        root_logger.error("Unknown fragmentation method: %s (supported methods: %s)", f, MODELS.keys())
+        logger.critical(
+            f"Unknown model: `{f}` (supported models: {MODELS.keys()})"
+        )
         sys.exit(1)
     except FragmentationModelRequiredError:
-        root_logger.error("Please specify model in config file.")
+        logger.critical("Please specify model in config file.")
         sys.exit(1)
     except InvalidXGBoostModelError:
-        root_logger.error(f"Could not download XGBoost model properly\nTry manual download")
+        logger.critical(
+            f"Could not download XGBoost model properly\nTry manual download"
+        )
         sys.exit(1)
     except EmptySpectrumError:
-        root_logger.error("Provided MGF file cannot contain empty spectra")
+        logger.critical("Provided MGF file cannot contain empty spectra")
         sys.exit(1)
 
 
