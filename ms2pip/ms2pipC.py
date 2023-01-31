@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from rich.progress import track
-from scipy.stats import pearsonr
 
 from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.exceptions import (FragmentationModelRequiredError,
