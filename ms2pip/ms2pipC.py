@@ -14,22 +14,13 @@ import pandas as pd
 import xgboost as xgb
 from rich.progress import track
 
+import ms2pip.exceptions as exceptions
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (FragmentationModelRequiredError,
-                               InvalidModificationFormattingError,
-                               InvalidPEPRECError, MissingConfigurationError,
-                               NoMatchingSpectraFound,
-                               NoValidPeptideSequencesError, TitlePatternError,
-                               UnknownFragmentationMethodError,
-                               UnknownModificationError,
-                               UnknownOutputFormatError)
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
-from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
-                             write_amino_acid_masses)
-from ms2pip.predict_xgboost import (get_predictions_xgb,
-                                    validate_requested_xgb_model)
+from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_acid_masses
+from ms2pip.predict_xgboost import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.retention_time import RetentionTime
 from ms2pip.spectrum import read_spectrum_file
 
@@ -364,7 +355,7 @@ def process_spectra(
         try:
             title = match[1]
         except (TypeError, IndexError):
-            raise TitlePatternError(
+            raise exceptions.TitlePatternError(
                 "Spectrum title pattern could not be matched to spectrum IDs "
                 f"`{spectrum.title}`. "
                 " Are you sure that the regex contains a capturing group?"
@@ -391,7 +382,7 @@ def process_spectra(
 
         try:
             modpeptide = apply_mods(peptide, mods, PTMmap)
-        except UnknownModificationError as e:
+        except exceptions.UnknownModificationError as e:
             logger.warn("Unknown modification: %s", e)
             continue
 
@@ -550,13 +541,13 @@ def apply_mods(peptide, mods, PTMmap):
     if mods != "-":
         l = mods.split("|")
         if len(l) % 2 != 0:
-            raise InvalidModificationFormattingError(mods)
+            raise exceptions.InvalidModificationFormattingError(mods)
         for i in range(0, len(l), 2):
             tl = l[i + 1]
             if tl in PTMmap:
                 modpeptide[int(l[i])] = PTMmap[tl]
             else:
-                raise UnknownModificationError(tl)
+                raise exceptions.UnknownModificationError(tl)
 
     return modpeptide
 
@@ -668,14 +659,14 @@ class MS2PIP:
         self.modfile2 = None
 
         if params is None:
-            raise MissingConfigurationError()
+            raise exceptions.MissingConfigurationError()
 
         if "model" in self.params["ms2pip"]:
             self.model = self.params["ms2pip"]["model"]
         elif "frag_method" in self.params["ms2pip"]:
             self.model = self.params["ms2pip"]["frag_method"]
         else:
-            raise FragmentationModelRequiredError()
+            raise exceptions.FragmentationModelRequiredError()
         self.fragerror = self.params["ms2pip"]["frag_error"]
 
         # Validate requested output formats
@@ -685,7 +676,7 @@ class MS2PIP:
             ]
             for o in self.out_formats:
                 if o not in SUPPORTED_OUT_FORMATS:
-                    raise UnknownOutputFormatError(o)
+                    raise exceptions.UnknownOutputFormatError(o)
         else:
             if not return_results:
                 logger.info("No output format specified; defaulting to csv")
@@ -707,7 +698,7 @@ class MS2PIP:
                     self.model_dir,
                 )
         else:
-            raise UnknownFragmentationMethodError(self.model)
+            raise exceptions.UnknownFragmentationMethodError(self.model)
 
         if output_filename is None and not return_results:
             self.output_filename = "{}_{}".format(
@@ -827,7 +818,7 @@ class MS2PIP:
             with open(self.pep_file, "rt") as f:
                 line = f.readline()
                 if line[:7] != "spec_id":
-                    raise InvalidPEPRECError()
+                    raise exceptions.InvalidPEPRECError()
                 sep = line[7]
             data = pd.read_csv(
                 self.pep_file,
@@ -857,7 +848,7 @@ class MS2PIP:
             )
 
         if len(data) == 0:
-            raise NoValidPeptideSequencesError()
+            raise exceptions.NoValidPeptideSequencesError()
 
         self.data = data
 
@@ -961,7 +952,7 @@ class MS2PIP:
 
         # Validate number of results
         if not mz_bufs:
-            raise NoMatchingSpectraFound(
+            raise exceptions.NoMatchingSpectraFound(
                 "No spectra matching titles/IDs from PEPREC could be found in "
                 "provided spectrum file."
             )
