@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import annotations
+
 import csv
 import glob
 import itertools
@@ -7,6 +9,7 @@ import multiprocessing
 import multiprocessing.dummy
 import os
 import re
+from collections import defaultdict
 from random import shuffle
 
 import numpy as np
@@ -15,11 +18,10 @@ import xgboost as xgb
 from rich.progress import track
 
 import ms2pip.exceptions as exceptions
+import ms2pip.peptides
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.feature_names import get_feature_names_new
 from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
-from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_acid_masses
 from ms2pip.predict_xgboost import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.retention_time import RetentionTime
 from ms2pip.spectrum import read_spectrum_file
@@ -173,15 +175,50 @@ MODELS = {
 MODELS["HCD"] = MODELS["HCD2021"]
 
 
-def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
+def process_peptides(
+    worker_num: int,
+    data: pd.DataFrame,
+    afile: str,
+    modfile: str,
+    modfile2: str,
+    ptm_ids: dict[str, int],
+    model: str,
+):
     """
-    Function for each worker to process a list of peptides. The models are
-    chosen based on model. PTMmap, Ntermmap and Ctermmap determine the
-    modifications applied to each peptide sequence. Returns the predicted
-    spectra for all the peptides.
-    """
+    Predict spectrum for each entry in PeptideRecord DataFrame.
 
+    Parameters
+    ----------
+    worker_num: int
+        Index of worker if using multiprocessing
+    data: pandas.DataFrame
+        PeptideRecord as Pandas DataFrame
+    afile: str
+        Filename of tempfile with amino acids definition for C code
+    modfile: str
+        Filename of tempfile with modification definition for C code
+    modfile2: str
+        Filename of tempfile with second instance of modification definition for C code
+    ptm_ids: dict[str, int]
+        Mapping of modification name -> modified residue integer encoding
+    model: str
+        Name of prediction model to be used
+
+    Returns
+    -------
+    pepid_buf: list
+    peplen_buf: list
+    charge_buf: list
+    mz_buf: list
+    target_buf: list
+    prediction_buf: list
+    vector_buf: list
+
+    """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
+
+    model_id = MODELS[model]["id"]
+    peaks_version = MODELS[model]["peaks_version"]
 
     # Prepare output variables
     pepid_buf = []
@@ -192,79 +229,52 @@ def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
     prediction_buf = []
     vector_buf = []
 
-    # transform pandas dataframe into dictionary for easy access
-    if "ce" in data.columns:
-        specdict = (
-            data[["spec_id", "peptide", "modifications", "charge", "ce"]]
-            .set_index("spec_id")
-            .to_dict()
-        )
-        ces = specdict["ce"]
-    else:
-        specdict = (
-            data[["spec_id", "peptide", "modifications", "charge"]]
-            .set_index("spec_id")
-            .to_dict()
-        )
-    pepids = data["spec_id"].tolist()
-    peptides = specdict["peptide"]
-    modifications = specdict["modifications"]
-    charges = specdict["charge"]
-    del specdict
-
     # Track progress for only one worker (good approximation of all workers' progress)
-    for pepid in track(
-        pepids,
-        total=len(pepids),
+    for entry in track(
+        data.itertuples(),
+        total=len(data),
         disable=worker_num != 0,
         transient=True,
         description="",
     ):
-        peptide = peptides[pepid]
-        peptide = peptide.replace("L", "I")
-        mods = modifications[pepid]
+        pepid_buf.append(entry.spec_id)
+        peplen_buf.append(len(entry.peptide))
+        charge_buf.append(entry.charge)
 
-        # TODO: Check if 30 is good default CE!
-        colen = 30
-        if "ce" in data.columns:
-            colen = ces[pepid]
-
-        # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
-        if len(peptide) > 100:
+        try:
+            enc_peptide = ms2pip.peptides.encode_peptide(entry.peptide)
+            enc_peptidoform = ms2pip.peptides.apply_modifications(
+                enc_peptide, entry.modifications, ptm_ids
+            )
+        except (
+            exceptions.InvalidPeptideError,
+            exceptions.InvalidAminoAcidError,
+            exceptions.InvalidModificationFormattingError,
+            exceptions.UnknownModificationError,
+        ):
             continue
 
-        # convert peptide string to integer list to speed up C code
-        peptide = np.array(
-            [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
-        )
-        modpeptide = apply_mods(peptide, mods, PTMmap)
-
-        pepid_buf.append(pepid)
-        peplen = len(peptide) - 2
-        peplen_buf.append(peplen)
-
-        ch = charges[pepid]
-        charge_buf.append(ch)
-
-        model_id = MODELS[model]["id"]
-        peaks_version = MODELS[model]["peaks_version"]
-
-        # get ion mzs
-        mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
+        # Get ion mzs
+        mzs = ms2pip_pyx.get_mzs(enc_peptidoform, peaks_version)
         mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
 
         # If using xgboost model file, get feature vectors to predict outside of MP.
         # Predictions will be added in `_merge_predictions` function.
         if "xgboost_model_files" in MODELS[model].keys():
-            vector_buf.append(
-                np.array(
-                    ms2pip_pyx.get_vector(peptide, modpeptide, ch),
-                    dtype=np.uint16,
-                )
+            vectors = np.array(
+                ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, entry.charge),
+                dtype=np.uint16,
             )
+            vector_buf.append(vectors)
+        # Else, get predictions from C models in multiprocessing.
         else:
             predictions = ms2pip_pyx.get_predictions(
-                peptide, modpeptide, ch, model_id, peaks_version, colen
+                enc_peptide,
+                enc_peptidoform,
+                entry.charge,
+                model_id,
+                peaks_version,
+                entry.ce,
             )
             prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
@@ -287,44 +297,55 @@ def process_spectra(
     afile,
     modfile,
     modfile2,
-    PTMmap,
+    ptm_ids,
     model,
     fragerror,
     spectrum_id_pattern,
 ):
     """
-    Function for each worker to process a list of spectra. Each peptide's
-    sequence is extracted from the mgf file. Then models are chosen based on
-    model. PTMmap, Ntermmap and Ctermmap determine the modifications
-    applied to each peptide sequence and the spectrum is predicted. Then either
-    the feature vectors are returned, or a DataFrame with the predicted and
-    empirical intensities.
+    Perform requested tasks for each spectrum in spectrum file.
+
+    Parameters
+    ----------
+    worker_num: int
+        Index of worker if using multiprocessing
+    data: pandas.DataFrame
+        PeptideRecord as Pandas DataFrame
+    spec_file: str
+        Filename of spectrum file
+    vector_file: str, None
+        Output filename for feature vector file
+    afile: str
+        Filename of tempfile with amino acids definition for C code
+    modfile: str
+        Filename of tempfile with modification definition for C code
+    modfile2: str
+        Filename of tempfile with second instance of modification definition for C code
+    ptm_ids: dict[str, int]
+        Mapping of modification name -> modified residue integer encoding
+    model: str
+        Name of prediction model to be used
+    fragerror: float
+        Fragmentation spectrum m/z error tolerance in Dalton
+    spectrum_id_pattern
+        Regular expression pattern to apply to spectrum titles before matching to
+        peptide file entries
+
+    Returns
+    -------
+    pepid_buf: list
+    peplen_buf: list
+    charge_buf: list
+    mz_buf: list
+    target_buf: list
+    prediction_buf: list
+    vector_buf: list
+
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
-
-    # transform pandas data structure into dictionary for easy access
-    if "ce" in data.columns:
-        specdict = (
-            data[["spec_id", "peptide", "modifications", "ce"]]
-            .set_index("spec_id")
-            .to_dict()
-        )
-        ces = specdict["ce"]
-    else:
-        specdict = (
-            data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
-        )
-    peptides = specdict["peptide"]
-    modifications = specdict["modifications"]
-
-    # cols contains the names of the computed features
-    cols_n = get_feature_names_new()
-    if "ce" in data.columns:
-        cols_n.append("ce")
-    # cols_n = get_feature_names_catboost()
 
     # if vector_file
     dvectors = []
@@ -342,18 +363,23 @@ def process_spectra(
 
     spectrum_id_regex = re.compile(spectrum_id_pattern)
 
+    # Restructure PeptideRecord entries as spec_id -> [psm_1, psm_2, ...]
+    entries_by_specid = entries_by_specid = defaultdict(list)
+    for entry in data.itertuples():
+        entries_by_specid[entry.spec_id].append(entry)
+
     # Track progress for only one worker (good approximation of all workers' progress)
     for spectrum in track(
         read_spectrum_file(spec_file),
-        total=len(peptides),
+        total=len(data),
         disable=worker_num != 0,
         transient=True,
         description="",
     ):
-        # Match title with regex
+        # Match spectrum ID with provided regex, use first match group as new ID
         match = spectrum_id_regex.search(spectrum.title)
         try:
-            title = match[1]
+            spectrum_id = match[1]
         except (TypeError, IndexError):
             raise exceptions.TitlePatternError(
                 "Spectrum title pattern could not be matched to spectrum IDs "
@@ -361,33 +387,8 @@ def process_spectra(
                 " Are you sure that the regex contains a capturing group?"
             )
 
-        if title not in peptides:
-            continue
-
-        peptide = peptides[title]
-        peptide = peptide.replace("L", "I")
-        mods = modifications[title]
-
-        if "mut" in mods:
-            continue
-
-        # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
-        if len(peptide) > 100:
-            continue
-
-        # convert peptide string to integer list to speed up C code
-        peptide = np.array(
-            [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
-        )
-
-        try:
-            modpeptide = apply_mods(peptide, mods, PTMmap)
-        except exceptions.UnknownModificationError as e:
-            logger.warn("Unknown modification: %s", e)
-            continue
-
         # Spectrum preprocessing:
-        # Remove reporter ions and percursor peak, normalize, tranform
+        # Remove reporter ions and precursor peak, normalize, transform
         for label_type in ["iTRAQ", "TMT"]:
             if label_type in model:
                 spectrum.remove_reporter_ions("iTRAQ")
@@ -395,92 +396,94 @@ def process_spectra(
         spectrum.tic_norm()
         spectrum.log2_transform()
 
-        # TODO: Check if 30 is good default CE!
-        # RG: removed `if ce == 0` in get_vector, split up into two functions
-        colen = 30
-        if "ce" in data.columns:
+        for entry in entries_by_specid[spectrum_id]:
             try:
-                colen = int(float(ces[title]))
-            except:
-                logger.warn("Could not parse collision energy!")
+                enc_peptide = ms2pip.peptides.encode_peptide(entry.peptide)
+                enc_peptidoform = ms2pip.peptides.apply_modifications(
+                    enc_peptide, entry.modifications, ptm_ids
+                )
+            except (
+                exceptions.InvalidPeptideError,
+                exceptions.InvalidAminoAcidError,
+                exceptions.InvalidModificationFormattingError,
+                exceptions.UnknownModificationError,
+            ):
                 continue
 
-        if vector_file:
-            # get targets
-            targets = ms2pip_pyx.get_targets(
-                modpeptide,
-                spectrum.msms,
-                spectrum.peaks,
-                float(fragerror),
-                peaks_version,
-            )
-            psmids.extend([title] * (len(targets[0])))
-            if "ce" in data.columns:
+            if vector_file:
+                targets = ms2pip_pyx.get_targets(
+                    enc_peptidoform,
+                    spectrum.msms,
+                    spectrum.peaks,
+                    float(fragerror),
+                    peaks_version,
+                )
+                psmids.extend([spectrum_id] * (len(targets[0])))
                 dvectors.append(
                     np.array(
-                        ms2pip_pyx.get_vector_ce(
-                            peptide, modpeptide, spectrum.charge, colen
+                        ms2pip_pyx.get_vector(
+                            enc_peptide, enc_peptidoform, entry.charge
                         ),
                         dtype=np.uint16,
                     )
-                )  # SD: added collision energy
-            else:
-                dvectors.append(
-                    np.array(
-                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
-                        dtype=np.uint16,
-                    )
                 )
 
-            # Collecting targets to dict; works for variable number of ion types
-            # For C-term ion types (y, y++, z), flip the order of targets,
-            # for correct order in vectors DataFrame
-            for i, t in enumerate(targets):
-                if i in dtargets.keys():
-                    if i % 2 == 0:
-                        dtargets[i].extend(t)
+                # Restructure to dict with entries per ion type
+                # Flip the order for C-terminal ion types
+                for i, t in enumerate(targets):
+                    if i in dtargets.keys():
+                        if i % 2 == 0:
+                            dtargets[i].extend(t)
+                        else:
+                            dtargets[i].extend(t[::-1])
                     else:
-                        dtargets[i].extend(t[::-1])
+                        if i % 2 == 0:
+                            dtargets[i] = [t]
+                        else:
+                            dtargets[i] = [t[::-1]]
+
+            else:
+                # Predict the b- and y-ion intensities from the peptide
+                pepid_buf.append(spectrum_id)
+                peplen_buf.append(len(entry.peptide))
+                charge_buf.append(entry.charge)
+
+                targets = ms2pip_pyx.get_targets(
+                    enc_peptidoform,
+                    spectrum.msms,
+                    spectrum.peaks,
+                    float(fragerror),
+                    peaks_version,
+                )
+                target_buf.append([np.array(t, dtype=np.float32) for t in targets])
+
+                mzs = ms2pip_pyx.get_mzs(enc_peptidoform, peaks_version)
+                mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+
+                # If using xgboost model file, get feature vectors to predict outside of MP.
+                # Predictions will be added in `_merge_predictions` function.
+                if "xgboost_model_files" in MODELS[model].keys():
+                    vector_buf.append(
+                        np.array(
+                            ms2pip_pyx.get_vector(
+                                enc_peptide, enc_peptidoform, entry.charge
+                            ),
+                            dtype=np.uint16,
+                        )
+                    )
+                # Else, get predictions from C models in multiprocessing.
                 else:
-                    if i % 2 == 0:
-                        dtargets[i] = [t]
-                    else:
-                        dtargets[i] = [t[::-1]]
-
-        else:
-            # Predict the b- and y-ion intensities from the peptide
-            pepid_buf.append(title)
-            peplen_buf.append(len(peptide) - 2)
-            charge_buf.append(spectrum.charge)
-
-            # get/append ion mzs, targets and predictions
-            targets = ms2pip_pyx.get_targets(
-                modpeptide,
-                spectrum.msms,
-                spectrum.peaks,
-                float(fragerror),
-                peaks_version,
-            )
-            target_buf.append([np.array(t, dtype=np.float32) for t in targets])
-            mzs = ms2pip_pyx.get_mzs(modpeptide, peaks_version)
-            mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
-
-            # If using xgboost model file, get feature vectors to predict outside of MP.
-            # Predictions will be added in `_merge_predictions` function.
-            if "xgboost_model_files" in MODELS[model].keys():
-                vector_buf.append(
-                    np.array(
-                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
-                        dtype=np.uint16,
+                    predictions = ms2pip_pyx.get_predictions(
+                        enc_peptide,
+                        enc_peptidoform,
+                        entry.charge,
+                        model_id,
+                        peaks_version,
+                        entry.ce,
                     )
-                )
-            else:
-                predictions = ms2pip_pyx.get_predictions(
-                    peptide, modpeptide, spectrum.charge, model_id, peaks_version, colen
-                )
-                prediction_buf.append(
-                    [np.array(p, dtype=np.float32) for p in predictions]
-                )
+                    prediction_buf.append(
+                        [np.array(p, dtype=np.float32) for p in predictions]
+                    )
 
     # If feature vectors requested, return specific data
     if vector_file:
@@ -528,36 +531,6 @@ def prepare_titles(titles, num_cpu):
     )
 
     return split_titles
-
-
-def apply_mods(peptide, mods, PTMmap):
-    """
-    Takes a peptide sequence and a set of modifications. Returns the modified
-    version of the peptide sequence, c- and n-term modifications. This modified
-    version are hard coded in ms2pipfeatures_c.c for now.
-    """
-    modpeptide = np.array(peptide[:], dtype=np.uint16)
-
-    if mods != "-":
-        l = mods.split("|")
-        if len(l) % 2 != 0:
-            raise exceptions.InvalidModificationFormattingError(mods)
-        for i in range(0, len(l), 2):
-            tl = l[i + 1]
-            if tl in PTMmap:
-                modpeptide[int(l[i])] = PTMmap[tl]
-            else:
-                raise exceptions.UnknownModificationError(tl)
-
-    return modpeptide
-
-
-def peakcount(x):
-    c = 0.0
-    for i in x:
-        if i > -9.95:
-            c += 1.0
-    return c / len(x)
 
 
 class MS2PIP:
@@ -700,7 +673,12 @@ class MS2PIP:
         else:
             raise exceptions.UnknownFragmentationMethodError(self.model)
 
-        if output_filename is None and not return_results:
+        if (
+            output_filename is None
+            and not return_results
+            and isinstance(self.pep_file, str)
+        ):
+
             self.output_filename = "{}_{}".format(
                 ".".join(pep_file.split(".")[:-1]), self.model
             )
@@ -732,7 +710,7 @@ class MS2PIP:
             self.spec_file = spec_file
             self.spec_files = None
 
-        self.mods = Modifications()
+        self.mods = ms2pip.peptides.Modifications()
         for mod_type in ("sptm", "ptm"):
             self.mods.add_from_ms2pip_modstrings(
                 self.params["ms2pip"][mod_type], mod_type=mod_type
@@ -740,7 +718,7 @@ class MS2PIP:
 
     def run(self):
         """Run initiated MS2PIP based on class configuration."""
-        self.afile = write_amino_acid_masses()
+        self.afile = ms2pip.peptides.write_amino_acid_masses()
         self.modfile = self.mods.write_modifications_file(mod_type="ptm")
         self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
 
@@ -812,9 +790,8 @@ class MS2PIP:
             os.remove(self.modfile2)
 
     def _read_peptide_information(self):
-        # read peptide information
-        # the file contains the columns: spec_id, modifications, peptide and charge
-        if type(self.pep_file) == str:
+        """Validate and process PeptideRecord DataFrame."""
+        if isinstance(self.pep_file, str):
             with open(self.pep_file, "rt") as f:
                 line = f.readline()
                 if line[:7] != "spec_id":
@@ -827,10 +804,18 @@ class MS2PIP:
                 dtype={"spec_id": str, "modifications": str},
                 nrows=self.limit,
             )
-        else:
+        elif isinstance(self.pep_file, pd.DataFrame):
             data = self.pep_file
-        # for some reason the missing values are converted to float otherwise
+        else:
+            raise TypeError("Invalid type for peptide file")
+
         data = data.fillna("-")
+        if not "ce" in data.columns:
+            data["ce"] = 30
+        else:
+            data["ce"] = data["ce"].astype(int)
+
+        data["charge"] = data["charge"].astype(int)
 
         # Filter PEPREC for unsupported peptides
         num_pep = len(data)

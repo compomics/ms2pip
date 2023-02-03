@@ -2,7 +2,6 @@
 
 import logging
 import os
-import re
 
 import click
 import matplotlib.pyplot as plt
@@ -11,11 +10,10 @@ import spectrum_utils.plot as sup
 import spectrum_utils.spectrum as sus
 import xgboost as xgb
 
+import ms2pip.peptides
 from ms2pip.config_parser import ConfigParser
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import InvalidModificationFormattingError, InvalidPeptideError
-from ms2pip.ms2pipC import MODELS, apply_mods
-from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_acid_masses
+from ms2pip.ms2pipC import MODELS
 from ms2pip.predict_xgboost import initialize_xgb_models, validate_requested_xgb_model
 
 logger = logging.getLogger("ms2pip")
@@ -61,10 +59,10 @@ class SinglePrediction:
             self.model_dir = os.path.join(os.path.expanduser("~"), ".ms2pip")
 
     def _init_ms2pip(self, modification_strings):
-        self.mod_info = Modifications()
+        self.mod_info = ms2pip.peptides.Modifications()
         self.mod_info.modifications = {"ptm": {}, "sptm": {}}
         self.mod_info.add_from_ms2pip_modstrings(modification_strings)
-        afile = write_amino_acid_masses()
+        afile = ms2pip.peptides.write_amino_acid_masses()
         modfile = self.mod_info.write_modifications_file(mod_type="ptm")
         modfile2 = self.mod_info.write_modifications_file(mod_type="sptm")
         ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
@@ -106,21 +104,15 @@ class SinglePrediction:
             List with fragment ion types and series, order matches `mz`
 
         """
-        peptide = peptide.upper().replace("L", "I")
-
-        if validate_input:
-            self._validate_sequence(peptide)
-            self._validate_mod_string(modifications)
-
-        peptide = np.array(
-            [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
+        peptide_encoded = ms2pip.peptides.encode_peptide(peptide)
+        peptidoform_encoded = ms2pip.peptides.apply_modifications(
+            peptide_encoded, modifications, self.mod_info.ptm_ids
         )
-        modpeptide = apply_mods(peptide, modifications, self.mod_info.ptm_ids)
         model_id = MODELS[model]["id"]
         peaks_version = MODELS[model]["peaks_version"]
         ce = 30
 
-        mz = np.array(ms2pip_pyx.get_mzs(modpeptide, peaks_version))
+        mz = np.array(ms2pip_pyx.get_mzs(peptidoform_encoded, peaks_version))
         if "xgboost_model_files" in MODELS[model].keys():
             validate_requested_xgb_model(
                 MODELS[model]["xgboost_model_files"],
@@ -133,7 +125,8 @@ class SinglePrediction:
                 1,
             )
             xgb_vector = np.array(
-                ms2pip_pyx.get_vector(peptide, modpeptide, charge), dtype=np.uint16
+                ms2pip_pyx.get_vector(peptide_encoded, peptidoform_encoded, charge),
+                dtype=np.uint16,
             )
             xgb_vector = xgb.DMatrix(xgb_vector)
             intensity = []
@@ -148,7 +141,7 @@ class SinglePrediction:
         else:
             intensity = np.array(
                 ms2pip_pyx.get_predictions(
-                    peptide, modpeptide, charge, model_id, peaks_version, ce
+                    peptide_encoded, peptidoform_encoded, charge, model_id, peaks_version, ce
                 )
             )
         annotation = []
@@ -223,20 +216,6 @@ class SinglePrediction:
         ax.set_title("MS²PIP prediction for " + identifier)
         if filename:
             plt.savefig(filename)
-
-    @staticmethod
-    def _validate_sequence(sequence):
-        """Validate peptide sequence for MS²PIP."""
-        pattern = r"[ACDEFGHIKLMNPQRSTVWY]{3,99}"
-        if not re.fullmatch(pattern, sequence):
-            raise InvalidPeptideError
-
-    @staticmethod
-    def _validate_mod_string(mod_string):
-        """Validate modification string for MS²PIP."""
-        pattern = r"^(?:(?:-1|[0-9]{1,2})\|(?:[^\|\s]+)\|?)*$|^-$"
-        if not re.fullmatch(pattern, mod_string):
-            raise InvalidModificationFormattingError
 
     @staticmethod
     def _transform(intensity):

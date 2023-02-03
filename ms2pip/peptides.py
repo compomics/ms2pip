@@ -1,13 +1,15 @@
 """
 MS2PIP / PEPREC modification handling
 """
+from __future__ import annotations
 
 import itertools
 import tempfile
 
+import numpy as np
 from pyteomics import mass
 
-from ms2pip.exceptions import InvalidAminoAcidError
+import ms2pip.exceptions as exceptions
 
 AMINO_ACIDS = [
     "A",
@@ -61,9 +63,7 @@ PROTON_MASS = 1.007825032070059
 
 class Modifications:
     def __init__(self):
-        """
-        MS2PIP / PEPREC modification handling
-        """
+        """MS²PIP modification configuration handling."""
         self.modifications = {}
         self._mass_shifts = None
         self._ptm_ids = None
@@ -104,7 +104,7 @@ class Modifications:
             elif amino_acid in AMINO_ACID_IDS:
                 amino_acid_id = AMINO_ACID_IDS[amino_acid]
             else:
-                raise InvalidAminoAcidError(amino_acid)
+                raise exceptions.InvalidAminoAcidError(amino_acid)
 
             self.modifications[mod_type][mod_name] = {
                 "mass_shift": float(mass_shift),
@@ -124,9 +124,7 @@ class Modifications:
 
     @property
     def mass_shifts(self):
-        """
-        Return modification name -> mass shift mapping.
-        """
+        """Return modification name -> mass shift mapping."""
         if not self._mass_shifts:
             self._mass_shifts = {
                 name: mod["mass_shift"] for name, mod in self._all_modifications
@@ -135,9 +133,7 @@ class Modifications:
 
     @property
     def ptm_ids(self):
-        """
-        Return modification name -> modification id mapping.
-        """
+        """Return modification name -> modification id mapping."""
         if not self._ptm_ids:
             self._ptm_ids = {
                 name: mod["mod_id"] for name, mod in self._all_modifications
@@ -198,3 +194,91 @@ def write_amino_acid_masses():
     amino_file.write("0\n")
     amino_file.close()
     return amino_file.name
+
+
+def encode_peptide(peptide: str) -> np.array:
+    """
+    Encode peptide and modifications as sequence of integers.
+
+    Parameters
+    ----------
+    peptide: str
+        Peptide sequence
+
+    Returns
+    -------
+    encoded_peptide: np.array
+        Unmodified peptide encoded as integers
+
+    Raises
+    ------
+    ms2pip.exceptions.InvalidPeptideError
+    ms2pip.exceptions.InvalidAminoAcidError
+
+    """
+    peptide = peptide.upper().replace("L", "I")
+
+    # Peptides longer then 101 lead to "Segmentation fault (core dumped)"
+    if len(peptide) > 100:
+        raise exceptions.InvalidPeptideError(
+            "Peptide sequence cannot be longer than 100 amino acids."
+        )
+    elif len(peptide) < 4:
+        raise exceptions.InvalidPeptideError(
+            "Peptide sequence cannot be shorter than 4 amino acids."
+        )
+
+    # Encode as integers; add terminal positions for modifications; convert to numpy
+    try:
+        encoded_peptide = np.array(
+            [0] + [AMINO_ACID_IDS[x] for x in peptide] + [0], dtype=np.uint16
+        )
+    except KeyError:
+        raise exceptions.InvalidAminoAcidError(
+            f"Unsupported amino acid found in peptide `{peptide}`"
+        )
+
+    return encoded_peptide
+
+
+def apply_modifications(
+    encoded_peptide: np.array, modifications: str, ptm_ids: dict[str, int]
+) -> np.array:
+    """
+    Replace residue IDs with modified residue IDs.
+
+    Parameters
+    ----------
+    encoded_peptide: np.array
+        Unmodified peptide sequence encoded as integers
+    modifications: str
+        PeptideRecord-style modification notation (e.g. ``3|Oxidation``)
+    ptm_ids: dict[str, int]
+        Mapping of modification name -> modified residue integer encoding
+
+    Returns
+    -------
+    encoded_peptide: np.array
+        Modified peptide sequence encoded as integers
+
+    Raises
+    ------
+    ms2pip.exceptions.InvalidModificationFormattingError
+    ms2pip.exceptions.UnknownModificationError
+
+    """
+    if modifications and modifications != "-":
+        encoded_peptidoform = np.copy(encoded_peptide)  # Prevent inplace editing!
+        mods_split = modifications.split("|")
+        if len(mods_split) % 2 != 0:
+            raise exceptions.InvalidModificationFormattingError(modifications)
+        for i in range(0, len(mods_split), 2):
+            location = int(mods_split[i])
+            name = mods_split[i + 1]
+            if name in ptm_ids:
+                encoded_peptidoform[location] = ptm_ids[name]
+            else:
+                raise exceptions.UnknownModificationError(name)
+        return encoded_peptidoform
+    else:
+        return encoded_peptide
