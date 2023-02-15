@@ -14,11 +14,11 @@ from ms2pip.exceptions import (
 
 
 class Spectrum:
-    def __init__(self, title, charge, pepmass, msms, peaks) -> None:
+    def __init__(self, title, msms, peaks, charge) -> None:
         """Minimal information on observed MS2 spectrum."""
         self.title = str(title)
-        self.charge = int(charge)
-        self.pepmass = float(pepmass)
+        self.charge = charge
+        # self.pepmass = float(pepmass)
         self.msms = np.array(msms, dtype=np.float32)
         self.peaks = np.array(peaks, dtype=np.float32)
 
@@ -91,10 +91,14 @@ def read_mgf(spec_file) -> Generator[Spectrum, None, None]:
             spec_id = spectrum["params"]["title"]
             peaks = spectrum["intensity array"]
             msms = spectrum["m/z array"]
-            precursor_mz = spectrum["params"]["pepmass"][0]
-            precursor_charge = spectrum["params"]["charge"][0]
+            # precursor_mz = spectrum["params"]["pepmass"][0]
+            try:
+                precursor_charge = spectrum["params"]["charge"][0]
+            except KeyError:
+                precursor_charge = None
+
             parsed_spectrum = Spectrum(
-                spec_id, precursor_charge, precursor_mz, msms, peaks
+                spec_id, msms, peaks, precursor_charge
             )
             yield parsed_spectrum
 

@@ -324,10 +324,11 @@ def process_spectra(
         ces = specdict["ce"]
     else:
         specdict = (
-            data[["spec_id", "peptide", "modifications"]].set_index("spec_id").to_dict()
+            data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
         )
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
+    charges = specdict["charge"]
 
     # cols contains the names of the computed features
     cols_n = get_feature_names_new()
@@ -376,6 +377,9 @@ def process_spectra(
         peptide = peptides[title]
         peptide = peptide.replace("L", "I")
         mods = modifications[title]
+        
+        if not spectrum.charge:
+            spectrum.charge = charges[title] # if charge cannot be parsed from mgf
 
         if "mut" in mods:
             continue
