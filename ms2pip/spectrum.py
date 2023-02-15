@@ -91,7 +91,6 @@ def read_mgf(spec_file) -> Generator[Spectrum, None, None]:
             spec_id = spectrum["params"]["title"]
             peaks = spectrum["intensity array"]
             msms = spectrum["m/z array"]
-            # precursor_mz = spectrum["params"]["pepmass"][0]
             try:
                 precursor_charge = spectrum["params"]["charge"][0]
             except KeyError:
@@ -129,10 +128,12 @@ def read_mzml(spec_file) -> Generator[Spectrum, None, None]:
                 precursor = spectrum["precursorList"]["precursor"][0][
                     "selectedIonList"
                 ]["selectedIon"][0]
-                precursor_mz = precursor["selected ion m/z"]
-                precursor_charge = precursor["charge state"]
+                try:
+                    precursor_charge = precursor["charge state"]
+                except KeyError:
+                    precursor_charge = None
                 parsed_spectrum = Spectrum(
-                    spec_id, precursor_charge, precursor_mz, msms, peaks
+                    spec_id, msms, peaks, precursor_charge
                 )
                 yield parsed_spectrum
 
