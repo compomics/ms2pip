@@ -377,9 +377,11 @@ def process_spectra(
         peptide = peptides[title]
         peptide = peptide.replace("L", "I")
         mods = modifications[title]
-        
-        if not spectrum.charge:
-            spectrum.charge = charges[title] # if charge cannot be parsed from mgf
+
+        if spectrum.precursor_charge:
+            charge = spectrum.precursor_charge
+        else:
+            charge = charges[title]  # If charge cannot be parsed from MGF
 
         if "mut" in mods:
             continue
@@ -432,7 +434,7 @@ def process_spectra(
                 dvectors.append(
                     np.array(
                         ms2pip_pyx.get_vector_ce(
-                            peptide, modpeptide, spectrum.charge, colen
+                            peptide, modpeptide, charge, colen
                         ),
                         dtype=np.uint16,
                     )
@@ -440,7 +442,7 @@ def process_spectra(
             else:
                 dvectors.append(
                     np.array(
-                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
+                        ms2pip_pyx.get_vector(peptide, modpeptide, charge),
                         dtype=np.uint16,
                     )
                 )
@@ -464,7 +466,7 @@ def process_spectra(
             # Predict the b- and y-ion intensities from the peptide
             pepid_buf.append(title)
             peplen_buf.append(len(peptide) - 2)
-            charge_buf.append(spectrum.charge)
+            charge_buf.append(charge)
 
             # get/append ion mzs, targets and predictions
             targets = ms2pip_pyx.get_targets(
@@ -483,13 +485,13 @@ def process_spectra(
             if "xgboost_model_files" in MODELS[model].keys():
                 vector_buf.append(
                     np.array(
-                        ms2pip_pyx.get_vector(peptide, modpeptide, spectrum.charge),
+                        ms2pip_pyx.get_vector(peptide, modpeptide, charge),
                         dtype=np.uint16,
                     )
                 )
             else:
                 predictions = ms2pip_pyx.get_predictions(
-                    peptide, modpeptide, spectrum.charge, model_id, peaks_version, colen
+                    peptide, modpeptide, charge, model_id, peaks_version, colen
                 )
                 prediction_buf.append(
                     [np.array(p, dtype=np.float32) for p in predictions]
