@@ -6,7 +6,7 @@ from Cython.Distutils import build_ext
 from setuptools import setup
 from setuptools.extension import Extension
 
-VERSION = "3.10.0"
+VERSION = "3.10.1"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
