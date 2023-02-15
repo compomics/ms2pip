@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ms2pip"
-version = "3.10.0"
+version = "3.10.1"
 description = "MS²PIP: MS² Peak Intensity Prediction"
 authors = ["Sven Degroeve", "Ralf Gabriels", "Kevin Velghe", "Ana Sílvia C. Silva", "Arthur Declercq"]
 
