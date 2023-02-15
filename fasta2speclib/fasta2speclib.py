@@ -446,7 +446,10 @@ def run_batches(peprec, decoy=False):
             peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
 
         if params["save_peprec"]:
-            peprec_batch.to_csv(params["output_filename"] + "_" + str(b_count) + ".csv")
+            peprec_batch.to_csv(
+                params["output_filename"] + "_" + str(b_count) + ".csv",
+                lineterminator="\n",
+            )
 
         logging.info("Running MS2PIP for %d peptides", len(peprec_batch))
         ms2pip = MS2PIP(

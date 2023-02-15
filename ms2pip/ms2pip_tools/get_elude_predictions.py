@@ -108,8 +108,13 @@ def get_elude_predictions(peprec, elude_model_file, **kwargs):
 	filename_out = '{}_Preds.txt'.format(elude_model_file)
 	filename_model = elude_model_file
 
-	peprec.apply(elude_insert_mods, **kwargs, axis=1)\
-		  .to_csv(filename_in, sep=' ', index=False, header=False)
+	peprec.apply(elude_insert_mods, **kwargs, axis=1).to_csv(
+		filename_in,
+		sep=' ',
+		index=False,
+		header=False,
+		lineterminator="\n",
+	)
 	os.system('elude -l "{}" -e "{}" -o "{}" -p'.format(filename_model, filename_in, filename_out))
 	preds = pd.read_csv(filename_out, sep='\t', comment='#')
 	os.system('rm {}; rm {}'.format(filename_in, filename_out))

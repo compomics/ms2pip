@@ -189,9 +189,9 @@ class SpectrumOutput:
             elif self.normalization == "basepeak_1":
                 self.all_preds["prediction"] *= 10000
             else:
-                self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
-                    "prediction"
-                ].apply(lambda x: (x / x.max()) * 10000)
+                self.all_preds["prediction"] = self.all_preds.groupby(
+                    ["spec_id"], group_keys=False
+                )["prediction"].apply(lambda x: (x / x.max()) * 10000)
             self.normalization = "basepeak_10000"
 
         elif method == "basepeak_1":
@@ -200,16 +200,16 @@ class SpectrumOutput:
             elif self.normalization == "basepeak_10000":
                 self.all_preds["prediction"] /= 10000
             else:
-                self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
-                    "prediction"
-                ].apply(lambda x: (x / x.max()))
+                self.all_preds["prediction"] = self.all_preds.groupby(
+                    ["spec_id"], group_keys=False
+                )["prediction"].apply(lambda x: (x / x.max()))
             self.normalization = "basepeak_1"
 
         elif method == "tic":
             if self.normalization != "tic":
-                self.all_preds["prediction"] = self.all_preds.groupby(["spec_id"])[
-                    "prediction"
-                ].apply(lambda x: x / x.sum())
+                self.all_preds["prediction"] = self.all_preds.groupby(
+                    ["spec_id"], group_keys=False
+                )["prediction"].apply(lambda x: x / x.sum())
             self.normalization = "tic"
 
         else:
@@ -391,7 +391,7 @@ class SpectrumOutput:
             seq = self.peprec_dict[spec_id]["peptide"]
             mods = self.peprec_dict[spec_id]["modifications"]
             charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
+            _, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
             msp_modifications = self._get_msp_modifications(seq, mods)
 
             if self.has_protein_list:
@@ -516,7 +516,7 @@ class SpectrumOutput:
             "FragmentNumber",
         ]
         spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
-        spectronaut_df.to_csv(file_obj, index=False, header=header)
+        spectronaut_df.to_csv(file_obj, index=False, header=header, lineterminator="\n")
 
         return file_obj
 
@@ -673,8 +673,9 @@ class SpectrumOutput:
         return file_obj_ssl, file_obj_ms2
 
     def _write_dlib_metadata(self, connection):
-        from ms2pip.ms2pip_tools.dlib import DLIB_VERSION, Metadata
         from sqlalchemy import select
+
+        from ms2pip.ms2pip_tools.dlib import DLIB_VERSION, Metadata
 
         with connection.begin():
             version = connection.execute(
@@ -833,7 +834,12 @@ class SpectrumOutput:
             file_object = open(f_name, self.write_mode)
             logger.info("Writing results to %s", f_name)
 
-        self.all_preds.to_csv(file_object, float_format="%.6g", index=False)
+        self.all_preds.to_csv(
+            file_object,
+            float_format="%.6g",
+            index=False,
+            lineterminator="\n"
+        )
         return file_object
 
     def write_results(self, output_formats: List[str]) -> Dict[str, Any]:
