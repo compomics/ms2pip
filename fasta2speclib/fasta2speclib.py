@@ -213,7 +213,7 @@ def get_modification_versions(
         elif mod["amino_acid"]:
             for pos, aa in enumerate(peptide):
                 if aa == mod["amino_acid"]:
-                    possibilities_by_site[pos] = [mod["name"]]
+                    possibilities_by_site[pos + 1] = [mod["name"]]
 
     # Get all possible combinations of modifications for all sites
     mod_permutations = list(product(*possibilities_by_site.values()))
