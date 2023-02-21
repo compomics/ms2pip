@@ -1,14 +1,17 @@
+import logging
 import os
+from pathlib import Path
 
 import pandas as pd
 
-# from deeplc import DeepLC
+logger = logging.getLogger(__name__)
 
 # Reduce Tensorflow logging
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
+
 class RetentionTime:
-    def __init__(self, predictor="deeplc", config=None):
+    def __init__(self, predictor="deeplc", config=None, num_cpu=None):
         """
         Initialize peptide retention time predictor
 
@@ -27,6 +30,13 @@ class RetentionTime:
             self.config = dict()
         else:
             self.config = config
+
+        if "deeplc" not in self.config:
+            self.config["deeplc"] = {
+                "verbose": False,
+                "calibration_file": None,
+                "n_jobs": num_cpu,
+            }
 
     def _get_irt_peptides(self):
         """
@@ -57,29 +67,32 @@ class RetentionTime:
         """
         Initialize DeepLC: import, configurate and calibrate
         """
-        # Only import if DeepLC will be used, otherwise lot's of extra heavy
+        # Only import if DeepLC will be used, otherwise lots of extra heavy
         # dependencies (e.g. Tensorflow) are imported as well
-        from deeplc import DeepLC
+        import deeplc
 
-        if "deeplc" in self.config:
-            deeplc_params = self.config["deeplc"]
-            calibration_file = deeplc_params["calibration_file"]
-            del deeplc_params["calibration_file"]
-        else:
-            deeplc_params = {"verbose": False}
-            calibration_file = None
-
-        # TODO: Remove when fixed upstream in DeepLC
-        if not calibration_file:
-            deeplc_params["split_cal"] = 9
-
-        self.deeplc_predictor = DeepLC(**deeplc_params)
-
-        if calibration_file:
-            cal_df = pd.read_csv(calibration_file, sep=",")
+        deeplc_params = self.config["deeplc"]
+        if "calibration_file" in deeplc_params and deeplc_params["calibration_file"]:
+            cal_df = pd.read_csv(deeplc_params["calibration_file"], sep=",")
         else:
             cal_df = self._get_irt_peptides()
+            deeplc_params["split_cal"] = 9  # Only 11 iRT peptides, so use 9 splits
+            best_model_for_irt = (
+                Path(deeplc.__file__).parent
+                / "mods/full_hc_PXD005573_mcp_cb975cfdd4105f97efa0b3afffe075cc.hdf5"
+            )
+            if best_model_for_irt.exists():
+                deeplc_params["path_model"] = str(best_model_for_irt)
 
+        # Remove from deeplc_params to control calibration here instead of in DeepLC
+        if "calibration_file" in deeplc_params:
+            del deeplc_params["calibration_file"]
+
+        # PyGAM results in strange calibration on limited set of iRT peptides
+        deeplc_params["pygam_calibration"] = False
+        self.deeplc_predictor = deeplc.DeepLC(**deeplc_params)
+
+        logger.info("Calibrating DeepLC...")
         self.deeplc_predictor.calibrate_preds(seq_df=cal_df)
 
     def _prepare_deeplc_peptide_df(self):
@@ -94,6 +107,7 @@ class RetentionTime:
         """
         Run DeepLC
         """
+        logger.info("Predicting retention times with DeepLC...")
         self.deeplc_preds = self.deeplc_predictor.make_preds(
             seq_df=self.deeplc_pep_df.fillna("")
         )

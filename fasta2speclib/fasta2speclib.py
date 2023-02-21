@@ -8,8 +8,22 @@ The script runs through the following steps:
 - Add variations on charge state
 - Predict spectra with MS2PIP
 - Write to various output file formats
-"""
 
+
+Unspecific cleavage (e.g. for immunopeptidomics) is supported by setting
+``cleavage_rule`` to ``unspecific``.
+
+
+Decoys added by reversing sequences, keeping the N-terminal residue inplace.
+
+
+Modifications:
+- Peptides can carry only one modification per site (side chain or terminus).
+- Protein terminal modifications take precedence over peptide terminal modifications.
+- Terminal modifications can have site specificity (e.g. N-term K or N-term P).
+
+"""
+from __future__ import annotations
 
 __author__ = "Ralf Gabriels"
 __copyright__ = "CompOmics"
@@ -17,43 +31,633 @@ __credits__ = ["Ralf Gabriels", "Sven Degroeve", "Lennart Martens"]
 __license__ = "Apache License, Version 2.0"
 __email__ = "Ralf.Gabriels@ugent.be"
 
-
-# Native libraries
 import argparse
 import json
 import logging
 import multiprocessing
-from itertools import product
-from math import ceil
+import multiprocessing.dummy
+from collections import defaultdict
+from functools import cmp_to_key, partial
+from itertools import chain, product
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
-# Third party libraries
-import numpy as np
 import pandas as pd
-from Bio import SeqIO
-from pyteomics.parser import cleave
+from pydantic import BaseModel, validator
+from pyteomics.fasta import FASTA, Protein, decoy_db
+from pyteomics.parser import icleave
+from rich.logging import RichHandler
+from rich.progress import track
 
 from ms2pip.ms2pip_tools import spectrum_output
-from ms2pip.ms2pip_tools.get_elude_predictions import get_elude_predictions
-
-# MS2PIP
-from ms2pip.ms2pipC import MS2PIP
+from ms2pip.ms2pipC import MODELS, MS2PIP
+from ms2pip.peptides import Modifications
 from ms2pip.retention_time import RetentionTime
 
+logger = logging.getLogger(__name__)
 
-def ArgParse():
+
+class ModificationConfig(BaseModel):
+    """Configuration for a single modification in the search space."""
+
+    name: str
+    mass_shift: float
+    unimod_accession: Optional[int] = None
+    amino_acid: Optional[str] = None
+    peptide_n_term: Optional[bool] = False
+    protein_n_term: Optional[bool] = False
+    peptide_c_term: Optional[bool] = False
+    protein_c_term: Optional[bool] = False
+    fixed: Optional[bool] = False
+
+    @validator("protein_c_term", always=True)  # Validate on last target in model
+    def modification_must_have_target(cls, v, values):
+        target_fields = [
+            "amino_acid",
+            "peptide_n_term",
+            "protein_n_term",
+            "peptide_c_term",
+            "protein_c_term",
+        ]
+        if not any(t in values and values[t] for t in target_fields):
+            raise ValueError(
+                "Modifications must have at least one target (amino acid or N/C-term)."
+            )
+        return v
+
+
+DEFAULT_MODIFICATIONS = [
+    ModificationConfig(
+        name="Oxidation",
+        unimod_accession=35,
+        mass_shift=15.994915,
+        amino_acid="M",
+    ),
+    ModificationConfig(
+        name="Carbamidomethyl",
+        mass_shift=57.021464,
+        unimod_accession=4,
+        amino_acid="C",
+        fixed=True,
+    ),
+]
+
+
+class Peptide(BaseModel):
+    sequence: str
+    proteins: List[str]
+    is_n_term: Optional[bool] = None
+    is_c_term: Optional[bool] = None
+    modification_options: List[str] = None
+    charge_options: List[int] = None
+
+
+class Configuration(BaseModel):
+    fasta_filename: str
+    output_filename: Optional[str] = None
+    output_filetype: Optional[list[str]] = None
+    charges: list[int] = [2, 3]
+    min_length: int = 8
+    max_length: int = 30
+    cleavage_rule: str = "trypsin"
+    missed_cleavages: int = 2
+    semi_specific: bool = False
+    modifications: list[ModificationConfig] = DEFAULT_MODIFICATIONS
+    max_variable_modifications: int = 3
+    min_precursor_mz: Optional[float] = None
+    max_precursor_mz: Optional[float] = None
+    ms2pip_model: str = "HCD"
+    add_decoys: float = False
+    add_retention_time: float = True
+    deeplc: dict = dict()
+    rt_predictions_file: Optional[str] = None
+    peprec_filter: Optional[str] = None
+    save_peprec: bool = False
+    batch_size: int = 10000
+    num_cpu: int = -1
+
+    @validator("output_filetype")
+    def _validate_output_filetypes(cls, v):
+        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib", "hdf"]
+        v = [filetype.lower() for filetype in v]
+        for filetype in v:
+            if filetype not in allowed_types:
+                raise ValueError(
+                    f"File type `{filetype}` not recognized. Should be one of "
+                    f"`{allowed_types}`."
+                )
+        return v
+
+    @validator("modifications")
+    def _validate_modifications(cls, v):
+        if all(isinstance(m, ModificationConfig) for m in v):
+            return v
+        elif all(isinstance(m, dict) for m in v):
+            return [ModificationConfig(**modification) for modification in v]
+        else:
+            raise ValueError(
+                "Modifications should be a list of dicts or ModificationConfig objects."
+            )
+
+    @validator("ms2pip_model")
+    def _validate_ms2pip_model(cls, v):
+        if v not in MODELS.keys():
+            raise ValueError(
+                f"MS²PIP model `{v}` not recognized. Should be one of "
+                f"`{MODELS.keys()}`."
+            )
+        return v
+
+    @validator("num_cpu")
+    def _validate_num_cpu(cls, v):
+        available_cpus = multiprocessing.cpu_count()
+        if not 0 < v < available_cpus:
+            return available_cpus
+        else:
+            return v
+
+    def get_output_filename(self):
+        if self.output_filename:
+            return self.output_filename
+        else:
+            return str(Path(self.fasta_filename).with_suffix(""))
+
+
+def digest_protein(
+    protein: Protein,
+    min_length: int = 8,
+    max_length: int = 30,
+    cleavage_rule: str = "trypsin",
+    missed_cleavages: int = 2,
+    semi_specific: bool = False,
+) -> list[Peptide]:
+    """Digest protein sequence and return a list of validated peptides."""
+
+    def valid_residues(sequence: str) -> bool:
+        return not any(aa in sequence for aa in ["B", "J", "O", "U", "X", "Z"])
+
+    def parse_peptide(
+        start_position: int,
+        sequence: str,
+        protein: Protein,
+    ) -> Peptide:
+        """Parse result from parser.icleave into Peptide."""
+        return Peptide(
+            sequence=sequence,
+            # Assumes protein ID is description until first space
+            proteins=[protein.description.split(" ")[0]],
+            is_n_term=start_position == 0,
+            is_c_term=start_position + len(sequence) == len(protein.sequence),
+        )
+
+    peptides = [
+        parse_peptide(start, seq, protein)
+        for start, seq in icleave(
+            protein.sequence,
+            cleavage_rule,
+            missed_cleavages=missed_cleavages,
+            min_length=min_length,
+            max_length=max_length,
+            semi=semi_specific,
+        )
+        if valid_residues(seq)
+    ]
+
+    return peptides
+
+
+def get_modifications_by_target(
+    modifications,
+) -> Dict[str, Dict[str, List[ModificationConfig]]]:
+    """Restructure variable modifications to options per side chain or terminus."""
+    modifications_by_target = {
+        "sidechain": defaultdict(lambda: [None]),
+        "peptide_n_term": defaultdict(lambda: [None]),
+        "peptide_c_term": defaultdict(lambda: [None]),
+        "protein_n_term": defaultdict(lambda: [None]),
+        "protein_c_term": defaultdict(lambda: [None]),
+    }
+
+    def add_mod(mod, target, amino_acid):
+        if amino_acid:
+            modifications_by_target[target][amino_acid].append(mod)
+        else:
+            modifications_by_target[target]["any"].append(mod)
+
+    for mod in modifications:
+        if mod.fixed:
+            continue
+        if mod.peptide_n_term:
+            add_mod(mod, "peptide_n_term", mod.amino_acid)
+        elif mod.peptide_c_term:
+            add_mod(mod, "peptide_c_term", mod.amino_acid)
+        elif mod.protein_n_term:
+            add_mod(mod, "protein_n_term", mod.amino_acid)
+        elif mod.protein_c_term:
+            add_mod(mod, "protein_c_term", mod.amino_acid)
+        else:
+            add_mod(mod, "sidechain", mod.amino_acid)
+
+    return {k: dict(v) for k, v in modifications_by_target.items()}
+
+
+# TODO: Make adding modifications more efficient
+def get_modification_versions(
+    peptide: Peptide,
+    modifications: List[ModificationConfig],
+    modifications_by_target: Dict[str, Dict[str, List[ModificationConfig]]],
+    max_variable_modifications: int = 3,
+) -> List[str]:
+    """Get MS²PIP modification strings for all potential versions."""
+    possibilities_by_site = defaultdict(list)
+
+    # Generate dictionary of positions per amino acid
+    pos_dict = defaultdict(list)
+    for pos, aa in enumerate(peptide.sequence):
+        pos_dict[aa].append(pos + 1)
+    # Map modifications to positions
+    for aa in set(pos_dict).intersection(set(modifications_by_target["sidechain"])):
+        possibilities_by_site.update(
+            {pos: modifications_by_target["sidechain"][aa] for pos in pos_dict[aa]}
+        )
+
+    # Assign possible modifications per terminus
+    for terminus, position, specificity in [
+        ("peptide_n_term", 0, None),
+        ("peptide_c_term", -1, None),
+        ("protein_n_term", 0, "is_n_term"),
+        ("protein_c_term", -1, "is_c_term"),
+    ]:
+        if specificity is None or getattr(peptide, specificity):
+            for site, mods in modifications_by_target[terminus].items():
+                if site == "any" or peptide.sequence[position] == site:
+                    possibilities_by_site[position].extend(mods)
+
+    # Override with fixed modifications
+    for mod in modifications:
+        aa = mod.amino_acid
+        # Skip variable modifications
+        if not mod.fixed:
+            continue
+        # Assign if specific aa matches or if no aa is specified for each terminus
+        for terminus, position, specificity in [
+            ("peptide_n_term", 0, None),
+            ("peptide_c_term", -1, None),
+            ("protein_n_term", 0, "is_n_term"),
+            ("protein_c_term", -1, "is_c_term"),
+        ]:
+            if getattr(mod, terminus):  # Mod has this terminus
+                if specificity is None or getattr(
+                    peptide, specificity
+                ):  # Specificity matches
+                    if not aa or (
+                        aa and peptide.sequence[position] == aa
+                    ):  # Aa matches
+                        possibilities_by_site[position] = [
+                            mod
+                        ]  # Override with fixed mod
+                break  # Allow `else: if amino_acid` if no terminus matches
+        # Assign if fixed modification is not terminal and specific aa matches
+        else:
+            if aa:
+                for pos in pos_dict[aa]:
+                    possibilities_by_site[pos] = [mod]
+
+    # Get all possible combinations of modifications for all sites
+    mod_permutations = product(*possibilities_by_site.values())
+    mod_positions = possibilities_by_site.keys()
+
+    # Filter by max modified sites (avoiding combinatorial explosion)
+    mod_permutations = filter(
+        lambda mods: sum([1 for m in mods if m is not None and not m.fixed])
+        <= max_variable_modifications,
+        mod_permutations,
+    )
+
+    def _compare_minus_one_larger(a, b):
+        """Custom comparison function where `-1` is always larger."""
+        if a[0] == -1:
+            return 1
+        elif b[0] == -1:
+            return -1
+        else:
+            return a[0] - b[0]
+
+    # Get MS²PIP modifications strings for each combination
+    mod_strings = []
+    for p in mod_permutations:
+        if p == [""]:
+            mod_strings.append("-")
+        else:
+            mods = sorted(
+                zip(mod_positions, p), key=cmp_to_key(_compare_minus_one_larger)
+            )
+            mod_strings.append("|".join(f"{p}|{m.name}" for p, m in mods if m))
+
+    return mod_strings
+
+
+def count_fasta_entries(filename) -> int:
+    with open(filename, "rt") as f:
+        count = 0
+        for line in f:
+            if line[0] == ">":
+                count += 1
+    return count
+
+
+def peptides_to_peprec(peptides: List[Peptide]) -> pd.DataFrame:
+    """Convert a list of peptides to a PeptideRecord DataFrame."""
+    peprec = pd.DataFrame(
+        [
+            {
+                "peptide": peptide.sequence,
+                "modifications": modifications,
+                "charge": charge,
+            }
+            for peptide in peptides
+            for charge in peptide.charge_options
+            for modifications in peptide.modification_options
+        ],
+        columns=["spec_id", "peptide", "modifications", "charge"],
+    )
+    peprec["spec_id"] = peprec.index
+    return peprec
+
+
+def prepare_ms2pip_params(config: Configuration) -> dict:
+    """Prepare MS²PIP parameters from fasta2speclib configuration."""
+    return {
+        "ms2pip": {
+            "model": config.ms2pip_model,
+            "frag_error": 0.02,
+            "ptm": [
+                "{},{},opt,N-term".format(mod.name, mod.mass_shift)
+                if mod.peptide_n_term or mod.protein_n_term
+                else "{},{},opt,C-term".format(mod.name, mod.mass_shift)
+                if mod.peptide_c_term or mod.protein_c_term
+                else "{},{},opt,{}".format(mod.name, mod.mass_shift, mod.amino_acid)
+                for mod in config.modifications
+            ],
+            "sptm": [],
+            "gptm": [],
+        }
+    }
+
+
+def write_predictions(
+    predictions: pd.DataFrame,
+    peprec: pd.DataFrame,
+    filetypes: List[str],
+    filename: str,
+    ms2pip_params: Dict,
+    append: bool = False,
+):
+    """Write predictions to requested output file formats."""
+    write_mode = "a" if append else "w"
+    if "hdf" in filetypes:
+        logger.info(f"Writing results to {filename}_predictions.hdf")
+        predictions.astype(str).to_hdf(
+            f"{filename}_predictions.hdf",
+            key="table",
+            format="table",
+            complevel=3,
+            complib="zlib",
+            mode=write_mode,
+            append=append,
+            min_itemsize=50,
+        )
+    spec_out = spectrum_output.SpectrumOutput(
+        predictions,
+        peprec,
+        ms2pip_params["ms2pip"],
+        output_filename=filename,
+        write_mode=write_mode,
+    )
+    if "msp" in filetypes:
+        spec_out.write_msp()
+    if "mgf" in filetypes:
+        spec_out.write_mgf()
+    if "bibliospec" in filetypes:
+        spec_out.write_bibliospec()
+    if "spectronaut" in filetypes:
+        spec_out.write_spectronaut()
+    if "dlib" in filetypes:
+        spec_out.write_dlib()
+
+
+def run(
+    fasta_filename: Union[str, Path],
+    output_filename: Optional[Union[str, Path]] = None,
+    config: Optional[Union[Configuration, dict]] = None,
+):
+    """
+    Generate an MS²PIP- and DeepLC-predicted spectral library.
+
+    fasta_filename: str, Path
+        Path to input FASTA file.
+    output_filename: str, Path
+        Stem for output filenames. For instance, ``./output`` would result in
+        ``./output.msp``. If ``None``, the output filename will be based on the
+        input FASTA filename.
+    config: Configuration, dict, optional
+        Configuration of fasta2speclib. See documentation for more info
+
+    """
+    # Parse configuration
+    if config:
+        if isinstance(config, dict):
+            config["fasta_filename"] = fasta_filename
+            config["output_filename"] = output_filename
+            config = Configuration.parse_obj(config)
+        elif isinstance(config, Configuration):
+            config.fasta_filename = fasta_filename
+            config.output_filename = output_filename
+        else:
+            raise TypeError(f"Invalid type for configuration: `{type(config)}`.")
+    else:
+        config = Configuration(
+            fasta_filename=fasta_filename, output_filename=output_filename
+        )
+
+    # `unspecific` is not an option in pyteomics.parser.icleave, so we configure
+    # the settings for unspecific cleavage here.
+    if config.cleavage_rule == "unspecific":
+        config.missed_cleavages = config.max_length
+        config.cleavage_rule = r"(?<=[A-Z])"
+
+    # Setup multiprocessing, using a dummy pool if num_cpu is 1
+    if config.num_cpu != 1:
+        Pool = multiprocessing.Pool
+    else:
+        Pool = multiprocessing.dummy.Pool
+
+    logger.info("Preparing search space...")
+
+    # Setup database, with decoy configuration if required
+    n_proteins = count_fasta_entries(config.fasta_filename)
+    if config.add_decoys:
+        fasta_db = decoy_db(
+            config.fasta_filename,
+            mode="reverse",
+            decoy_only=False,
+            keep_nterm=True,
+        )
+    else:
+        fasta_db = FASTA(config.fasta_filename)
+        n_proteins *= 2
+
+    # Read proteins and digest to peptides
+    with Pool(config.num_cpu) as pool:
+        partial_digest_protein = partial(
+            digest_protein,
+            min_length=config.min_length,
+            max_length=config.max_length,
+            cleavage_rule=config.cleavage_rule,
+            missed_cleavages=config.missed_cleavages,
+            semi_specific=config.semi_specific,
+        )
+        results = track(
+            pool.imap(partial_digest_protein, fasta_db),
+            total=n_proteins,
+            description="Digesting proteins...",
+            transient=True,
+        )
+        peptides = list(chain.from_iterable(results))
+
+    # Remove redundancy in peptides and combine protein lists
+    peptide_dict = dict()
+    for peptide in track(
+        peptides,
+        description="Removing peptide redundancy...",
+        transient=True,
+    ):
+        if peptide.sequence in peptide_dict:
+            peptide_dict[peptide.sequence].proteins.extend(peptide.proteins)
+        else:
+            peptide_dict[peptide.sequence] = peptide
+    peptides = list(peptide_dict.values())
+
+    # Add modification and charge permutations
+    modifications_by_target = get_modifications_by_target(config.modifications)
+    modification_options = []
+    with Pool(config.num_cpu) as pool:
+        partial_get_modification_versions = partial(
+            get_modification_versions,
+            modifications=config.modifications,
+            modifications_by_target=modifications_by_target,
+            max_variable_modifications=config.max_variable_modifications,
+        )
+        modification_options = pool.imap(partial_get_modification_versions, peptides)
+        for pep, mod_opt in track(
+            zip(peptides, modification_options),
+            description="Adding modifications...",
+            total=len(peptides),
+            transient=True,
+        ):
+            pep.modification_options = mod_opt
+            pep.charge_options = config.charges
+
+    logger.info(f"Search space contains {len(peptides)} peptides.")
+
+    # Divide peptides into chunks
+    chunks = [
+        peptides[i : i + config.batch_size]
+        for i in range(0, len(peptides), config.batch_size)
+    ]
+
+    # If add_retention_time, initiate DeepLC
+    if config.add_retention_time:
+        logger.debug("Initializing DeepLC predictor")
+        if not config.deeplc:
+            config.deeplc = {"calibration_file": None}
+        if not "n_jobs" in config.deeplc:
+            config.deeplc["n_jobs"] = config.num_cpu
+        rt_predictor = RetentionTime(config=config.dict())
+    else:
+        rt_predictor = None
+
+    # Setup MS²PIP parameters
+    ms2pip_params = prepare_ms2pip_params(config)
+
+    # Run in batches to avoid memory issues
+    for chunk_id, chunk_peptides in enumerate(chunks):
+        logger.info(f"Processing batch {chunk_id + 1}/{len(chunks)}...")
+
+        # Generate MS²PIP input
+        logger.info("Generating MS²PIP input...")
+        peprec = peptides_to_peprec(chunk_peptides)
+        logger.info(f"Chunk contains {len(peprec)} peptidoforms.")
+
+        # Filter on precursor m/z
+        if config.min_precursor_mz and config.max_precursor_mz:
+            mods = Modifications()
+            mods.add_from_ms2pip_modstrings(ms2pip_params["ms2pip"]["ptm"])
+            precursor_mz = peprec.apply(
+                lambda x: mods.calc_precursor_mz(
+                    x["peptide"], x["modifications"], x["charge"]
+                )[1],
+                axis=1,
+            )
+            before = len(peprec)
+            peprec = (
+                peprec[
+                    (config.min_precursor_mz <= precursor_mz)
+                    & (precursor_mz <= config.max_precursor_mz)
+                ]
+                .reset_index(drop=True)
+                .copy()
+            )
+            after = len(peprec)
+            logger.info(f"Filtered batch on precursor m/z: {before} -> {after}")
+
+        # Predict retention time
+        if config.add_retention_time:
+            logger.info("Predicting retention times with DeepLC...")
+            rt_predictor.add_rt_predictions(peprec)
+
+        # Predict spectra
+        logger.info("Predicting spectra with MS²PIP...")
+        ms2pip = MS2PIP(
+            peprec,
+            num_cpu=config.num_cpu,
+            params=ms2pip_params,
+            return_results=True,
+            add_retention_time=False,
+        )
+        predictions = ms2pip.run()
+
+        # Write output
+        logger.info("Writing output...")
+        write_predictions(
+            predictions,
+            peprec,
+            config.output_filetype,
+            config.get_output_filename(),
+            ms2pip_params,
+            append=chunk_id != 0,
+        )
+
+    logger.info("Done!")
+
+
+def argument_parser():
     parser = argparse.ArgumentParser(
-        description="Create an MS2PIP-predicted spectral library, starting from a fasta file."
+        description=(
+            "Create an MS2PIP- and DeepLC-predicted spectral library, starting from a "
+            "FASTA file."
+        )
     )
     parser.add_argument(
         "fasta_filename",
         action="store",
-        help="Path to the fasta file containing protein sequences",
+        help="Path to the FASTA file containing protein sequences",
     )
     parser.add_argument(
         "-o",
         dest="output_filename",
         action="store",
-        help="Name for output file(s) (if not given, derived from input file)",
+        help="Name for output file(s) (if not given, derived from FASTA file)",
     )
     parser.add_argument(
         "-c",
@@ -66,508 +670,24 @@ def ArgParse():
     return args
 
 
-def get_params():
-    args = ArgParse()
-
-    if not args.config_filename:
-        config_filename = "fasta2speclib_config.json"
-    else:
-        config_filename = args.config_filename
-
-    with open(config_filename, "rt") as config_file:
-        params = json.load(config_file)
-
-    params.update(
-        {
-            "fasta_filename": args.fasta_filename,
-            "log_level": logging.INFO,
-        }
-    )
-
-    if args.output_filename:
-        params["output_filename"] = args.output_filename
-    else:
-        params["output_filename"] = "_".join(
-            params["fasta_filename"].split("\\")[-1].split(".")[:-1]
-        )
-
-    if not params["num_cpu"]:
-        params["num_cpu"] = multiprocessing.cpu_count()
-
-    return params
-
-
-def prot_to_peprec(protein):
-    """Cleave protein and return pd.DataFrame with valid peptides."""
-
-    def validate_peptide(peptide, min_length, max_length):
-        """Validate peptide by length and amino acids."""
-        peplen = len(peptide)
-        return (
-            (peplen >= min_length)
-            and (peplen <= max_length)
-            and not any(aa in peptide for aa in ["B", "J", "O", "U", "X", "Z"])
-        )
-
-    params = get_params()
-
-    pep_count = 0
-    spec_ids = []
-    peptides = []
-
-    for peptide in cleave(
-        str(protein.seq), params["cleavage_rule"], params["missed_cleavages"]
-    ):
-        pep_count += 1
-        if validate_peptide(peptide, params["min_peplen"], params["max_peplen"]):
-            spec_ids.append("{}_{:03d}".format(protein.id, pep_count))
-            peptides.append(peptide)
-
-    return pd.DataFrame(
-        {
-            "spec_id": spec_ids,
-            "peptide": peptides,
-            "modifications": "-",
-            "charge": np.nan,
-        }
-    )
-
-
-def get_protein_list(df):
-    peptide_to_prot = {}
-    for pi, pep in zip(df["spec_id"], df["peptide"]):
-        pi = "_".join(pi.split("_")[0:2])
-        if pep in peptide_to_prot.keys():
-            peptide_to_prot[pep].append(pi)
-        else:
-            peptide_to_prot[pep] = [pi]
-    df["protein_list"] = [list(set(peptide_to_prot[pep])) for pep in df["peptide"]]
-    df = df[~df.duplicated(["peptide", "charge", "modifications"])]
-    return df
-
-
-def get_modifications_by_target(modifications):
-    """Restructure modifications configuration to options per side chain or terminus."""
-    mods_sidechain = {}
-    mods_nterm = {}
-
-    for mod in modifications:
-        if mod["fixed"]:
-            continue
-        elif mod["n_term"]:
-            if mod["amino_acid"]:
-                if mod["amino_acid"] in mods_nterm:
-                    mods_nterm[mod["amino_acid"]].append(mod["name"])
-                else:
-                    mods_nterm[mod["amino_acid"]] = [mod["name"]]
-            else:
-                if "any" in mods_nterm:
-                    mods_nterm["any"].append(mod["name"])
-                else:
-                    mods_nterm["any"] = [mod["name"]]
-        elif mod["amino_acid"]:
-            if mod["amino_acid"] in mods_sidechain:
-                mods_sidechain[mod["amino_acid"]].append(mod["name"])
-            else:
-                mods_sidechain[mod["amino_acid"]] = [mod["name"]]
-
-    for aa, mods in mods_sidechain.items():
-        mods.append(None)
-    if "any" in mods_nterm:
-        mods_nterm["any"].append(None)
-    else:
-        mods_nterm["any"] = [None]
-
-    return mods_sidechain, mods_nterm
-
-
-def get_modification_versions(
-    peptide, modifications, mods_sidechain, mods_nterm, max_mods=3
-):
-    """Get MS²PIP modification strings for all potential versions."""
-    possibilities_by_site = dict()
-
-    # Assign possible modifications per residue (side chains)
-    for pos, aa in enumerate(peptide):
-        if aa in mods_sidechain:
-            possibilities_by_site[pos + 1] = mods_sidechain[aa]
-
-    # Assign possible modifications for N terminus
-    if mods_nterm:
-        possibilities_by_site[0] = []
-    for site, mods in mods_nterm.items():
-        if site == "any":
-            possibilities_by_site[0].extend(mods)
-        elif peptide[0] == site:
-            possibilities_by_site[0].extend(mods)
-
-    # Override with fixed modifications
-    for mod in modifications:
-        if not mod["fixed"]:
-            continue
-        if mod["n_term"]:
-            if (mod["amino_acid"] and peptide[0] == mod["amino_acid"]) or not mod[
-                "amino_acid"
-            ]:
-                possibilities_by_site[0] = [mod["name"]]
-        elif mod["amino_acid"]:
-            for pos, aa in enumerate(peptide):
-                if aa == mod["amino_acid"]:
-                    possibilities_by_site[pos] = [mod["name"]]
-
-    # Get all possible combinations of modifications for all sites
-    mod_permutations = list(product(*possibilities_by_site.values()))
-    mod_positions = possibilities_by_site.keys()
-
-    # Get MS²PIP modifications strings for each combination
-    mod_strings = []
-    for perm in mod_permutations:
-        mods = sorted(zip(mod_positions, perm))  # Zip permutations with positions
-        mods = "|".join(
-            f"{m[0]}|{m[1]}" for m in mods if m[1]
-        )  # Make str for modified sites
-        mod_strings.append(mods)
-
-    # Filter by max modified sites (avoiding combinatorial explosion)
-    mod_strings = list(
-        filter(lambda x: (x.count("|") + 1) / 2 <= max_mods, mod_strings)
-    )
-
-    return mod_strings
-
-
-def add_mods(tup):
-    """
-    See fasta2speclib_config.md for more information.
-    """
-    _, row = tup
-    params = get_params()
-
-    # TODO: Do not hardcode max_mods
-    # TODO: Do not include fixed modifications in max_mods
-    mods_sidechain, mods_nterm = get_modifications_by_target(params["modifications"])
-    mod_versions = get_modification_versions(
-        row["peptide"], params["modifications"], mods_sidechain, mods_nterm, max_mods=3
-    )
-
-    df_out = pd.DataFrame(columns=row.index)
-    df_out["modifications"] = ["-" if not mods else mods for mods in mod_versions]
-    df_out["spec_id"] = [
-        "{}_{:03d}".format(row["spec_id"], i) for i in range(len(mod_versions))
-    ]
-    df_out["charge"] = row["charge"]
-    df_out["peptide"] = row["peptide"]
-    if "protein_list" in row.index:
-        df_out["protein_list"] = str(row["protein_list"])
-    return df_out
-
-
-def add_charges(df_in):
-    params = get_params()
-    df_out = pd.DataFrame(columns=df_in.columns)
-    for charge in params["charges"]:
-        tmp = df_in.copy()
-        tmp["spec_id"] = tmp["spec_id"] + "_{}".format(charge)
-        tmp["charge"] = charge
-        df_out = pd.concat([df_out, tmp], axis=0, ignore_index=True)
-    df_out.sort_values(["spec_id", "charge"], inplace=True)
-    df_out.reset_index(drop=True, inplace=True)
-    return df_out
-
-
-def create_decoy_peprec(
-    peprec,
-    spec_id_prefix="decoy_",
-    keep_cterm_aa=True,
-    remove_redundancy=True,
-    move_mods=True,
-):
-    """
-    Create decoy peptides by reversing the sequences in a PEPREC DataFrame.
-
-    Keyword arguments:
-    spec_id_prefix -- string to prefix the decoy spec_ids (default: 'decoy_')
-    keep_cterm_aa -- True if the last amino acid should stay in place (for example to keep tryptic properties) (default: True)
-    remove_redundancy -- True if reversed peptides that are also found in the set of normal peptide should be removed (default: True)
-    move_mods -- True to move modifications according to reversed sequence (default: True)
-
-    Known issues:
-    - C-terminal modifications (with position `-1`) are sorted to the front (eg: `-1|Cterm|0|Nterm|2|NormalPTM`).
-    """
-
-    def move_mods(row):
-        mods = row["modifications"]
-        if type(mods) == str:
-            if not mods == "-":
-                mods = mods.split("|")
-                mods = sorted(
-                    zip(
-                        [
-                            int(p)
-                            if (p == "-1" or p == "0")
-                            else len(row["peptide"]) - int(p)
-                            for p in mods[::2]
-                        ],
-                        mods[1::2],
-                    )
-                )
-                mods = "|".join(["|".join([str(x) for x in mod]) for mod in mods])
-                row["modifications"] = mods
-        return row
-
-    peprec_decoy = peprec.copy()
-    peprec_decoy["spec_id"] = spec_id_prefix + peprec_decoy["spec_id"].astype(str)
-
-    if keep_cterm_aa:
-        peprec_decoy["peptide"] = peprec_decoy["peptide"].apply(
-            lambda pep: pep[-2::-1] + pep[-1]
-        )
-    else:
-        peprec_decoy["peptide"] = peprec_decoy["peptide"].apply(lambda pep: pep[-1::-1])
-
-    if remove_redundancy:
-        peprec_decoy = peprec_decoy[~peprec_decoy["peptide"].isin(peprec["peptide"])]
-
-    if "protein_list" in peprec_decoy.columns:
-        peprec_decoy["protein_list"] = "decoy"
-
-    if move_mods:
-        peprec_decoy = peprec_decoy.apply(move_mods, axis=1)
-
-    return peprec_decoy
-
-
-def remove_from_peprec_filter(peprec_pred, peprec_filter):
-    peprec_pred_comb = (
-        peprec_pred["modifications"]
-        + peprec_pred["peptide"]
-        + peprec_pred["charge"].astype(str)
-    )
-    peprec_filter_comb = (
-        peprec_filter["modifications"]
-        + peprec_filter["peptide"]
-        + peprec_filter["charge"].astype(str)
-    )
-    return peprec_pred[~peprec_pred_comb.isin(peprec_filter_comb)].copy()
-
-
-def run_batches(peprec, decoy=False):
-    params = get_params()
-    if decoy:
-        params["output_filename"] += "_decoy"
-
-    ms2pip_params = {
-        "ms2pip": {
-            "model": params["ms2pip_model"],
-            "frag_error": 0.02,
-            # Modify fasta2speclib modifications dict to MS2PIP params PTMs entry
-            "ptm": [
-                "{},{},opt,{}".format(
-                    mods["name"], mods["mass_shift"], mods["amino_acid"]
-                )
-                if not mods["n_term"]
-                else "{},{},opt,N-term".format(mods["name"], mods["mass_shift"])
-                for mods in params["modifications"]
-            ],
-            "sptm": [],
-            "gptm": [],
-        }
-    }
-
-    # If add_retention_time, initiate DeepLC
-    if params["add_retention_time"]:
-        logging.debug("Initializing DeepLC predictor")
-        if "deeplc" not in params or not params["deeplc"]:
-            params["deeplc"] = {"calibration_file": None}
-        if not "n_jobs" in params["deeplc"]:
-            params["deeplc"]["n_jobs"] = params["num_cpu"]
-        rt_predictor = RetentionTime(config=params)
-
-    # Split up into batches to save memory:
-    b_size = params["batch_size"]
-    b_count = 0
-    num_b_counts = ceil(len(peprec) / b_size)
-    for i in range(0, len(peprec), b_size):
-        if i + b_size < len(peprec):
-            peprec_batch = peprec[i : i + b_size]
-        else:
-            peprec_batch = peprec[i:]
-        b_count += 1
-        logging.info(
-            "Predicting batch %d of %d, containing %d unmodified peptides",
-            b_count,
-            num_b_counts,
-            len(peprec_batch),
-        )
-
-        logging.debug("Adding all modification combinations")
-        peprec_mods = pd.DataFrame(columns=peprec_batch.columns)
-        with multiprocessing.Pool(params["num_cpu"]) as p:
-            peprec_mods = pd.concat(
-                [peprec_mods] + p.map(add_mods, peprec_batch.iterrows()),
-                ignore_index=True,
-            )
-        peprec_batch = peprec_mods
-
-        if params["add_retention_time"]:
-            logging.info("Adding DeepLC predicted retention times")
-            rt_predictor.add_rt_predictions(peprec_batch)
-        elif type(params["elude_model_file"]) == str:
-            logging.debug("Adding ELUDE predicted retention times")
-            peprec_batch["rt"] = get_elude_predictions(
-                peprec_batch,
-                params["elude_model_file"],
-                unimod_mapping={
-                    mod["name"]: mod["unimod_accession"]
-                    for mod in params["modifications"]
-                },
-            )
-
-        if type(params["rt_predictions_file"]) == str:
-            logging.info("Adding RT predictions from file")
-            rt_df = pd.read_csv(params["rt_predictions_file"])
-            for col in ["peptide", "modifications", "rt"]:
-                assert col in rt_df.columns, (
-                    "RT file should contain a `%s` column" % col
-                )
-            peprec_batch = peprec_batch.merge(
-                rt_df, on=["peptide", "modifications"], how="left"
-            )
-            assert (
-                not peprec_batch["rt"].isna().any()
-            ), "Not all required peptide-modification combinations could be found in RT file"
-
-        logging.debug("Adding charge states %s", str(params["charges"]))
-        peprec_batch = add_charges(peprec_batch)
-
-        if type(params["peprec_filter"]) == str:
-            logging.debug("Removing peptides present in peprec filter")
-            peprec_filter = pd.read_csv(params["peprec_filter"], sep=" ")
-            peprec_batch = remove_from_peprec_filter(peprec_batch, peprec_filter)
-
-        if params["save_peprec"]:
-            peprec_batch.to_csv(
-                params["output_filename"] + "_" + str(b_count) + ".csv",
-                lineterminator="\n",
-            )
-
-        logging.info("Running MS2PIP for %d peptides", len(peprec_batch))
-        ms2pip = MS2PIP(
-            peprec_batch,
-            num_cpu=params["num_cpu"],
-            output_filename=params["output_filename"],
-            params=ms2pip_params,
-            return_results=True,
-        )
-        all_preds = ms2pip.run()
-
-        if b_count == 1:
-            write_mode = "w"
-            append = False
-        else:
-            write_mode = "a"
-            append = True
-
-        if "hdf" in params["output_filetype"]:
-            logging.info(
-                "Writing predictions to %s_predictions.hdf", params["output_filename"]
-            )
-            all_preds.astype(str).to_hdf(
-                "{}_predictions.hdf".format(params["output_filename"]),
-                key="table",
-                format="table",
-                complevel=3,
-                complib="zlib",
-                mode=write_mode,
-                append=append,
-                min_itemsize=50,
-            )
-
-        spec_out = spectrum_output.SpectrumOutput(
-            all_preds,
-            peprec_batch,
-            ms2pip_params["ms2pip"],
-            output_filename="{}".format(params["output_filename"]),
-            write_mode=write_mode,
-        )
-
-        if "msp" in params["output_filetype"]:
-            logging.info("Writing MSP file")
-            spec_out.write_msp()
-
-        if "mgf" in params["output_filetype"]:
-            logging.info("Writing MGF file")
-            spec_out.write_mgf()
-
-        if "bibliospec" in params["output_filetype"]:
-            logging.info("Writing BiblioSpec SSL and MS2 files")
-            spec_out.write_bibliospec()
-
-        if "spectronaut" in params["output_filetype"]:
-            logging.info("Writing Spectronaut CSV file")
-            spec_out.write_spectronaut()
-
-        if "dlib" in params["output_filetype"]:
-            logging.info("Writing DLIB SQLite file")
-            spec_out.write_dlib()
-
-        del all_preds
-        del peprec_batch
-
-
 def main():
-    params = get_params()
+    """Command line entrypoint for fasta2speclib."""
     logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(message)s",
+        format="%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        level=params["log_level"],
+        level=logging.INFO,
+        handlers=[RichHandler(rich_tracebacks=True, show_level=True, show_path=False)],
     )
-    peprec = pd.DataFrame(columns=["spec_id", "peptide", "modifications", "charge"])
+    logging.getLogger("ms2pip").setLevel(logging.WARNING)
+    logging.getLogger("deeplc").setLevel(logging.WARNING)
 
-    logging.info("Cleaving proteins, adding peptides to peprec")
-    with multiprocessing.Pool(params["num_cpu"]) as p:
-        peprec = pd.concat(
-            [peprec]
-            + p.map(prot_to_peprec, SeqIO.parse(params["fasta_filename"], "fasta")),
-            ignore_index=True,
-        )
+    args = argument_parser()
 
-    logging.info("Removing peptide redundancy, adding protein list to peptides")
-    peprec = get_protein_list(peprec)
+    with open(args.config_filename, "rt") as config_file:
+        config_dict = json.load(config_file)
+    run(args.fasta_filename, args.output_filename, config_dict)
 
-    peprec_nonmod = peprec.copy()
-
-    save_peprec = False
-    if save_peprec:
-        logging.info(
-            "Saving non-expanded PEPREC to %s.peprec.hdf", params["output_filename"]
-        )
-        peprec_nonmod["protein_list"] = [
-            "/".join(prot) for prot in peprec_nonmod["protein_list"]
-        ]
-        peprec_nonmod.astype(str).to_hdf(
-            "{}_nonexpanded.peprec.hdf".format(params["output_filename"]),
-            key="table",
-            format="table",
-            complevel=3,
-            complib="zlib",
-            mode="w",
-        )
-
-    if not params["decoy"]:
-        del peprec_nonmod
-
-    run_batches(peprec, decoy=False)
-
-    if params["decoy"]:
-        logging.info("Reversing sequences for decoy peptides")
-        peprec_decoy = create_decoy_peprec(peprec_nonmod, move_mods=False)
-        del peprec_nonmod
-
-        logging.info("Predicting spectra for decoy peptides")
-        run_batches(peprec_decoy, decoy=True)
-
-    logging.info("fasta2speclib is ready!")
+    exit()
 
 
 if __name__ == "__main__":

@@ -252,7 +252,7 @@ class SpectrumOutput:
         """
 
         if isinstance(modifications, str):
-            if modifications == "-":
+            if not modifications or modifications == "-":
                 msp_modifications = "0"
             else:
                 mods = modifications.split("|")
@@ -835,10 +835,7 @@ class SpectrumOutput:
             logger.info("Writing results to %s", f_name)
 
         self.all_preds.to_csv(
-            file_object,
-            float_format="%.6g",
-            index=False,
-            lineterminator="\n"
+            file_object, float_format="%.6g", index=False, lineterminator="\n"
         )
         return file_object
 
