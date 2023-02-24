@@ -4,13 +4,10 @@ from pathlib import Path
 from typing import Generator, List
 
 import numpy as np
-from pyteomics import mzml, mgf
+from pyteomics import mgf, mzml
 
-from ms2pip.exceptions import (
-    UnsupportedSpectrumFiletypeError,
-    InvalidSpectrumError,
-    EmptySpectrumError,
-)
+from ms2pip.exceptions import (EmptySpectrumError, InvalidSpectrumError,
+                               UnsupportedSpectrumFiletypeError)
 
 
 class Spectrum:
@@ -115,7 +112,6 @@ def read_mzml(spec_file) -> Generator[Spectrum, None, None]:
         iterative=True,
         use_index=False,
         dtype=np.float32,
-        decode_binary=True,
     ) as mzml_file:
         for spectrum in mzml_file:
             if spectrum["ms level"] == 2:
