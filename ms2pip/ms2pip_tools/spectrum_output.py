@@ -516,7 +516,7 @@ class SpectrumOutput:
             "FragmentNumber",
         ]
         spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
-        spectronaut_df.to_csv(file_obj, index=False, header=header, lineterminator="\n")
+        spectronaut_df.to_csv(file_obj, index=False, header=header, sep=";", lineterminator="\n")
 
         return file_obj
 
