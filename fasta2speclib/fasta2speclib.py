@@ -115,14 +115,14 @@ class Peptide(BaseModel):
 class Configuration(BaseModel):
     fasta_filename: str
     output_filename: Optional[str] = None
-    output_filetype: Optional[list[str]] = None
-    charges: list[int] = [2, 3]
+    output_filetype: Optional[List[str]] = None
+    charges: List[int] = [2, 3]
     min_length: int = 8
     max_length: int = 30
     cleavage_rule: str = "trypsin"
     missed_cleavages: int = 2
     semi_specific: bool = False
-    modifications: list[ModificationConfig] = DEFAULT_MODIFICATIONS
+    modifications: List[ModificationConfig] = DEFAULT_MODIFICATIONS
     max_variable_modifications: int = 3
     min_precursor_mz: Optional[float] = None
     max_precursor_mz: Optional[float] = None
@@ -130,9 +130,6 @@ class Configuration(BaseModel):
     add_decoys: float = False
     add_retention_time: float = True
     deeplc: dict = dict()
-    rt_predictions_file: Optional[str] = None
-    peprec_filter: Optional[str] = None
-    save_peprec: bool = False
     batch_size: int = 10000
     num_cpu: int = -1
 
@@ -190,7 +187,7 @@ def digest_protein(
     cleavage_rule: str = "trypsin",
     missed_cleavages: int = 2,
     semi_specific: bool = False,
-) -> list[Peptide]:
+) -> List[Peptide]:
     """Digest protein sequence and return a list of validated peptides."""
 
     def valid_residues(sequence: str) -> bool:

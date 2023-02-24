@@ -5,6 +5,7 @@
     "max_peplen":30,
     "cleavage_rule":"trypsin",
     "missed_cleavages":2,
+    "semi_specific":false,
     "modifications":[
         {"name":"Acetyl", "unimod_accession":1, "mass_shift":42.010565, "amino_acid":null, "protein_n_term":true},
         {"name":"Oxidation", "unimod_accession":35, "mass_shift":15.994915, "amino_acid":"M"},
