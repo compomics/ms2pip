@@ -40,26 +40,24 @@ from collections import defaultdict
 from functools import cmp_to_key, partial
 from itertools import chain, product
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
+from ms2pip.ms2pip_tools import spectrum_output
+from ms2pip.ms2pipC import MODELS, MS2PIP
+from ms2pip.peptides import Modifications as MS2PIPModifications
+from ms2pip.retention_time import RetentionTime
 from pydantic import BaseModel, validator
 from pyteomics.fasta import FASTA, Protein, decoy_db
 from pyteomics.parser import icleave
 from rich.logging import RichHandler
 from rich.progress import track
 
-from ms2pip.ms2pip_tools import spectrum_output
-from ms2pip.ms2pipC import MODELS, MS2PIP
-from ms2pip.peptides import Modifications as MS2PIPModifications
-from ms2pip.retention_time import RetentionTime
-
 logger = logging.getLogger(__name__)
 
 
 class Peptide(BaseModel):
     """Peptide representation within the fasta2speclib search space."""
-
     sequence: str
     proteins: List[str]
     is_n_term: Optional[bool] = None
@@ -70,7 +68,6 @@ class Peptide(BaseModel):
 
 class ModificationConfig(BaseModel):
     """Configuration for a single modification in the search space."""
-
     name: str
     mass_shift: float
     unimod_accession: Optional[int] = None
@@ -117,7 +114,7 @@ DEFAULT_MODIFICATIONS = [
 class Configuration(BaseModel):
     """Configuration for fasta2speclib."""
 
-    fasta_filename: str
+    fasta_filename: Union[str, Path]
     output_filename: Optional[str] = None
     output_filetype: Optional[List[str]] = None
     charges: List[int] = [2, 3]
@@ -135,7 +132,7 @@ class Configuration(BaseModel):
     add_retention_time: float = True
     deeplc: dict = dict()
     batch_size: int = 10000
-    num_cpu: int = -1
+    num_cpu: Optional[int] = None
 
     @validator("output_filetype")
     def _validate_output_filetypes(cls, v):
@@ -171,7 +168,7 @@ class Configuration(BaseModel):
     @validator("num_cpu")
     def _validate_num_cpu(cls, v):
         available_cpus = multiprocessing.cpu_count()
-        if not 0 < v < available_cpus:
+        if not v or not 0 < v < available_cpus:
             return available_cpus
         else:
             return v
@@ -250,7 +247,7 @@ class Fasta2SpecLib:
         logger.info("Preparing search space...")
 
         # Setup database, with decoy configuration if required
-        n_proteins = self._count_fasta_entries(self.config.fasta_filename)
+        n_proteins = count_fasta_entries(self.config.fasta_filename)
         if self.config.add_decoys:
             fasta_db = decoy_db(
                 self.config.fasta_filename,
@@ -409,15 +406,6 @@ class Fasta2SpecLib:
             }
         }
         return ms2pip_params
-
-    @staticmethod
-    def _count_fasta_entries(filename) -> int:
-        with open(filename, "rt") as f:
-            count = 0
-            for line in f:
-                if line[0] == ">":
-                    count += 1
-        return count
 
     @staticmethod
     def _digest_protein(
@@ -644,6 +632,16 @@ class Fasta2SpecLib:
             spec_out.write_spectronaut()
         if "dlib" in filetypes:
             spec_out.write_dlib()
+
+
+def count_fasta_entries(filename: Union[str, Path]) -> int:
+    """Count the number of entries in a FASTA file."""
+    with open(filename, "rt") as f:
+        count = 0
+        for line in f:
+            if line[0] == ">":
+                count += 1
+    return count
 
 
 def _argument_parser():
