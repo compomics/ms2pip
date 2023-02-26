@@ -582,12 +582,11 @@ class Fasta2SpecLib:
                     "peptide": peptide.sequence,
                     "modifications": modifications,
                     "charge": charge,
-                    "protein_list": proteins
+                    "protein_list": peptide.proteins
                 }
                 for peptide in peptides
                 for charge in peptide.charge_options
                 for modifications in peptide.modification_options
-                for proteins in peptide.proteins
             ],
             columns=["spec_id", "peptide", "modifications", "charge", "protein_list"],
         )
