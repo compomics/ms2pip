@@ -1,23 +1,28 @@
 """Read MS2 spectra."""
 
 from pathlib import Path
-from typing import Generator, List
+from typing import Generator
 
 import numpy as np
 from pyteomics import mgf, mzml
 
-from ms2pip.exceptions import (EmptySpectrumError, InvalidSpectrumError,
-                               UnsupportedSpectrumFiletypeError)
+from ms2pip.exceptions import (
+    EmptySpectrumError,
+    InvalidSpectrumError,
+    UnsupportedSpectrumFiletypeError,
+)
 
 
 class Spectrum:
-    def __init__(self, title, charge, pepmass, msms, peaks) -> None:
+    def __init__(
+        self, title, msms, peaks, precursor_charge=None, precursor_mz=None
+    ) -> None:
         """Minimal information on observed MS2 spectrum."""
         self.title = str(title)
-        self.charge = int(charge)
-        self.pepmass = float(pepmass)
         self.msms = np.array(msms, dtype=np.float32)
         self.peaks = np.array(peaks, dtype=np.float32)
+        self.precursor_charge = int(precursor_charge) if precursor_charge else None
+        self.precursor_mz = float(precursor_mz) if precursor_mz else None
 
         self.tic = np.sum(self.peaks)
 
@@ -54,7 +59,9 @@ class Spectrum:
     def remove_precursor(self, tolerance=0.02) -> None:
         """Remove precursor peak."""
         for mi, mp in enumerate(self.msms):
-            if (mp >= self.pepmass - tolerance) & (mp <= self.pepmass + tolerance):
+            if (mp >= self.precursor_mz - tolerance) & (
+                mp <= self.precursor_mz + tolerance
+            ):
                 self.peaks[mi] = 0
 
     def tic_norm(self) -> None:
@@ -88,10 +95,16 @@ def read_mgf(spec_file) -> Generator[Spectrum, None, None]:
             spec_id = spectrum["params"]["title"]
             peaks = spectrum["intensity array"]
             msms = spectrum["m/z array"]
-            precursor_mz = spectrum["params"]["pepmass"][0]
-            precursor_charge = spectrum["params"]["charge"][0]
+            try:
+                precursor_charge = spectrum["params"]["charge"][0]
+            except KeyError:
+                precursor_charge = None
+            try:
+                precursor_mz = spectrum["params"]["pepmass"][0]
+            except KeyError:
+                precursor_mz = None
             parsed_spectrum = Spectrum(
-                spec_id, precursor_charge, precursor_mz, msms, peaks
+                spec_id, msms, peaks, precursor_charge, precursor_mz
             )
             yield parsed_spectrum
 
@@ -124,7 +137,7 @@ def read_mzml(spec_file) -> Generator[Spectrum, None, None]:
                 precursor_mz = precursor["selected ion m/z"]
                 precursor_charge = precursor["charge state"]
                 parsed_spectrum = Spectrum(
-                    spec_id, precursor_charge, precursor_mz, msms, peaks
+                    spec_id, msms, peaks, precursor_charge, precursor_mz
                 )
                 yield parsed_spectrum
 
