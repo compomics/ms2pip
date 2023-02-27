@@ -15,21 +15,23 @@ import xgboost as xgb
 from rich.progress import track
 
 from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.exceptions import (FragmentationModelRequiredError,
-                               InvalidModificationFormattingError,
-                               InvalidPEPRECError, MissingConfigurationError,
-                               NoMatchingSpectraFound,
-                               NoValidPeptideSequencesError, TitlePatternError,
-                               UnknownFragmentationMethodError,
-                               UnknownModificationError,
-                               UnknownOutputFormatError)
+from ms2pip.exceptions import (
+    FragmentationModelRequiredError,
+    InvalidModificationFormattingError,
+    InvalidPEPRECError,
+    MissingConfigurationError,
+    NoMatchingSpectraFound,
+    NoValidPeptideSequencesError,
+    TitlePatternError,
+    UnknownFragmentationMethodError,
+    UnknownModificationError,
+    UnknownOutputFormatError,
+)
 from ms2pip.feature_names import get_feature_names_new
 from ms2pip.match_spectra import MatchSpectra
 from ms2pip.ms2pip_tools import calc_correlations, spectrum_output
-from ms2pip.peptides import (AMINO_ACID_IDS, Modifications,
-                             write_amino_acid_masses)
-from ms2pip.predict_xgboost import (get_predictions_xgb,
-                                    validate_requested_xgb_model)
+from ms2pip.peptides import AMINO_ACID_IDS, Modifications, write_amino_acid_masses
+from ms2pip.predict_xgboost import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.retention_time import RetentionTime
 from ms2pip.spectrum import read_spectrum_file
 
@@ -551,18 +553,23 @@ def apply_mods(peptide, mods, PTMmap):
     version of the peptide sequence, c- and n-term modifications. This modified
     version are hard coded in ms2pipfeatures_c.c for now.
     """
-    modpeptide = np.array(peptide[:], dtype=np.uint16)
-
+    modpeptide = np.array(peptide[:], dtype=np.uint16)  # Copy to avoid inplace changes
     if mods != "-":
         l = mods.split("|")
         if len(l) % 2 != 0:
             raise InvalidModificationFormattingError(mods)
         for i in range(0, len(l), 2):
             tl = l[i + 1]
-            if tl in PTMmap:
-                modpeptide[int(l[i])] = PTMmap[tl]
-            else:
+            try:
+                mod = PTMmap[tl]
+            except:
                 raise UnknownModificationError(tl)
+            try:
+                modpeptide[int(l[i])] = mod
+            except IndexError:
+                raise InvalidModificationFormattingError(
+                    f"Amino acid position not in peptide for modifications: `{mods}`"
+                )
 
     return modpeptide
 
@@ -580,7 +587,7 @@ class MS2PIP:
         self,
         pep_file,
         spec_file=None,
-        spectrum_id_pattern="(.*)",
+        spectrum_id_pattern=None,
         vector_file=None,
         num_cpu=1,
         params=None,
@@ -658,7 +665,9 @@ class MS2PIP:
         """
         self.pep_file = pep_file
         self.vector_file = vector_file
-        self.spectrum_id_pattern = spectrum_id_pattern
+        self.spectrum_id_pattern = (
+            spectrum_id_pattern if spectrum_id_pattern else "(.*)"
+        )
         self.num_cpu = num_cpu
         self.params = params
         self.return_results = return_results
@@ -705,7 +714,7 @@ class MS2PIP:
 
         # Validate requested model
         if self.model in MODELS.keys():
-            logger.info("Using %s models", self.model)
+            logger.debug("Using %s models", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
                 validate_requested_xgb_model(
                     MODELS[self.model]["xgboost_model_files"],
@@ -715,12 +724,14 @@ class MS2PIP:
         else:
             raise UnknownFragmentationMethodError(self.model)
 
+        # TODO: Move to run?
         if output_filename is None and not return_results:
             self.output_filename = "{}_{}".format(
                 ".".join(pep_file.split(".")[:-1]), self.model
             )
         else:
             self.output_filename = output_filename
+        # TODO
 
         logger.debug(f"Starting workers (num_cpu={self.num_cpu})...")
         if multiprocessing.current_process().daemon:
@@ -734,6 +745,7 @@ class MS2PIP:
         else:
             self.myPool = multiprocessing.Pool(self.num_cpu)
 
+        # TODO: Move to run?
         if self.match_spectra:
             self.spec_file = None
             if self.sqldb_uri:
@@ -746,6 +758,7 @@ class MS2PIP:
         else:
             self.spec_file = spec_file
             self.spec_files = None
+        # TODO
 
         self.mods = Modifications()
         for mod_type in ("sptm", "ptm"):
@@ -753,17 +766,21 @@ class MS2PIP:
                 self.params["ms2pip"][mod_type], mod_type=mod_type
             )
 
+    # TODO: Pass PEPREC and SPECFILE args here?
     def run(self):
         """Run initiated MS2PIP based on class configuration."""
+
+        # TODO: MOVE TO INIT?
         self.afile = write_amino_acid_masses()
         self.modfile = self.mods.write_modifications_file(mod_type="ptm")
         self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
+        #
 
         self._read_peptide_information()
 
         if self.add_retention_time:
             logger.info("Adding retention time predictions")
-            rt_predictor = RetentionTime(config=self.params)
+            rt_predictor = RetentionTime(config=self.params, num_cpu=self.num_cpu)
             rt_predictor.add_rt_predictions(self.data)
 
         # Spectrum file mode
@@ -788,13 +805,35 @@ class MS2PIP:
                     if not self.return_results:
                         corr_filename = self.output_filename + "_correlations.csv"
                         logger.info(f"Writing file {corr_filename}")
-                        correlations.to_csv(corr_filename, index=True)
+                        try:
+                            correlations.to_csv(
+                                corr_filename,
+                                index=True,
+                                lineterminator="\n",
+                            )
+                        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                            correlations.to_csv(
+                                corr_filename,
+                                index=True,
+                                line_terminator="\n",
+                            )
                     else:
                         return correlations
                 if not self.return_results:
                     pae_filename = self.output_filename + "_pred_and_emp.csv"
                     logger.info(f"Writing file {pae_filename}...")
-                    all_preds.to_csv(pae_filename, index=False)
+                    try:
+                        all_preds.to_csv(
+                            pae_filename,
+                            index=False,
+                            lineterminator="\n",
+                        )
+                    except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                        all_preds.to_csv(
+                            pae_filename,
+                            index=False,
+                            line_terminator="\n",
+                        )
                 else:
                     return all_preds
 
@@ -844,8 +883,8 @@ class MS2PIP:
             )
         else:
             data = self.pep_file
-        # for some reason the missing values are converted to float otherwise
-        data = data.fillna("-")
+        # Unmodified peptides should have a '-', not NaN or an empty string
+        data["modifications"] = data["modifications"].replace("", "-").fillna("-")
 
         # Filter PEPREC for unsupported peptides
         num_pep = len(data)
@@ -929,7 +968,10 @@ class MS2PIP:
         if ext == "pkl":
             all_results.to_pickle(self.vector_file + ".pkl")
         elif ext == "csv":
-            all_results.to_csv(self.vector_file)
+            try:
+                all_results.to_csv(self.vector_file, lineterminator="\n")
+            except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                all_results.to_csv(self.vector_file, line_terminator="\n")
         else:
             # "table" is a tag used to read back the .h5
             all_results.to_hdf(self.vector_file, "table")

@@ -125,7 +125,6 @@ def read_mzml(spec_file) -> Generator[Spectrum, None, None]:
         iterative=True,
         use_index=False,
         dtype=np.float32,
-        decode_binary=True,
     ) as mzml_file:
         for spectrum in mzml_file:
             if spectrum["ms level"] == 2:

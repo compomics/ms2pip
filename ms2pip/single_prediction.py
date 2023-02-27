@@ -236,7 +236,7 @@ class SinglePrediction:
         """Validate modification string for MS²PIP."""
         pattern = r"^(?:(?:-1|[0-9]{1,2})\|(?:[^\|\s]+)\|?)*$|^-$"
         if not re.fullmatch(pattern, mod_string):
-            raise InvalidModificationFormattingError
+            raise InvalidModificationFormattingError(mod_string)
 
     @staticmethod
     def _transform(intensity):

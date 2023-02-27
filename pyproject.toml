@@ -12,7 +12,7 @@ build-backend = "setuptools.build_meta"
 python = "^3.7"
 biopython = ">=1.74,<2"
 numpy = ">=1.16,<2"
-pandas = ">=0.24,<2"
+pandas = ">=1,<2"
 pyteomics = ">=3.5,<5"
 tqdm = ">=4,<5"
 tables = ">=3.4"
@@ -26,7 +26,12 @@ spectrum_utils = "^0.3.5"
 click = ">=7,<9"
 lxml = "^4"
 rich = ">=13"
+pydantic = ">=1.10,<2"
 
 [tool.poetry.dev-dependencies]
 cython = "*"
 pytest = "*"
+
+[tool.black]
+line-length = 88
+target-version = ['py37']
