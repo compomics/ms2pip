@@ -516,7 +516,10 @@ class SpectrumOutput:
             "FragmentNumber",
         ]
         spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
-        spectronaut_df.to_csv(file_obj, index=False, header=header, sep=";", lineterminator="\n")
+        try:
+            spectronaut_df.to_csv(file_obj, index=False, header=header, sep=";", lineterminator="\n")
+        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+            spectronaut_df.to_csv(file_obj, index=False, header=header, sep=";", line_terminator="\n")
 
         return file_obj
 
@@ -673,9 +676,8 @@ class SpectrumOutput:
         return file_obj_ssl, file_obj_ms2
 
     def _write_dlib_metadata(self, connection):
-        from sqlalchemy import select
-
         from ms2pip.ms2pip_tools.dlib import DLIB_VERSION, Metadata
+        from sqlalchemy import select
 
         with connection.begin():
             version = connection.execute(
@@ -834,9 +836,14 @@ class SpectrumOutput:
             file_object = open(f_name, self.write_mode)
             logger.info("Writing results to %s", f_name)
 
-        self.all_preds.to_csv(
-            file_object, float_format="%.6g", index=False, lineterminator="\n"
-        )
+        try:
+            self.all_preds.to_csv(
+                file_object, float_format="%.6g", index=False, lineterminator="\n"
+            )
+        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+            self.all_preds.to_csv(
+                file_object, float_format="%.6g", index=False, line_terminator="\n"
+            )
         return file_object
 
     def write_results(self, output_formats: List[str]) -> Dict[str, Any]:

@@ -805,21 +805,35 @@ class MS2PIP:
                     if not self.return_results:
                         corr_filename = self.output_filename + "_correlations.csv"
                         logger.info(f"Writing file {corr_filename}")
-                        correlations.to_csv(
-                            corr_filename,
-                            index=True,
-                            lineterminator="\n",
-                        )
+                        try:
+                            correlations.to_csv(
+                                corr_filename,
+                                index=True,
+                                lineterminator="\n",
+                            )
+                        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                            correlations.to_csv(
+                                corr_filename,
+                                index=True,
+                                line_terminator="\n",
+                            )
                     else:
                         return correlations
                 if not self.return_results:
                     pae_filename = self.output_filename + "_pred_and_emp.csv"
                     logger.info(f"Writing file {pae_filename}...")
-                    all_preds.to_csv(
-                        pae_filename,
-                        index=False,
-                        lineterminator="\n",
-                    )
+                    try:
+                        all_preds.to_csv(
+                            pae_filename,
+                            index=False,
+                            lineterminator="\n",
+                        )
+                    except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                        all_preds.to_csv(
+                            pae_filename,
+                            index=False,
+                            line_terminator="\n",
+                        )
                 else:
                     return all_preds
 
@@ -954,10 +968,10 @@ class MS2PIP:
         if ext == "pkl":
             all_results.to_pickle(self.vector_file + ".pkl")
         elif ext == "csv":
-            all_results.to_csv(
-                self.vector_file,
-                lineterminator="\n",
-            )
+            try:
+                all_results.to_csv(self.vector_file, lineterminator="\n")
+            except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                all_results.to_csv(self.vector_file, line_terminator="\n")
         else:
             # "table" is a tag used to read back the .h5
             all_results.to_hdf(self.vector_file, "table")
