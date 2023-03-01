@@ -6,7 +6,7 @@ from Cython.Distutils import build_ext
 from setuptools import setup
 from setuptools.extension import Extension
 
-VERSION = "3.10.0"
+VERSION = "3.11.0"
 
 NAME = "ms2pip"
 LICENSE = "apache-2.0"
@@ -44,7 +44,7 @@ CLASSIFIERS = [
 INSTALL_REQUIRES = [
     "biopython>=1.74,<2",
     "numpy>=1.16,<2",
-    "pandas>=0.24,<2",
+    "pandas>=1,<2",
     "pyteomics>=3.5,<5",
     "tqdm>=4,<5",
     "tables>=3.4",
@@ -56,6 +56,7 @@ INSTALL_REQUIRES = [
     "spectrum-utils==0.3.5",
     "lxml>=4",
     "rich>=13",
+    "pydantic>=1.10,<2",
 ]
 PYTHON_REQUIRES = ">=3.7,<4"
 

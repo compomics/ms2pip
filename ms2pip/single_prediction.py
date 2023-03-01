@@ -14,7 +14,8 @@ import ms2pip.peptides
 from ms2pip.config_parser import ConfigParser
 from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.ms2pipC import MODELS
-from ms2pip.predict_xgboost import initialize_xgb_models, validate_requested_xgb_model
+from ms2pip.predict_xgboost import (initialize_xgb_models,
+                                    validate_requested_xgb_model)
 
 logger = logging.getLogger("ms2pip")
 
