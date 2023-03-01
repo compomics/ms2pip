@@ -222,7 +222,8 @@ def process_peptides(
     peaks_version = MODELS[model]["peaks_version"]
 
     # Prepare output variables
-    pepid_buf = []
+    psm_id_buf = []
+    spec_id_buf = []
     peplen_buf = []
     charge_buf = []
     mz_buf = []
@@ -238,7 +239,8 @@ def process_peptides(
         transient=True,
         description="",
     ):
-        pepid_buf.append(entry.spec_id)
+        psm_id_buf.append(entry.psm_id)
+        spec_id_buf.append(entry.spec_id)
         peplen_buf.append(len(entry.peptide))
         charge_buf.append(entry.charge)
 
@@ -280,13 +282,14 @@ def process_peptides(
             prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
     return (
-        pepid_buf,
+        spec_id_buf,
         peplen_buf,
         charge_buf,
         mz_buf,
         target_buf,
         prediction_buf,
         vector_buf,
+        psm_id_buf
     )
 
 
@@ -353,8 +356,9 @@ def process_spectra(
     dtargets = dict()
     psmids = []
 
-    # else
-    pepid_buf = []
+    # 
+    psm_id_buf = []
+    spec_id_buf = []
     peplen_buf = []
     charge_buf = []
     mz_buf = []
@@ -362,10 +366,13 @@ def process_spectra(
     prediction_buf = []
     vector_buf = []
 
-    spectrum_id_regex = re.compile(spectrum_id_pattern)
+    try:
+        spectrum_id_regex = re.compile(spectrum_id_pattern)
+    except TypeError:
+        spectrum_id_regex = re.compile(r"(.*)")
 
     # Restructure PeptideRecord entries as spec_id -> [psm_1, psm_2, ...]
-    entries_by_specid = entries_by_specid = defaultdict(list)
+    entries_by_specid = defaultdict(list)
     for entry in data.itertuples():
         entries_by_specid[entry.spec_id].append(entry)
 
@@ -392,7 +399,7 @@ def process_spectra(
         # Remove reporter ions and precursor peak, normalize, transform
         for label_type in ["iTRAQ", "TMT"]:
             if label_type in model:
-                spectrum.remove_reporter_ions("iTRAQ")
+                spectrum.remove_reporter_ions(label_type)
         # spectrum.remove_precursor()
         spectrum.tic_norm()
         spectrum.log2_transform()
@@ -445,7 +452,8 @@ def process_spectra(
 
             else:
                 # Predict the b- and y-ion intensities from the peptide
-                pepid_buf.append(spectrum_id)
+                psm_id_buf.append(entry.psm_id)
+                spec_id_buf.append(spectrum_id)
                 peplen_buf.append(len(entry.peptide))
                 charge_buf.append(entry.charge)
 
@@ -502,13 +510,14 @@ def process_spectra(
 
     # Else, return general data
     return (
-        pepid_buf,
+        spec_id_buf,
         peplen_buf,
         charge_buf,
         mz_buf,
         target_buf,
         prediction_buf,
         vector_buf,
+        psm_id_buf
     )
 
 
@@ -856,7 +865,12 @@ class MS2PIP:
 
         if len(data) == 0:
             raise exceptions.NoValidPeptideSequencesError()
-
+        
+        if not "psm_id" in data.columns:
+            data.reset_index(inplace=True)
+            data["psm_id"] = data["index"].astype(str)
+            data.rename({"index": "psm_id"}, axis=1)            
+        
         self.data = data
 
     def _execute_in_pool(self, titles, func, args):
@@ -932,27 +946,30 @@ class MS2PIP:
         return all_results
 
     def _merge_predictions(self, results):
-        pepid_bufs = []
+        spec_id_bufs = []
         peplen_bufs = []
         charge_bufs = []
         mz_bufs = []
         target_bufs = []
         prediction_bufs = []
         vector_bufs = []
+        psm_id_bufs = []
         for r in results:
             (
-                pepid_buf,
+                spec_id_buf,
                 peplen_buf,
                 charge_buf,
                 mz_buf,
                 target_buf,
                 prediction_buf,
                 vector_buf,
+                psm_id_buf
             ) = r.get()
-            pepid_bufs.extend(pepid_buf)
+            spec_id_bufs.extend(spec_id_buf)
             peplen_bufs.extend(peplen_buf)
             charge_bufs.extend(charge_buf)
             mz_bufs.extend(mz_buf)
+            psm_id_bufs.extend(psm_id_buf)
             if target_buf:
                 target_bufs.extend(target_buf)
             if prediction_buf:
@@ -990,6 +1007,7 @@ class MS2PIP:
         ionnumbers = []
         charges = []
         pepids = []
+        psm_ids = []
         for pi, pl in enumerate(peplen_bufs):
             [
                 ions.extend([ion_type] * (pl - 1))
@@ -997,7 +1015,8 @@ class MS2PIP:
             ]
             ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
             charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
-            pepids.extend([pepid_bufs[pi]] * (num_ion_types * (pl - 1)))
+            pepids.extend([spec_id_bufs[pi]] * (num_ion_types * (pl - 1)))
+            psm_ids.extend([psm_id_bufs[pi]] * (num_ion_types * (pl - 1)))
         all_preds = pd.DataFrame()
         all_preds["spec_id"] = pepids
         all_preds["charge"] = charges
@@ -1012,7 +1031,9 @@ class MS2PIP:
                 self.data[["spec_id", "rt"]], on="spec_id", copy=False
             )
 
-        return all_preds
+        all_preds["psm_id"] = psm_ids
+
+        return all_preds[["psm_id", "spec_id", "charge", "ion", "ionnumber", "mz", "prediction", "target"]]
 
     def _process_peptides(self):
         titles = self.data.spec_id.tolist()
