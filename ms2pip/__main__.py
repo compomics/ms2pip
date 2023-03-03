@@ -3,10 +3,12 @@ import logging
 import multiprocessing
 import sys
 
+import click
 from rich.console import Console
 from rich.logging import RichHandler
 
 from ms2pip.config_parser import ConfigParser
+from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.exceptions import (EmptySpectrumError,
                                FragmentationModelRequiredError,
                                InvalidModificationFormattingError,
@@ -15,7 +17,7 @@ from ms2pip.exceptions import (EmptySpectrumError,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
                                UnknownOutputFormatError)
-from ms2pip.ms2pipC import MODELS, MS2PIP, SUPPORTED_OUT_FORMATS
+from ms2pip.ms2pipC import MS2PIP
 
 
 def print_logo():
@@ -34,85 +36,117 @@ http://compomics.github.io/projects/ms2pip_c.html
     print(logo)
 
 
-def argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pep_file", metavar="<PEPREC file>", help="list of peptides")
-    parser.add_argument(
-        "-c",
-        "--config-file",
-        metavar="CONFIG_FILE",
-        action="store",
-        required=True,
-        dest="config_file",
-        help="Configuration file: text-based (extensions `.txt`, `.config`, or `.ms2pip`) or TOML (extension `.toml`).",
-    )
-    parser.add_argument(
-        "-s",
-        "--spectrum-file",
-        metavar="SPECTRUM_FILE",
-        action="store",
-        dest="spec_file",
-        help="MGF or mzML spectrum file (optional)",
-    )
-    parser.add_argument(
-        "-w",
-        "--vector-file",
-        metavar="FEATURE_VECTOR_OUTPUT",
-        action="store",
-        dest="vector_file",
-        help="write feature vectors to FILE.{pkl,h5} (optional)",
-    )
-    parser.add_argument(
-        "-r",
-        "--retention-time",
-        action="store_true",
-        default=False,
-        dest="add_retention_time",
-        help="add retention time predictions (requires DeepLC python package)",
-    )
-    parser.add_argument(
-        "-x",
-        "--correlations",
-        action="store_true",
-        default=False,
-        dest="correlations",
-        help="calculate correlations (if spectrum file is given)",
-    )
-    parser.add_argument(
-        "-m",
-        "--match-spectra",
-        action="store_true",
-        default=False,
-        dest="match_spectra",
-        help="match peptides to spectra based on predicted spectra (if spectrum file is given)",
-    )
-    parser.add_argument(
-        "-n",
-        "--num-cpu",
-        metavar="NUM_CPU",
-        action="store",
-        dest="num_cpu",
-        type=int,
-        help="number of CPUs to use (default: all available)",
-    )
-    parser.add_argument(
-        "--sqldb-uri",
-        action="store",
-        dest="sqldb_uri",
-        help="use sql database of observed spectra instead of spectrum files",
-    )
-    parser.add_argument(
-        "--model-dir",
-        action="store",
-        dest="model_dir",
-        help="Custom directory for downloaded XGBoost model files, default: `~/.ms2pip`",
-    )
-    args = parser.parse_args()
+@click.group()
+def cli():
+    pass
 
-    if not args.num_cpu:
-        args.num_cpu = multiprocessing.cpu_count()
 
-    return args
+@cli.command()
+@click.argument("peptide-file", required=True)
+@click.option("--output-filename", "-o")
+@click.option("--add-retention-time", "-r", is_flag=True)
+@click.option("--config-file", "-c")
+@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_OUTPUT_FORMATS))
+@click.option("--model", type=click.Choice(MODELS))
+@click.option("--model-dir")
+@click.option("--num-cpu", "-n", type=int)
+def predict(*args, **kwargs):
+    config = ConfigParser(filepath=kwargs["config_file"]).config
+    ms2pip = MS2PIP(
+        params=config,
+        model=kwargs["model"],
+        model_dir=kwargs["model_dir"],
+        output_formats=kwargs["output_format"],
+        num_cpu=kwargs["num_cpu"],
+    )
+    try:
+        ms2pip.predict(
+            peptides=kwargs["peptide_file"],
+            output_filename=kwargs["output_filename"],
+            add_retention_time=kwargs["add_retention_time"],
+        )
+    finally:
+        ms2pip.cleanup()
+
+
+@cli.command()
+@click.argument("peptide-file", required=True)
+@click.argument("spectrum-file", required=True)
+@click.option("--spectrum-id-pattern")
+@click.option("--output-filename", "-o")
+@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_OUTPUT_FORMATS))
+@click.option("--add-retention-time", "-r", is_flag=True)
+@click.option("--compute-correlations", "-x", is_flag=True)
+@click.option("--config-file", "-c")
+@click.option("--model", type=click.Choice(MODELS))
+@click.option("--model-dir")
+@click.option("--num-cpu", "-n", type=int)
+def correlate(*args, **kwargs):
+    config = ConfigParser(filepath=kwargs["config_file"]).config
+    ms2pip = MS2PIP(
+        params=config,
+        model=kwargs["model"],
+        model_dir=kwargs["model_dir"],
+        output_formats=kwargs["output_format"],
+        num_cpu=kwargs["num_cpu"],
+    )
+    try:
+        ms2pip.correlate(
+            peptides=kwargs["peptide_file"],
+            spectrum_file=kwargs["spectrum_file"],
+            spectrum_id_pattern=kwargs["spectrum_id_pattern"],
+            output_filename=kwargs["output_filename"],
+            compute_correlations=kwargs["compute_correlations"],
+            add_retention_time=kwargs["add_retention_time"],
+        )
+    finally:
+        ms2pip.cleanup()
+
+@cli.command()
+@click.argument("peptide-file", required=True)
+@click.argument("spectrum-file", required=True)
+@click.option("--spectrum-id-pattern")
+@click.option("--output-filename", "-o")
+@click.option("--config-file", "-c")
+@click.option("--num-cpu", "-n", type=int)
+def get_features(*args, **kwargs):
+    config = ConfigParser(filepath=kwargs["config_file"]).config
+    ms2pip = MS2PIP(
+        params=config,
+        output_formats=kwargs["output_format"],
+        num_cpu=kwargs["num_cpu"],
+    )
+    try:
+        ms2pip.get_features(
+            peptides=kwargs["peptide_file"],
+            spectrum_file=kwargs["spectrum_file"],
+            spectrum_id_pattern=kwargs["spectrum_id_pattern"],
+            output_filename=kwargs["output_filename"],
+        )
+    finally:
+        ms2pip.cleanup()
+
+@cli.command()
+@click.argument("peptide-file", required=True)
+@click.option("--spectrum-file")
+@click.option("--sqldb-uri")
+@click.option("--config-file", "-c")
+@click.option("--num-cpu", "-n", type=int)
+def match_spectra(*args, **kwargs):
+    config = ConfigParser(filepath=kwargs["config_file"]).config
+    ms2pip = MS2PIP(
+        params=config,
+        output_formats=kwargs["output_format"],
+        num_cpu=kwargs["num_cpu"],
+    )
+    try:
+        ms2pip.get_features(
+            peptides=kwargs["peptide_file"],
+            spectrum_file=kwargs["spectrum_file"],
+            sqldb_uri=kwargs["sqldb_uri"],
+        )
+    finally:
+        ms2pip.cleanup()
 
 
 def main():
@@ -128,26 +162,9 @@ def main():
 
     print_logo()
 
-    args = argument_parser()
-    config_parser = ConfigParser(filepath=args.config_file)
-
     try:
-        ms2pip = MS2PIP(
-            args.pep_file,
-            spec_file=args.spec_file,
-            vector_file=args.vector_file,
-            params=config_parser.config,
-            num_cpu=args.num_cpu,
-            add_retention_time=args.add_retention_time,
-            compute_correlations=args.correlations,
-            match_spectra=args.match_spectra,
-            sqldb_uri=args.sqldb_uri,
-            model_dir=args.model_dir,
-        )
-        try:
-            ms2pip.run()
-        finally:
-            ms2pip.cleanup()
+        cli()
+
     except InvalidPEPRECError:
         logger.critical("PEPREC file should start with header column")
         sys.exit(1)
@@ -165,7 +182,7 @@ def main():
         sys.exit(1)
     except UnknownOutputFormatError as o:
         logger.critical(
-            f"Unknown output format: `{o}` (supported formats: `{SUPPORTED_OUT_FORMATS}`)"
+            f"Unknown output format: `{o}` (supported formats: `{SUPPORTED_OUTPUT_FORMATS}`)"
         )
         sys.exit(1)
     except UnknownFragmentationMethodError as f:
