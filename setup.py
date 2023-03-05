@@ -6,63 +6,6 @@ from Cython.Distutils import build_ext
 from setuptools import setup
 from setuptools.extension import Extension
 
-VERSION = "3.11.0"
-
-NAME = "ms2pip"
-LICENSE = "apache-2.0"
-DESCRIPTION = "MS²PIP: MS² Peak Intensity Prediction"
-AUTHOR = (
-    "Sven Degroeve, Ralf Gabriels, Kevin Velghe, Ana Sílvia C. Silva, Arthur Declercq"
-)
-AUTHOR_EMAIL = "sven.degroeve@vib-ugent.be"
-URL = "https://www.github.com/compomics/ms2pip_c"
-PROJECT_URLS = {
-    "Documentation": "http://compomics.github.io/projects/ms2pip_c",
-    "Source": "https://github.com/compomics/ms2pip_c",
-    "Tracker": "https://github.com/compomics/ms2pip_c/issues",
-    "Web server": "https://iomics.ugent.be/ms2pip/",
-    "Publication": "https://doi.org/10.1093/nar/gkz299/",
-}
-KEYWORDS = [
-    "MS2PIP",
-    "Proteomics",
-    "peptides",
-    "peak intensity prediction",
-    "spectrum",
-    "machine learning",
-    "spectral library",
-    "fasta2speclib",
-]
-CLASSIFIERS = [
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3 :: Only",
-    "Topic :: Scientific/Engineering :: Bio-Informatics",
-    "Development Status :: 5 - Production/Stable",
-]
-INSTALL_REQUIRES = [
-    "biopython>=1.74,<2",
-    "numpy>=1.16,<2",
-    "pandas>=1,<2",
-    "pyteomics>=3.5,<5",
-    "tqdm>=4,<5",
-    "tables>=3.4",
-    "tomlkit>=0.5,<1",
-    "sqlalchemy>=1.3,<2",
-    "click>=7,<9",
-    "xgboost>=1.3,<2",
-    "matplotlib>=3.0",
-    "spectrum-utils==0.3.5",
-    "lxml>=4",
-    "rich>=13",
-    "pydantic>=1.10,<2",
-]
-PYTHON_REQUIRES = ">=3.7,<4"
-
-with open("README.md", "r") as fh:
-    LONG_DESCRIPTION = fh.read()
-
 to_remove = [
     "ms2pip/cython_modules/ms2pip_pyx.c*",
     "ms2pip/cython_modules/ms2pip_pyx.so",
@@ -99,29 +42,6 @@ extensions = [
 ]
 
 setup(
-    name=NAME,
-    version=VERSION,
-    license=LICENSE,
-    description=DESCRIPTION,
-    long_description=LONG_DESCRIPTION,
-    long_description_content_type="text/markdown",
-    author=AUTHOR,
-    author_email=AUTHOR_EMAIL,
-    url=URL,
-    project_urls=PROJECT_URLS,
-    keywords=KEYWORDS,
-    classifiers=CLASSIFIERS,
-    packages=["ms2pip", "ms2pip.ms2pip_tools", "fasta2speclib"],
-    include_package_data=True,
-    entry_points={
-        "console_scripts": [
-            "ms2pip=ms2pip.__main__:main",
-            "fasta2speclib=fasta2speclib.fasta2speclib:main",
-            "ms2pip-single-prediction=ms2pip.single_prediction:_main",
-        ],
-    },
-    install_requires=INSTALL_REQUIRES,
-    python_requires=PYTHON_REQUIRES,
     ext_modules=extensions,
     include_dirs=[numpy.get_include()],
     cmdclass={"build_ext": build_ext},

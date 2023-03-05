@@ -1,37 +1,90 @@
-[tool.poetry]
+[project]
 name = "ms2pip"
-version = "3.11.0"
-description = "MS²PIP: MS² Peak Intensity Prediction"
-authors = ["Sven Degroeve", "Ralf Gabriels", "Kevin Velghe", "Ana Sílvia C. Silva", "Arthur Declercq"]
+version = "4.0.0-dev0"
+description = "MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = [
+    "MS2PIP",
+    "proteomics",
+    "peptide fragmentation",
+    "peak intensity prediction",
+    "spectrum prediction",
+    "machine learning",
+    "spectral library",
+    "fasta2speclib",
+]
+authors = [
+    {name = "Ralf Gabriels", email = "ralf@gabriels.dev"},
+    {name = "Sven Degroeve", email = "sven.degroeve@ugent.be"},
+    {name = "Arthur Declercq", email = "arthur.declercq@ugent.be"},
+    {name = "Kevin Velghe", email = "kevin.velghe@ugent.be"},
+    {name = "Ana Sílvia C. Silva"},
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Development Status :: 5 - Production/Stable",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "numpy>=1.16,<2",
+    "pandas>=1,<2",
+    "pyteomics>=3.5,<5",
+    "tables>=3.4",
+    "tomlkit>=0.5,<1",
+    "sqlalchemy>=1.3,<2",
+    "click>=7,<9",
+    "xgboost>=1.3,<2",
+    "matplotlib>=3.0",
+    "spectrum-utils==0.3.5",
+    "lxml>=4",
+    "rich>=13",
+    "pydantic>=1.10,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort>5",
+    "pytest",
+]
+doc = [
+    "sphinx",
+    "numpydoc>=1,<2",
+    "recommonmark",
+    "sphinx-mdinclude",
+    "toml",
+    "semver>=2",
+    "sphinx_rtd_theme",
+    "sphinx-autobuild",
+]
+
+[project.urls]
+documentation = "http://compomics.github.io/projects/ms2pip_c"
+source = "https://github.com/compomics/ms2pip_c"
+tracker = "https://github.com/compomics/ms2pip_c/issues"
+webserver = "https://iomics.ugent.be/ms2pip/"
+publication = "https://doi.org/10.1093/nar/gkz299/"
+
+[project.scripts]
+ms2pip = "ms2pip.__main__:main"
 
 [build-system]
 requires = ["setuptools", "cython", "oldest-supported-numpy"]
 build-backend = "setuptools.build_meta"
 
-[tool.poetry.dependencies]
-python = "^3.7"
-biopython = ">=1.74,<2"
-numpy = ">=1.16,<2"
-pandas = ">=1,<2"
-pyteomics = ">=3.5,<5"
-tqdm = ">=4,<5"
-tables = ">=3.4"
-tomlkit = ">=0.5.11,<1"
-sqlalchemy = "^1.3.13"
-psycopg2 = "^2.8.4"
-deeplc = "^0.1.14"
-xgboost = "^1.3"
-matplotlib = "^3.0"
-spectrum_utils = "^0.3.5"
-click = ">=7,<9"
-lxml = "^4"
-rich = ">=13"
-pydantic = ">=1.10,<2"
-
-[tool.poetry.dev-dependencies]
-cython = "*"
-pytest = "*"
+[tool.setuptools.packages]
+find = {}
 
 [tool.black]
 line-length = 88
 target-version = ['py37']
+
+[tool.isort]
+profile = "black"
