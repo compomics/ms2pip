@@ -64,7 +64,8 @@ def process_peptides(
 
     Returns
     -------
-    pepid_buf: list
+    psm_id_buf: list
+    spec_id_buf: list
     peplen_buf: list
     charge_buf: list
     mz_buf: list
@@ -139,6 +140,7 @@ def process_peptides(
             prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
 
     return (
+        psm_id_buf,
         spec_id_buf,
         peplen_buf,
         charge_buf,
@@ -146,7 +148,6 @@ def process_peptides(
         target_buf,
         prediction_buf,
         vector_buf,
-        psm_id_buf
     )
 
 
@@ -194,7 +195,8 @@ def process_spectra(
 
     Returns
     -------
-    pepid_buf: list
+    psm_id_buf: list
+    spec_id_buf: list
     peplen_buf: list
     charge_buf: list
     mz_buf: list
@@ -367,6 +369,7 @@ def process_spectra(
 
     # Else, return general data
     return (
+        psm_id_buf,
         spec_id_buf,
         peplen_buf,
         charge_buf,
@@ -374,7 +377,6 @@ def process_spectra(
         target_buf,
         prediction_buf,
         vector_buf,
-        psm_id_buf
     )
 
 
@@ -448,13 +450,19 @@ class MS2PIP:
             }
 
         # Validate parameters
-        if "model" in self.params["ms2pip"]:
+        if model:
+            self.model = model
+        elif "model" in self.params["ms2pip"]:
             self.model = self.params["ms2pip"]["model"]
         elif "frag_method" in self.params["ms2pip"]:
             self.model = self.params["ms2pip"]["frag_method"]
         else:
             raise exceptions.FragmentationModelRequiredError()
         self.fragerror = self.params["ms2pip"]["frag_error"]
+        if output_formats:
+            self.output_formats = self._validate_output_formats(output_formats)
+        else:
+            self.output_format = self._validate_output_formats(self.params["ms2pip"]["out"])
 
         # Validate model_dir
         if not self.model_dir:
