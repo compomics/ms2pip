@@ -54,7 +54,7 @@ dev = [
     "isort>5",
     "pytest",
 ]
-doc = [
+docs = [
     "sphinx",
     "numpydoc>=1,<2",
     "recommonmark",
@@ -63,6 +63,7 @@ doc = [
     "semver>=2",
     "sphinx_rtd_theme",
     "sphinx-autobuild",
+    "sphinx-automodapi",
 ]
 
 [project.urls]
@@ -74,6 +75,7 @@ publication = "https://doi.org/10.1093/nar/gkz299/"
 
 [project.scripts]
 ms2pip = "ms2pip.__main__:main"
+ms2pip-single-prediction = "ms2pip._utils.single_prediction:_main"
 
 [build-system]
 requires = ["setuptools", "cython", "oldest-supported-numpy"]
@@ -83,7 +85,7 @@ build-backend = "setuptools.build_meta"
 find = {}
 
 [tool.black]
-line-length = 88
+line-length = 99
 target-version = ['py37']
 
 [tool.isort]

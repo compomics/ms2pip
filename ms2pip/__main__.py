@@ -1,13 +1,10 @@
-import argparse
 import logging
-import multiprocessing
 import sys
 
 import click
 from rich.console import Console
 from rich.logging import RichHandler
 
-from ms2pip.config_parser import ConfigParser
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.exceptions import (EmptySpectrumError,
                                FragmentationModelRequiredError,
@@ -17,7 +14,7 @@ from ms2pip.exceptions import (EmptySpectrumError,
                                UnknownFragmentationMethodError,
                                UnknownModificationError,
                                UnknownOutputFormatError)
-from ms2pip.ms2pipC import MS2PIP
+from ms2pip.core import MS2PIP
 
 
 def print_logo():
@@ -27,9 +24,7 @@ def print_logo():
 | |\/| \__ \/__|  _/| ||  _/
 |_|  |_|___/   |_| |___|_|
 
-by CompOmics
-sven.degroeve@ugent.be
-ralf.gabriels@ugent.be
+by CompOmics, VIB / Ghent University, Belgium
 
 http://compomics.github.io/projects/ms2pip_c.html
     """
@@ -57,7 +52,7 @@ def predict(*args, **kwargs):
         model=kwargs["model"],
         model_dir=kwargs["model_dir"],
         output_formats=kwargs["output_format"],
-        num_cpu=kwargs["num_cpu"],
+        processes=kwargs["processes"],
     )
     try:
         ms2pip.predict(
@@ -88,7 +83,7 @@ def correlate(*args, **kwargs):
         model=kwargs["model"],
         model_dir=kwargs["model_dir"],
         output_formats=kwargs["output_format"],
-        num_cpu=kwargs["num_cpu"],
+        processes=kwargs["processes"],
     )
     try:
         ms2pip.correlate(
@@ -114,7 +109,7 @@ def get_features(*args, **kwargs):
     ms2pip = MS2PIP(
         params=config,
         output_formats=kwargs["output_format"],
-        num_cpu=kwargs["num_cpu"],
+        processes=kwargs["processes"],
     )
     try:
         ms2pip.get_features(
@@ -137,7 +132,7 @@ def match_spectra(*args, **kwargs):
     ms2pip = MS2PIP(
         params=config,
         output_formats=kwargs["output_format"],
-        num_cpu=kwargs["num_cpu"],
+        processes=kwargs["processes"],
     )
     try:
         ms2pip.get_features(

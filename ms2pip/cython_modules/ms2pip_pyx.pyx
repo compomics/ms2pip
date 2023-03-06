@@ -16,9 +16,6 @@ cdef extern from "ms2pip_peaks_c.c":
 	void init_ms2pip(char* amino_masses_fname, char* modifications_fname, char* modifications_fname_sptm)
 
 	unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
-	unsigned int* get_v_ms2pip_ce(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int ce)
-	unsigned int* get_v_ms2pip_old(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
-	unsigned int* get_v_ms2pip_catboost(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge)
 
 	float* get_p_ms2pip(int peplen, unsigned short* peptide, unsigned short* modpeptide, int charge, int model_id, int ce)
 
@@ -47,44 +44,6 @@ def get_vector(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
 			   charge):
 
 	cdef unsigned int* results = get_v_ms2pip(len(peptide)-2, &peptide[0], &modpeptide[0], charge)
-
-	r = []
-	offset = 0
-	fnum = int(results[0] / (len(peptide) - 3))
-	for i in range(len(peptide) - 3):
-		v = []
-		for j in range(fnum):
-			v.append(results[j + 1 + offset])
-		offset += fnum
-		r.append(np.array(v, dtype=np.uint16))
-
-	return r
-
-
-def get_vector_ce(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
-			   np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
-			   charge, ce):
-
-	cdef unsigned int* results = get_v_ms2pip_ce(len(peptide)-2, &peptide[0], &modpeptide[0], charge, ce)
-
-	r = []
-	offset = 0
-	fnum = int(results[0] / (len(peptide) - 3))
-	for i in range(len(peptide) - 3):
-		v = []
-		for j in range(fnum):
-			v.append(results[j + 1 + offset])
-		offset += fnum
-		r.append(np.array(v, dtype=np.uint16))
-
-	return r
-
-
-def get_vector_catboost(np.ndarray[unsigned short, ndim=1, mode="c"] peptide,
-						np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
-						charge):
-
-	cdef unsigned int* results = get_v_ms2pip_catboost(len(peptide)-2, &peptide[0], &modpeptide[0], charge)
 
 	r = []
 	offset = 0
@@ -138,9 +97,8 @@ def get_targets_all(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
 	result_mzs = []
 	for i in range(NUM_ION_TYPES_MAPPING[peaks_version]*(len(modpeptide)-3)):
 		result_mzs.append(results.msms[i])
-	#print(result_parsed)
-	#print()
 	return (result_mzs,result_peaks)
+
 
 def get_targets_general(np.ndarray[unsigned short, ndim=1, mode="c"] modpeptide,
 						np.ndarray[float, ndim=1, mode="c"] msms,

@@ -21,7 +21,7 @@ MODELS = {
             "model_20190107_CID_train_B.xgboost": "4398c6ebe23e2f37c0aca42b095053ecea6fb427",
             "model_20190107_CID_train_Y.xgboost": "e0a9eb37e50da35a949d75807d66fb57e44aca0f",
         },
-    },
+},
     "HCD2019": {
         "id": 1,
         "ion_types": ["B", "Y"],

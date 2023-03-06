@@ -3,13 +3,10 @@
 #include <string.h>
 
 #include "ms2pip_init_c.c"
-#include "ms2pip_features_c_general.c"
-#include "ms2pip_features_c_ce.c"
-#include "ms2pip_features_c_old.c"
-#include "ms2pip_features_c_catboost.c"
+#include "ms2pip_features_c.c"
 
-#include "../models/HCD-2019.h"
-#include "../models/TMT.h"
+#include "../models_c/HCD-2019.h"
+#include "../models_c/TMT.h"
 
 float membuffer[10000];
 float ions[2000];
