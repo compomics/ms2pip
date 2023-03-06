@@ -43,6 +43,7 @@ class MS2PIP:
         model_dir: Optional[Union[str, Path]] = None,
         output_formats: Optional[List[str]] = None,
         processes: Optional[int] = None,
+        return_results: bool = False,
     ):
         """
         MS²PIP peak intensity predictor.
@@ -61,6 +62,8 @@ class MS2PIP:
             List of output formats to use. Overrides configuration file.
         processes : int, optional
             Number of parallel processes for multiprocessing steps. By default, all available.
+        return_results : bool, optional
+            Return results as a df instead of writing to file.
 
         """
         self.params = params
@@ -95,10 +98,16 @@ class MS2PIP:
         else:
             raise exceptions.FragmentationModelRequiredError()
         self.fragerror = self.params["ms2pip"]["frag_error"]
-        if output_formats:
-            self.output_formats = self._validate_output_formats(output_formats)
+
+        self.return_results = return_results
+        if self.return_results:
+            self.output_formats = []
+
         else:
-            self.output_format = self._validate_output_formats(self.params["ms2pip"]["out"])
+            if output_formats:
+                self.output_formats = self._validate_output_formats(output_formats)
+            else:
+                self.output_format = self._validate_output_formats(self.params["ms2pip"]["out"].split(","))
 
         # Validate model_dir
         if not self.model_dir:
@@ -144,7 +153,6 @@ class MS2PIP:
         peptides: Union[str, Path, pd.DataFrame],
         output_filename: Optional[str] = None,
         add_retention_time: bool = False,
-        return_results: bool = False,
     ) -> Optional[pd.DataFrame]:
         """
         Predict peptide fragment ion intensities.
@@ -169,7 +177,7 @@ class MS2PIP:
         """
         self._setup_modification_files()
         peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(output_filename, peptides, return_results)
+        output_filename = self._get_output_filename(output_filename, peptides, self.return_results)
 
         if add_retention_time:
             logger.info("Adding retention time predictions")
@@ -180,9 +188,9 @@ class MS2PIP:
         results = self._process_peptides(peptides)
 
         logger.debug("Merging results ...")
-        predictions = self._merge_predictions(results)
+        predictions = self._merge_predictions(peptides, results)
 
-        if not return_results:
+        if not self.return_results:
             self._write_predictions(predictions)
         else:
             return predictions
@@ -199,7 +207,6 @@ class MS2PIP:
         output_filename: Optional[str] = None,
         compute_correlations: bool = False,
         add_retention_time: bool = False,
-        return_results: bool = False,
     ) -> Optional[Tuple[pd.DataFrame, Optional[pd.DataFrame]]]:
         """
         Compare predicted and observed intensities and optionally compute correlations.
@@ -234,7 +241,7 @@ class MS2PIP:
         """
         self._setup_modification_files()
         peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(output_filename, peptides, return_results)
+        output_filename = self._get_output_filename(output_filename, peptides, self.return_results)
         spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
         if add_retention_time:
@@ -246,7 +253,7 @@ class MS2PIP:
         results = self._process_spectra(peptides, spectrum_file, spectrum_id_pattern)
 
         logger.debug("Merging results")
-        pred_and_emp = self._merge_predictions(results)
+        pred_and_emp = self._merge_predictions(peptides, results)
 
         # Correlations also requested
         if compute_correlations:
@@ -259,7 +266,7 @@ class MS2PIP:
         else:
             correlations = None
 
-        if not return_results:
+        if not self.return_results:
             # Write output to files
             pred_and_emp_filename = self.output_filename + "_pred_and_emp.csv"
             logger.info(f"Writing file {pred_and_emp_filename}...")
@@ -283,7 +290,6 @@ class MS2PIP:
         spectrum_file: Union[str, Path],
         spectrum_id_pattern: Optional[str] = None,
         output_filename: Optional[str] = None,
-        return_results: bool = False,
     ):
         """
         Extract feature vectors and target intensities from spectra.
@@ -312,7 +318,7 @@ class MS2PIP:
         """
         self._setup_modification_files()
         peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(output_filename, peptides, return_results)
+        output_filename = self._get_output_filename(output_filename, peptides, self.return_results)
         spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
         if self.add_retention_time:
@@ -326,7 +332,7 @@ class MS2PIP:
             peptides, spectrum_file, spectrum_id_pattern, vector_file=vector_filename
         )
         vectors = self._write_vector_file(results)
-        if return_results:
+        if self.return_results:
             return vectors
 
     def match_spectra(
@@ -355,7 +361,7 @@ class MS2PIP:
         self._setup_modification_files()
         peptides = self._read_peptide_information(peptides)
         output_filename = self._get_output_filename(
-            output_filename, peptides, return_results=False
+            output_filename, peptides, return_results=self.return_results
         )
 
         # Set spec_files based on spec_file or sqldb_uri
@@ -388,23 +394,16 @@ class MS2PIP:
         self.modfile = self.mods.write_modifications_file(mod_type="ptm")
         self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
 
-    def _validate_output_formats(
-        self, output_formats: List[str], return_results: bool
-    ) -> List[str]:
+    def _validate_output_formats(self, output_formats: List[str]) -> List[str]:
         """Validate requested output formats."""
-        if "out" in self.params["ms2pip"]:
-            output_formats = [
-                out_f.lower().strip() for out_f in self.params["ms2pip"]["out"].split(",")
-            ]
+        if not output_formats:
+            self.output_formats = ["csv"]
+        else:
             for output_format in output_formats:
                 if output_format not in SUPPORTED_OUTPUT_FORMATS:
                     raise exceptions.UnknownOutputFormatError(output_format)
-        else:
-            if not return_results:
-                logger.info("No output format specified; defaulting to CSV.")
-                self.output_formats = ["csv"]
-            else:
-                self.output_formats = []
+            self.output_formats = output_formats
+
 
     def _get_output_filename(
         self,
@@ -471,9 +470,10 @@ class MS2PIP:
             raise exceptions.NoValidPeptideSequencesError()
 
         if not "psm_id" in data.columns:
+            logger.debug("Adding psm_id column to peptide file")
             data.reset_index(inplace=True)
             data["psm_id"] = data["index"].astype(str)
-            data.rename({"index": "psm_id"}, axis=1)
+            data.rename({"index": "psm_id"}, axis=1, inplace=True)
 
         return data
 
@@ -579,6 +579,7 @@ class MS2PIP:
     def _merge_predictions(
         self, peptides: pd.DataFrame, results: multiprocessing.pool.AsyncResult
     ):
+        psm_id_bufs = []
         spec_id_bufs = []
         peplen_bufs = []
         charge_bufs = []
@@ -588,6 +589,7 @@ class MS2PIP:
         vector_bufs = []
         for r in results:
             (
+                psm_id_buf,
                 spec_id_buf,
                 peplen_buf,
                 charge_buf,
@@ -595,13 +597,12 @@ class MS2PIP:
                 target_buf,
                 prediction_buf,
                 vector_buf,
-                psm_id_buf,
             ) = r.get()
+            psm_id_bufs.extend(psm_id_buf)
             spec_id_bufs.extend(spec_id_buf)
             peplen_bufs.extend(peplen_buf)
             charge_bufs.extend(charge_buf)
             mz_bufs.extend(mz_buf)
-            psm_id_bufs.extend(psm_id_buf)
             if target_buf:
                 target_bufs.extend(target_buf)
             if prediction_buf:
@@ -647,6 +648,7 @@ class MS2PIP:
             pepids.extend([spec_id_bufs[pi]] * (num_ion_types * (pl - 1)))
             psm_ids.extend([psm_id_bufs[pi]] * (num_ion_types * (pl - 1)))
         all_preds = pd.DataFrame()
+        all_preds["psm_id"] = psm_ids
         all_preds["spec_id"] = pepids
         all_preds["charge"] = charges
         all_preds["ion"] = ions
@@ -655,14 +657,13 @@ class MS2PIP:
         all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
         if target_bufs:
             all_preds["target"] = np.concatenate(target_bufs, axis=None)
-        if "rt" in peptides.columns():
-            all_preds = all_preds.merge(peptides[["spec_id", "rt"]], on="spec_id", copy=False)
 
-        all_preds["psm_id"] = psm_ids
+        if "rt" in peptides.columns:
+            all_preds = all_preds.merge(
+                peptides[["psm_id", "rt"]], on="psm_id", copy=False
+            )
 
-        return all_preds[
-            ["psm_id", "spec_id", "charge", "ion", "ionnumber", "mz", "prediction", "target"]
-        ]
+        return all_preds
 
     def _write_predictions(
         self, all_preds: pd.DataFrame, peptides: pd.DataFrame, output_filename: str
