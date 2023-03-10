@@ -11,10 +11,7 @@ import spectrum_utils.spectrum as sus
 import xgboost as xgb
 
 from ms2pip._utils import peptides
-from ms2pip._utils.xgb_models import (
-    get_predictions_xgb,
-    validate_requested_xgb_model,
-)
+from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.core import MODELS
 from ms2pip.cython_modules import ms2pip_pyx
 

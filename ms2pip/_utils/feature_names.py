@@ -1,5 +1,6 @@
 from peptides import AMINO_ACIDS
 
+
 def get_feature_names():
     num_props = 4
     names = ["peplen", "charge"]

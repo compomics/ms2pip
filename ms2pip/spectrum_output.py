@@ -71,23 +71,6 @@ class SpectrumOutput:
         Set to true if predicted intensities in `all_preds` are in log-space. In that
         case, intensities will first be transformed to "normal"-space.
 
-    Methods
-    -------
-    write_msp()
-        Write predictions to MSP file
-    write_mgf()
-        Write predictions to MGF file
-    write_bibliospec()
-        Write predictions to Bibliospec SSL/MS2 files (also for Skyline)
-    write_spectronaut()
-        Write predictions to Spectronaut CSV file
-    write_dlib()
-        Write predictions to a DLIB SQLite file
-    write_csv()
-        Write predictions to CSV file
-    write_results(output_formats)
-        Write MS2PIP predictions in output formats defined by output_formats.
-
     Example
     -------
     >>> so = ms2pip.spectrum_tools.spectrum_output.SpectrumOutput(
@@ -178,9 +161,9 @@ class SpectrumOutput:
         Normalize spectra
         """
         if self.is_log_space:
-            self.all_preds["prediction"] = (
-                (2 ** self.all_preds["prediction"]) - 0.001
-            ).clip(lower=0)
+            self.all_preds["prediction"] = ((2 ** self.all_preds["prediction"]) - 0.001).clip(
+                lower=0
+            )
             self.is_log_space = False
 
         if method == "basepeak_10000":
@@ -309,9 +292,7 @@ class SpectrumOutput:
         pep = list(sequence)
         mapping = self.diff_modification_mapping[precision]
 
-        for loc, name in zip(
-            modifications.split("|")[::2], modifications.split("|")[1::2]
-        ):
+        for loc, name in zip(modifications.split("|")[::2], modifications.split("|")[1::2]):
             # C-term mod
             if loc == "-1":
                 pep[-1] = pep[-1] + "[{}]".format(mapping[name])
@@ -322,6 +303,17 @@ class SpectrumOutput:
             else:
                 pep[int(loc) - 1] = pep[int(loc) - 1] + "[{}]".format(mapping[name])
         return "".join(pep)
+
+    def write_results(self, output_formats: List[str]) -> Dict[str, Any]:
+        """
+        Write MS2PIP predictions in output formats defined by output_formats.
+        """
+        results = {}
+        for output_format in output_formats:
+            output_format = output_format.lower()
+            writer = self.OUTPUT_FORMATS[output_format]
+            results[output_format] = writer(self)
+        return results
 
     @output_format("msp")
     @writer(
@@ -342,10 +334,7 @@ class SpectrumOutput:
             prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
             msp_modifications = self._get_msp_modifications(seq, mods)
             num_peaks = sum(
-                [
-                    len(peaklist)
-                    for _, peaklist in self.preds_dict[spec_id]["peaks"].items()
-                ]
+                [len(peaklist) for _, peaklist in self.preds_dict[spec_id]["peaks"].items()]
             )
 
             comment_line = f" Mods={msp_modifications} Parent={prec_mz}"
@@ -443,9 +432,7 @@ class SpectrumOutput:
 
         # ModifiedPeptide and PrecursorMz columns
         spectronaut_peprec["ModifiedPeptide"] = spectronaut_peprec.apply(
-            lambda row: self._get_diff_modified_sequence(
-                row["peptide"], row["modifications"]
-            ),
+            lambda row: self._get_diff_modified_sequence(row["peptide"], row["modifications"]),
             axis=1,
         )
         spectronaut_peprec["PrecursorMz"] = spectronaut_peprec.apply(
@@ -454,9 +441,7 @@ class SpectrumOutput:
             )[1],
             axis=1,
         )
-        spectronaut_peprec["ModifiedPeptide"] = (
-            "_" + spectronaut_peprec["ModifiedPeptide"] + "_"
-        )
+        spectronaut_peprec["ModifiedPeptide"] = "_" + spectronaut_peprec["ModifiedPeptide"] + "_"
 
         # Additional columns
         spectronaut_peprec["FragmentLossType"] = "noloss"
@@ -517,16 +502,18 @@ class SpectrumOutput:
         ]
         spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
         try:
-            spectronaut_df.to_csv(file_obj, index=False, header=header, sep=";", lineterminator="\n")
+            spectronaut_df.to_csv(
+                file_obj, index=False, header=header, sep=";", lineterminator="\n"
+            )
         except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-            spectronaut_df.to_csv(file_obj, index=False, header=header, sep=";", line_terminator="\n")
+            spectronaut_df.to_csv(
+                file_obj, index=False, header=header, sep=";", line_terminator="\n"
+            )
 
         return file_obj
 
     def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
-        """
-        Construct Bibliospec SSL/MS2 strings and write to file_objects.
-        """
+        """Construct Bibliospec SSL/MS2 strings and write to file_objects."""
 
         for i, spec_id in enumerate(sorted(self.preds_dict.keys())):
             scannr = i + start_scannr
@@ -551,9 +538,7 @@ class SpectrumOutput:
 
             # TODO: implement csv instead of manual writing
             file_obj_ssl.write(
-                "\t".join(
-                    [ms2_filename, str(scannr), str(charge), mod_seq, "", "", str(rt)]
-                )
+                "\t".join([ms2_filename, str(scannr), str(charge), mod_seq, "", "", str(rt)])
                 + "\n"
             )
             file_obj_ms2.write(
@@ -615,11 +600,7 @@ class SpectrumOutput:
 
     @output_format("bibliospec")
     def write_bibliospec(self):
-        """
-        Write MS2PIP predictions to BiblioSpec SSL and MS2 spectral library files
-        (For example for use in Skyline).
-        """
-
+        """Write MS2PIP predictions to BiblioSpec/Skyline SSL and MS2 spectral library files."""
         precision = 1
         if precision not in self.diff_modification_mapping:
             self._generate_diff_modification_mapping(precision)
@@ -637,12 +618,8 @@ class SpectrumOutput:
             file_obj_ssl = StringIO()
             file_obj_ms2 = StringIO()
         else:
-            file_obj_ssl = open(
-                "{}_predictions.ssl".format(self.output_filename), self.write_mode
-            )
-            file_obj_ms2 = open(
-                "{}_predictions.ms2".format(self.output_filename), self.write_mode
-            )
+            file_obj_ssl = open("{}_predictions.ssl".format(self.output_filename), self.write_mode)
+            file_obj_ms2 = open("{}_predictions.ms2".format(self.output_filename), self.write_mode)
 
         # If a new file is written, write headers
         if "w" in self.write_mode:
@@ -659,9 +636,7 @@ class SpectrumOutput:
             ]
             file_obj_ssl.write("\t".join(ssl_header))
             file_obj_ms2.write(
-                "H\tCreationDate\t{}\n".format(
-                    strftime("%Y-%m-%d %H:%M:%S", localtime())
-                )
+                "H\tCreationDate\t{}\n".format(strftime("%Y-%m-%d %H:%M:%S", localtime()))
             )
             file_obj_ms2.write("H\tExtractor\tMS2PIP predictions\n")
         else:
@@ -669,9 +644,7 @@ class SpectrumOutput:
             # because Bibliospec speclib scan numbers can only be integers
             start_scannr = self._get_last_ssl_scannr() + 1
 
-        self._write_bibliospec_core(
-            file_obj_ssl, file_obj_ms2, start_scannr=start_scannr
-        )
+        self._write_bibliospec_core(file_obj_ssl, file_obj_ms2, start_scannr=start_scannr)
 
         return file_obj_ssl, file_obj_ms2
 
@@ -704,14 +677,10 @@ class SpectrumOutput:
                 charge = peprec["charge"]
 
                 prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-                mod_seq = self._get_diff_modified_sequence(
-                    seq, mods, precision=precision
-                )
+                mod_seq = self._get_diff_modified_sequence(seq, mods, precision=precision)
 
                 all_peaks = sorted(
-                    itertools.chain.from_iterable(
-                        self.preds_dict[spec_id]["peaks"].values()
-                    ),
+                    itertools.chain.from_iterable(self.preds_dict[spec_id]["peaks"].values()),
                     key=itemgetter(1),
                 )
                 mzs = [peak[1] for peak in all_peaks]
@@ -754,9 +723,7 @@ class SpectrumOutput:
             sql_peptide_to_proteins = set()
             proteins = {protein for _, protein in peptide_to_proteins}
             for peptide_to_protein in connection.execute(
-                PeptideToProtein.select().where(
-                    PeptideToProtein.c.ProteinAccession.in_(proteins)
-                )
+                PeptideToProtein.select().where(PeptideToProtein.c.ProteinAccession.in_(proteins))
             ):
                 sql_peptide_to_proteins.add(
                     (
@@ -775,9 +742,7 @@ class SpectrumOutput:
 
     @output_format("dlib")
     def write_dlib(self):
-        """
-        Write MS2PIP predictions to a DLIB SQLite file.
-        """
+        """Write MS2PIP predictions to a DLIB SQLite file."""
         from ms2pip._utils.dlib import metadata, open_sqlite
 
         normalization = "basepeak_10000"
@@ -800,9 +765,7 @@ class SpectrumOutput:
             os.remove(filename)
 
         if self.return_stringbuffer:
-            raise NotImplementedError(
-                "`return_stringbuffer` not implemented for DLIB output."
-            )
+            raise NotImplementedError("`return_stringbuffer` not implemented for DLIB output.")
 
         if not self.has_rt:
             raise NotImplementedError("Retention times required to write DLIB file.")
@@ -814,17 +777,13 @@ class SpectrumOutput:
             self._write_dlib_peptide_to_protein(connection, peptide_to_proteins)
 
     def get_normalized_predictions(self, normalization_method="tic"):
-        """
-        Return normalized copy of predictions.
-        """
+        """Return normalized copy of predictions."""
         self._normalize_spectra(method=normalization_method)
         return self.all_preds.copy()
 
     @output_format("csv")
     def write_csv(self):
-        """
-        Write MS2PIP predictions to CSV.
-        """
+        """Write MS2PIP predictions to CSV."""
 
         self._normalize_spectra(method="tic")
 
@@ -846,14 +805,3 @@ class SpectrumOutput:
                 file_object, float_format="%.6g", index=False, line_terminator="\n"
             )
         return file_object
-
-    def write_results(self, output_formats: List[str]) -> Dict[str, Any]:
-        """
-        Write MS2PIP predictions in output formats defined by output_formats.
-        """
-        results = {}
-        for output_format in output_formats:
-            output_format = output_format.lower()
-            writer = self.OUTPUT_FORMATS[output_format]
-            results[output_format] = writer(self)
-        return results

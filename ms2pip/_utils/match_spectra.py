@@ -79,7 +79,7 @@ class MatchSpectra:
         """
         Match predicted spectra to spectra in given MGF files.
 
-        Paramters:
+        Parameters:
         ----------
         mgf_files: list[str]
             List of filenames of MGF files

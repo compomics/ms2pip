@@ -4,10 +4,18 @@ import zlib
 
 import numpy
 import sqlalchemy
-from sqlalchemy import (Boolean, Column, Float, Index, Integer, MetaData,
-                        String, Table, TypeDecorator)
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Float,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    TypeDecorator,
+)
 from sqlalchemy.dialects.sqlite import BLOB
-
 
 DLIB_VERSION = "0.1.14"
 

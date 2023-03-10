@@ -1,6 +1,5 @@
 import sqlalchemy
-from sqlalchemy import (MetaData, Table, Column, Integer, String, Float,
-                        ForeignKey)
+from sqlalchemy import Column, Float, ForeignKey, Integer, MetaData, String, Table
 from sqlalchemy.types import ARRAY
 
 

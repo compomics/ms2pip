@@ -61,7 +61,10 @@ PROTON_MASS = 1.007825032070059
 class Modifications:
     def __init__(self):
         """MS²PIP modification configuration handling."""
-        self.modifications = {}
+        self.modifications = {
+            "ptm": {},
+            "sptm": {},
+        }
         self._mass_shifts = None
         self._ptm_ids = None
         self._next_mod_id = 38  # Omega compatibility (mutations)
@@ -123,18 +126,14 @@ class Modifications:
     def mass_shifts(self):
         """Return modification name -> mass shift mapping."""
         if not self._mass_shifts:
-            self._mass_shifts = {
-                name: mod["mass_shift"] for name, mod in self._all_modifications
-            }
+            self._mass_shifts = {name: mod["mass_shift"] for name, mod in self._all_modifications}
         return self._mass_shifts
 
     @property
     def ptm_ids(self):
         """Return modification name -> modification id mapping."""
         if not self._ptm_ids:
-            self._ptm_ids = {
-                name: mod["mod_id"] for name, mod in self._all_modifications
-            }
+            self._ptm_ids = {name: mod["mod_id"] for name, mod in self._all_modifications}
         return self._ptm_ids
 
     def write_modifications_file(self, mod_type="ptm"):
@@ -142,9 +141,7 @@ class Modifications:
         mod_file.write("{}\n".format(len(self.modifications[mod_type])))
         for name, mod in self.modifications[mod_type].items():
             mod_file.write(
-                "{},1,{},{}\n".format(
-                    mod["mass_shift"], mod["amino_acid_id"], mod["mod_id"]
-                )
+                "{},1,{},{}\n".format(mod["mass_shift"], mod["amino_acid_id"], mod["mod_id"])
             )
         mod_file.close()
         return mod_file.name
@@ -175,9 +172,7 @@ class Modifications:
 
         charge = int(charge)
         unmodified_mass = mass.fast_mass(peptide)
-        mods_massses = sum(
-            [self.mass_shifts[mod] for mod in modifications.split("|")[1::2]]
-        )
+        mods_massses = sum([self.mass_shifts[mod] for mod in modifications.split("|")[1::2]])
         prec_mass = unmodified_mass + mods_massses
         prec_mz = (prec_mass + charge * PROTON_MASS) / charge
         return prec_mass, prec_mz

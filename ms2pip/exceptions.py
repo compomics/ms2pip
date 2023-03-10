@@ -22,7 +22,7 @@ class UnknownOutputFormatError(ValueError):
     pass
 
 
-class UnknownFragmentationMethodError(ValueError):
+class UnknownModelError(ValueError):
     pass
 
 
@@ -50,15 +50,13 @@ class InvalidSpectrumError(Exception):
     pass
 
 
-class EmptySpectrumError(InvalidSpectrumError):
-    pass
-
-
 class NoMatchingSpectraFound(MS2PIPError):
     pass
+
 
 class TitlePatternError(MS2PIPError):
     pass
 
+
 class InvalidXGBoostModelError(MS2PIPError):
-    pass
+    """XGBoost model file could not be read."""

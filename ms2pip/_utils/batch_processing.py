@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -9,9 +10,9 @@ from rich.progress import track
 
 from ms2pip import exceptions
 from ms2pip._utils.peptides import apply_modifications, encode_peptide
-from ms2pip._utils.spectrum_input import read_spectrum_file
 from ms2pip.constants import MODELS
 from ms2pip.cython_modules import ms2pip_pyx
+from ms2pip.spectrum_input import read_spectrum_file
 
 
 def process_peptides(
@@ -20,7 +21,7 @@ def process_peptides(
     afile: str,
     modfile: str,
     modfile2: str,
-    ptm_ids: dict[str, int],
+    ptm_ids: Dict[str, int],
     model: str,
 ):
     """
@@ -131,42 +132,42 @@ def process_peptides(
 
 
 def process_spectra(
-    worker_num,
-    data,
-    spec_file,
-    vector_file,
-    afile,
-    modfile,
-    modfile2,
-    ptm_ids,
-    model,
-    fragerror,
-    spectrum_id_pattern,
+    worker_num: int,
+    data: pd.DataFrame,
+    spec_file: str,
+    vector_file: bool,
+    afile: str,
+    modfile: str,
+    modfile2: str,
+    ptm_ids: Dict[str, list],
+    model: str,
+    fragerror: float,
+    spectrum_id_pattern: str,
 ):
     """
     Perform requested tasks for each spectrum in spectrum file.
 
     Parameters
     ----------
-    worker_num: int
+    worker_num
         Index of worker if using multiprocessing
-    data: pandas.DataFrame
+    data
         PeptideRecord as Pandas DataFrame
-    spec_file: str
+    spec_file
         Filename of spectrum file
-    vector_file: str, None
-        Output filename for feature vector file
-    afile: str
+    vector_file
+        If feature vectors should be extracted instead of predictions
+    afile
         Filename of tempfile with amino acids definition for C code
-    modfile: str
+    modfile
         Filename of tempfile with modification definition for C code
-    modfile2: str
+    modfile2
         Filename of tempfile with second instance of modification definition for C code
-    ptm_ids: dict[str, int]
+    ptm_ids
         Mapping of modification name -> modified residue integer encoding
-    model: str
+    model
         Name of prediction model to be used
-    fragerror: float
+    fragerror
         Fragmentation spectrum m/z error tolerance in Dalton
     spectrum_id_pattern
         Regular expression pattern to apply to spectrum titles before matching to
@@ -223,13 +224,13 @@ def process_spectra(
         description="",
     ):
         # Match spectrum ID with provided regex, use first match group as new ID
-        match = spectrum_id_regex.search(spectrum.title)
+        match = spectrum_id_regex.search(spectrum.identifier)
         try:
             spectrum_id = match[1]
         except (TypeError, IndexError):
             raise exceptions.TitlePatternError(
                 "Spectrum title pattern could not be matched to spectrum IDs "
-                f"`{spectrum.title}`. "
+                f"`{spectrum.identifier}`. "
                 " Are you sure that the regex contains a capturing group?"
             )
 
@@ -238,7 +239,7 @@ def process_spectra(
         for label_type in ["iTRAQ", "TMT"]:
             if label_type in model:
                 spectrum.remove_reporter_ions(label_type)
-        # spectrum.remove_precursor()
+        # spectrum.remove_precursor()  # TODO: Decide to implement this or not
         spectrum.tic_norm()
         spectrum.log2_transform()
 
@@ -257,8 +258,8 @@ def process_spectra(
             if vector_file:
                 targets = ms2pip_pyx.get_targets(
                     enc_peptidoform,
-                    spectrum.msms,
-                    spectrum.peaks,
+                    spectrum.mz,
+                    spectrum.intensity,
                     float(fragerror),
                     peaks_version,
                 )
@@ -293,8 +294,8 @@ def process_spectra(
 
                 targets = ms2pip_pyx.get_targets(
                     enc_peptidoform,
-                    spectrum.msms,
-                    spectrum.peaks,
+                    spectrum.mz,
+                    spectrum.intensity,
                     float(fragerror),
                     peaks_version,
                 )

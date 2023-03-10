@@ -15,103 +15,312 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from psm_utils import PSMList
 
 import ms2pip._utils.peptides
 import ms2pip.exceptions as exceptions
-from ms2pip._utils import spectrum_output
-from ms2pip._utils.batch import process_peptides, process_spectra
+from ms2pip import spectrum_output
+from ms2pip._utils.batch_processing import process_peptides, process_spectra
 from ms2pip._utils.match_spectra import MatchSpectra
-from ms2pip._utils.xgb_models import (
-    get_predictions_xgb,
-    validate_requested_xgb_model,
-)
+from ms2pip._utils.peptides import Modifications
+from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
+from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.correlation import get_correlations
 
 logger = logging.getLogger(__name__)
 
 
-class MS2PIP:
-    """MS²PIP peak intensity predictor."""
+def predict_single():
+    """
+    Predict fragmentation spectrum for a single peptide.\f
+    """
+    pass
+
+
+def predict_batch(
+    psms: Union[PSMList, str, Path],
+    add_retention_time: bool = False,
+    model: Optional[str] = "HCD",
+    model_dir: Optional[Union[str, Path]] = None,
+    processes: Optional[int] = None,
+) -> pd.DataFrame:
+    """
+    Predict fragmentation spectra for a batch of peptides.\f
+
+    Parameters
+    ----------
+    psms
+        PSMList or path to PSM file that is supported by psm_utils.
+    add_retention_time
+        Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    model
+        Model to use for prediction. Default: "HCD".
+    model_dir
+        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
+    Returns
+    -------
+    predictions
+        Predicted spectra with theoretical m/z and predicted intensity values.
+
+    """
+    peprec, modification_config = read_psms(psms)
+
+    if add_retention_time:
+        logger.info("Adding retention time predictions")
+        rt_predictor = RetentionTime(processes=processes)
+        rt_predictor.add_rt_predictions(peprec)
+
+    with _Core(
+        modification_config=modification_config,
+        model=model,
+        model_dir=model_dir,
+        processes=processes,
+    ) as ms2pip_core:
+        logger.info("Processing peptides...")
+        results = ms2pip_core.process_peptides(peprec)
+        logger.debug("Merging results ...")
+        predictions = ms2pip_core.merge_predictions(peprec, results)
+
+    return predictions
+
+
+def predict_library():
+    """Predict spectral library from protein FASTA file."""
+    pass
+
+
+def correlate(
+    psms: Union[PSMList, str, Path],
+    spectrum_file: Union[str, Path],
+    spectrum_id_pattern: Optional[str] = None,
+    compute_correlations: bool = False,
+    add_retention_time: bool = False,
+    model: Optional[str] = "HCD",
+    model_dir: Optional[Union[str, Path]] = None,
+    ms2_tolerance: float = 0.02,
+    processes: Optional[int] = None,
+) -> Optional[Tuple[pd.DataFrame, Optional[pd.DataFrame]]]:
+    """
+    Compare predicted and observed intensities and optionally compute correlations.\f
+
+    Parameters
+    ----------
+    psms
+        PSMList or path to PSM file that is supported by psm_utils.
+    spectrum_file
+        Path to spectrum file with target intensities.
+    spectrum_id_pattern
+        Regular expression pattern to apply to spectrum titles before matching to
+        peptide file ``spec_id`` entries.
+    compute_correlations
+        Compute correlations between predictions and targets.
+    add_retention_time
+        Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    model
+        Model to use for prediction. Default: "HCD".
+    model_dir
+        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
+    ms2_tolerance
+        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
+    Returns
+    -------
+    pred_and_emp
+        ``pandas.DataFrame`` with predicted and empirical intensities.
+    correlations
+        ``pandas.DataFrame`` with correlations. Only returned if ``compute_correlations`` is
+        :py:const:`True`, else :py:const:`None`.
+
+    """
+    peprec, modification_config = read_psms(psms)
+    spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
+
+    if add_retention_time:
+        logger.info("Adding retention time predictions")
+        rt_predictor = RetentionTime(processes=processes)
+        rt_predictor.add_rt_predictions(peprec)
+
+    with _Core(
+        modification_config=modification_config,
+        model=model,
+        model_dir=model_dir,
+        ms2_tolerance=ms2_tolerance,
+        processes=processes,
+    ) as ms2pip_core:
+        logger.info("Processing spectra and peptides...")
+        results = ms2pip_core.process_spectra(peprec, spectrum_file, spectrum_id_pattern)
+        logger.debug("Merging results")
+        pred_and_emp = ms2pip_core.merge_predictions(peprec, results)
+
+    # Correlations also requested
+    if compute_correlations:
+        logger.info("Computing correlations")
+        correlations = get_correlations(pred_and_emp)
+        logger.info(
+            "Median correlation: \n%s",
+            str(correlations["pearsonr"].median()),
+        )
+    else:
+        correlations = None
+
+    return pred_and_emp, correlations
+
+
+def get_training_data(
+    psms: Union[PSMList, str, Path],
+    spectrum_file: Union[str, Path],
+    spectrum_id_pattern: Optional[str] = None,
+    ms2_tolerance: float = 0.02,
+    processes: Optional[int] = None,
+):
+    """
+    Extract feature vectors and target intensities from observed spectra for training.\f
+
+    Parameters
+    ----------
+    psms
+        PSMList or path to PSM file that is supported by psm_utils.
+    spectrum_file
+        Path to spectrum file with target intensities.
+    spectrum_id_pattern
+        Regular expression pattern to apply to spectrum titles before matching to
+        peptide file ``spec_id`` entries.
+    ms2_tolerance
+        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
+    Returns
+    -------
+    features
+        :py:class:`pandas.DataFrame` with feature vectors and targets.
+
+    """
+    peprec, modification_config = read_psms(psms)
+    spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
+
+    with _Core(
+        modification_config=modification_config,
+        ms2_tolerance=ms2_tolerance,
+        processes=processes,
+    ) as ms2pip_core:
+        logger.info("Processing spectra and peptides...")
+        results = ms2pip_core.process_spectra(
+            peprec, spectrum_file, spectrum_id_pattern, vector_file=True
+        )
+        logger.debug("Merging results")
+        vectors = ms2pip_core.write_vector_file(peprec, results)
+
+    return vectors
+
+
+def match_spectra(
+    psms: Union[PSMList, str, Path],
+    spectrum_file: Union[str, Path],
+    sqldb_uri: str,
+    model: Optional[str] = "HCD",
+    model_dir: Optional[Union[str, Path]] = None,
+    ms2_tolerance: float = 0.02,
+    processes: Optional[int] = None,
+):
+    """
+    Match spectra to peptides based on peak intensities (experimental).\f
+
+    Match spectra in `spectrum_file` or `sqldb_uri` to peptides in `pep_file` based on
+    predicted intensities.
+
+    Parameters
+    ----------
+    psms
+        PSMList or path to PSM file that is supported by psm_utils.
+    spectrum_file
+        Path to spectrum file or directory with spectrum files.
+    sqldb_uri
+        URI to prebuilt SQL database with spectra.
+    model
+        Model to use for prediction. Default: "HCD".
+    model_dir
+        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
+    ms2_tolerance
+        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
+    """
+    peprec, modification_config = read_psms(psms)
+
+    # Set spec_files based on spec_file or sqldb_uri
+    if sqldb_uri:
+        spectrum_files = None
+    elif os.path.isdir(spectrum_file):
+        spectrum_files = glob.glob("{}/*.mgf".format(spectrum_file))
+    else:
+        spectrum_files = [spectrum_file]
+    logger.debug("Using spectrum files %s", spectrum_files)
+
+    # Process
+    with _Core(
+        modification_config=modification_config,
+        model=model,
+        model_dir=model_dir,
+        ms2_tolerance=ms2_tolerance,
+        processes=processes,
+    ) as ms2pip_core:
+        logger.info("Processing spectra and peptides...")
+        results = ms2pip_core.process_peptides(peprec)
+        logger.debug("Matching spectra")
+        matched_spectra = ms2pip_core.match_spectra(results, peprec, spectrum_files, sqldb_uri)
+        logger.debug("Writing results")
+    return matched_spectra
+
+
+class _Core:
+    """MS²PIP core class implementing common functionality accross usage modes."""
 
     def __init__(
         self,
-        params: Optional[Dict] = None,
-        limit: Optional[int] = None,
+        modification_config: Optional[Dict] = None,
         model: Optional[str] = None,
         model_dir: Optional[Union[str, Path]] = None,
-        output_formats: Optional[List[str]] = None,
+        ms2_tolerance: float = 0.02,
         processes: Optional[int] = None,
-        return_results: bool = False,
     ):
         """
-        MS²PIP peak intensity predictor.
+        MS²PIP core class.
 
         Parameters
         ----------
-        params : dict
-            Configuration dictionary with ``model``, ``frag_error``, ``ptm``, and ``out``.
-        limit : int, optional
-            Limit to first N peptides in peptide file.
-        model : str
+        modification_config
+            Dictionary with modification information. Required if input peptides contain
+            modifications.
+        model
             Name of the model to use for predictions. Overrides configuration file.
-        model_dir : str, optional
+        model_dir
             Custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.
-        output_formats : list[str], optional
-            List of output formats to use. Overrides configuration file.
-        processes : int, optional
+        ms2_tolerance
+            MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+        processes
             Number of parallel processes for multiprocessing steps. By default, all available.
-        return_results : bool, optional
-            Return results as a df instead of writing to file.
 
         """
-        self.params = params
-        self.limit = limit
-        self.model_dir = model_dir
+        # Input parameters
+        self.modification_config = modification_config
+        self.model = model
+        self.model_dir = model_dir if model_dir else Path.home() / ".ms2pip"
+        self.ms2_tolerance = ms2_tolerance
         self.processes = processes if processes else multiprocessing.cpu_count()
 
+        # Instance variables
         self.afile = None
         self.modfile = None
         self.modfile2 = None
-
-        # Set default parameters if none provided
-        if self.params is None or "ms2pip" not in self.params:
-            logger.debug("No parameters provided, using default parameters.")
-            self.params = {
-                "ms2pip": {
-                    "ptm": [],
-                    "sptm": [],
-                    "model": "HCD",
-                    "frag_error": 0.02,
-                    "out": "csv",
-                }
-            }
-
-        # Validate parameters
-        if model:
-            self.model = model
-        elif "model" in self.params["ms2pip"]:
-            self.model = self.params["ms2pip"]["model"]
-        elif "frag_method" in self.params["ms2pip"]:
-            self.model = self.params["ms2pip"]["frag_method"]
-        else:
-            raise exceptions.FragmentationModelRequiredError()
-        self.fragerror = self.params["ms2pip"]["frag_error"]
-
-        self.return_results = return_results
-        if self.return_results:
-            self.output_formats = []
-
-        else:
-            if output_formats:
-                self.output_formats = self._validate_output_formats(output_formats)
-            else:
-                self.output_format = self._validate_output_formats(self.params["ms2pip"]["out"].split(","))
-
-        # Validate model_dir
-        if not self.model_dir:
-            self.model_dir = os.path.join(os.path.expanduser("~"), ".ms2pip")
 
         # Validate requested model
         if self.model in MODELS.keys():
@@ -123,13 +332,35 @@ class MS2PIP:
                     self.model_dir,
                 )
         else:
-            raise exceptions.UnknownFragmentationMethodError(self.model)
+            raise exceptions.UnknownModelError(self.model)
 
         # Set up multiprocessing
+        self._setup_multiprocessing()
+
+        # Set up modifications and write to files for C-code
+        self.mods = Modifications()
+        self.mods.add_from_ms2pip_modstrings(self.modification_config)
+        self._setup_modification_files()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        self.cleanup()
+
+    def _setup_modification_files(self):
+        """Write modification config to files for reading by C-code."""
+        self.afile = ms2pip._utils.peptides.write_amino_acid_masses()
+        self.modfile = self.mods.write_modifications_file(mod_type="ptm")
+        self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
+
+    def _setup_multiprocessing(self):
+        """Setup multiprocessing."""
         logger.debug(f"Starting workers (processes={self.processes})...")
         if multiprocessing.current_process().daemon:
             logger.warn(
-                "MS2PIP is running in a daemon process. Disabling multiprocessing as daemonic processes can't have children."
+                "MS²PIP is running in a daemon process. Disabling multiprocessing as daemonic "
+                "processes cannot have children."
             )
             self.myPool = multiprocessing.dummy.Pool(1)
         elif self.processes == 1:
@@ -137,262 +368,6 @@ class MS2PIP:
             self.myPool = multiprocessing.dummy.Pool(1)
         else:
             self.myPool = multiprocessing.Pool(self.processes)
-
-        self.mods = ms2pip.peptides.Modifications()
-        for mod_type in ("sptm", "ptm"):
-            self.mods.add_from_ms2pip_modstrings(
-                self.params["ms2pip"][mod_type], mod_type=mod_type
-            )
-
-    def predict_single():
-        """Predict single spectrum."""
-        pass
-
-    def predict_batch(
-        self,
-        peptides: Union[str, Path, pd.DataFrame],
-        output_filename: Optional[str] = None,
-        add_retention_time: bool = False,
-    ) -> Optional[pd.DataFrame]:
-        """
-        Predict peptide fragment ion intensities.
-
-        Parameters
-        ----------
-        peptides : str, Path, pandas.DataFrame
-            Path to file or ``pandas.DataFrame`` with peptide information (see
-            https://github.com/compomics/ms2pip_c#peprec-file)
-        output_filename : str, optional
-            Filepath prefix for output files
-        add_retention_time : bool, default: False
-            Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
-        return_results : bool, default: False
-            Return results instead of writing to output files.
-
-        Returns
-        -------
-        predictions: pandas.DataFrame
-            Predicted spectra. Only returned if ``return_results`` is True.
-
-        """
-        self._setup_modification_files()
-        peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(output_filename, peptides, self.return_results)
-
-        if add_retention_time:
-            logger.info("Adding retention time predictions")
-            rt_predictor = RetentionTime(config=self.params, processes=self.processes)
-            rt_predictor.add_rt_predictions(peptides)
-
-        logger.info("Processing peptides...")
-        results = self._process_peptides(peptides)
-
-        logger.debug("Merging results ...")
-        predictions = self._merge_predictions(peptides, results)
-
-        if not self.return_results:
-            self._write_predictions(predictions)
-        else:
-            return predictions
-
-    def predict_library():
-        """Predict spectral library from protein FASTA file."""
-        pass
-
-    def correlate(
-        self,
-        peptides: Union[str, Path, pd.DataFrame],
-        spectrum_file: Union[str, Path],
-        spectrum_id_pattern: Optional[str] = None,
-        output_filename: Optional[str] = None,
-        compute_correlations: bool = False,
-        add_retention_time: bool = False,
-    ) -> Optional[Tuple[pd.DataFrame, Optional[pd.DataFrame]]]:
-        """
-        Compare predicted and observed intensities and optionally compute correlations.
-
-        Parameters
-        ----------
-        peptides : str, Path, pandas.DataFrame
-            Path to file or ``pandas.DataFrame`` with peptide information (see
-            https://github.com/compomics/ms2pip_c#peprec-file)
-        spectrum_file : str, Path, optional
-            Path to spectrum file with target intensities.
-        spectrum_id_pattern : str, optional
-            Regular expression pattern to apply to spectrum titles before matching to
-            peptide file ``spec_id`` entries.
-        output_filename : str, optional
-            Filepath prefix for output files
-        compute_correlations : bool, default: False
-            Compute correlations between predictions and targets.
-        add_retention_time : bool, default: False
-            Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
-        return_results : bool, default: False
-            Return results after prediction (`MS2PIP.run()`) instead of writing to output files.
-
-        Returns
-        -------
-        pred_and_emp: pandas.DataFrame, optional
-            ``pandas.DataFrame`` with predicted and empirical intensities.
-        correlations: pandas.DataFrame, optional
-            ``pandas.DataFrame`` with correlations. Only returned if ``return_results``
-            is :py:const:`True` and ``compute_correlations`` is :py:const:`True`.
-
-        """
-        self._setup_modification_files()
-        peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(output_filename, peptides, self.return_results)
-        spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
-
-        if add_retention_time:
-            logger.info("Adding retention time predictions")
-            rt_predictor = RetentionTime(config=self.params, processes=self.processes)
-            rt_predictor.add_rt_predictions(peptides)
-
-        logger.info("Processing spectra and peptides...")
-        results = self._process_spectra(peptides, spectrum_file, spectrum_id_pattern)
-
-        logger.debug("Merging results")
-        pred_and_emp = self._merge_predictions(peptides, results)
-
-        # Correlations also requested
-        if compute_correlations:
-            logger.info("Computing correlations")
-            correlations = get_correlations(pred_and_emp)
-            logger.info(
-                "Median correlations: \n%s",
-                str(correlations.groupby("ion")["pearsonr"].median()),
-            )
-        else:
-            correlations = None
-
-        if not self.return_results:
-            # Write output to files
-            pred_and_emp_filename = self.output_filename + "_pred_and_emp.csv"
-            logger.info(f"Writing file {pred_and_emp_filename}...")
-            try:
-                pred_and_emp.to_csv(pred_and_emp_filename, index=False, lineterminator="\n")
-            except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-                pred_and_emp.to_csv(pred_and_emp_filename, index=False, line_terminator="\n")
-            if correlations:
-                corr_filename = self.output_filename + "_correlations.csv"
-                logger.info(f"Writing file {corr_filename}")
-                try:
-                    correlations.to_csv(corr_filename, index=False, lineterminator="\n")
-                except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-                    correlations.to_csv(corr_filename, index=False, line_terminator="\n")
-        else:
-            return pred_and_emp, correlations
-
-    def get_features(
-        self,
-        peptides: Union[str, Path, pd.DataFrame],
-        spectrum_file: Union[str, Path],
-        spectrum_id_pattern: Optional[str] = None,
-        output_filename: Optional[str] = None,
-    ):
-        """
-        Extract feature vectors and target intensities from spectra.
-
-        Parameters
-        ----------
-        peptides : str, Path, pandas.DataFrame
-            Path to file or ``pandas.DataFrame`` with peptide information (see
-            https://github.com/compomics/ms2pip_c#peprec-file)
-        spectrum_file : str, Path, optional
-            Path to spectrum file with target intensities.
-        spectrum_id_pattern : str, optional
-            Regular expression pattern to apply to spectrum titles before matching to
-            peptide file ``spec_id`` entries.
-        output_filename : str, optional
-            Filepath prefix for output files
-        return_results : bool, default: False
-            Return results instead of writing to output files.
-
-        Returns
-        -------
-        features: pandas.DataFrame, optional
-            ``pandas.DataFrame`` with feature vectors and targets. Only returned if
-            ``return_results`` is True.
-
-        """
-        self._setup_modification_files()
-        peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(output_filename, peptides, self.return_results)
-        spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
-
-        if self.add_retention_time:
-            logger.info("Adding retention time predictions")
-            rt_predictor = RetentionTime(config=self.params, processes=self.processes)
-            rt_predictor.add_rt_predictions(peptides)
-
-        logger.info("Processing spectra and peptides...")
-        vector_filename = output_filename + "_vectors.csv"
-        results = self._process_spectra(
-            peptides, spectrum_file, spectrum_id_pattern, vector_file=vector_filename
-        )
-        vectors = self._write_vector_file(results)
-        if self.return_results:
-            return vectors
-
-    def match_spectra(
-        self,
-        peptides,
-        spectrum_file: Union[str, Path],
-        sqldb_uri: str,
-    ):
-        """
-        Match spectra to peptides based on peak intensities (experimental).
-
-        Match spectra in `spectrum_file` or `sqldb_uri` to peptides in `pep_file` based on
-        predicted intensities.
-
-        Parameters
-        ----------
-        peptides : str, Path, pandas.DataFrame
-            Path to file or ``pandas.DataFrame`` with peptide information (see
-            https://github.com/compomics/ms2pip_c#peprec-file)
-        spectrum_file : str, Path, optional
-            Path to spectrum file with target intensities.
-        sqldb_uri : str, optional
-            URI to SQL database for `match_spectra` feature.
-
-        """
-        self._setup_modification_files()
-        peptides = self._read_peptide_information(peptides)
-        output_filename = self._get_output_filename(
-            output_filename, peptides, return_results=self.return_results
-        )
-
-        # Set spec_files based on spec_file or sqldb_uri
-        spectrum_file = None
-        if sqldb_uri:
-            spectrum_files = None
-        elif os.path.isdir(spectrum_file):
-            spectrum_files = glob.glob("{}/*.mgf".format(spectrum_file))
-        else:
-            spectrum_files = [spectrum_file]
-        logger.debug("Using spectrum files %s", spectrum_files)
-
-        # Process
-        results = self._process_peptides(peptides)
-        matched_spectra = self._match_spectra(results, peptides, spectrum_files, sqldb_uri)
-        self._write_matched_spectra(matched_spectra, output_filename)
-
-    def cleanup(self):
-        """Cleanup temporary files."""
-        if self.afile:
-            os.remove(self.afile)
-        if self.modfile:
-            os.remove(self.modfile)
-        if self.modfile2:
-            os.remove(self.modfile2)
-
-    def _setup_modification_files(self):
-        """Write modification config to files for reading by C-code."""
-        self.afile = ms2pip.peptides.write_amino_acid_masses()
-        self.modfile = self.mods.write_modifications_file(mod_type="ptm")
-        self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
 
     def _validate_output_formats(self, output_formats: List[str]) -> List[str]:
         """Validate requested output formats."""
@@ -403,79 +378,6 @@ class MS2PIP:
                 if output_format not in SUPPORTED_OUTPUT_FORMATS:
                     raise exceptions.UnknownOutputFormatError(output_format)
             self.output_formats = output_formats
-
-
-    def _get_output_filename(
-        self,
-        output_filename: Optional[str],
-        peptides: Union[str, Path, pd.DataFrame, None],
-        return_results: bool,
-    ) -> str:
-        """Get output filename from input filename if not defined."""
-        if isinstance(peptides, Path):
-            peptides = str(peptides)
-        # Only set output filename if not defined, required, and peptides is a filepath
-        if output_filename is None and not return_results and isinstance(peptides, str):
-            return "{}_{}".format(".".join(peptides.split(".")[:-1]), self.model)
-        else:
-            return output_filename
-
-    def _read_peptide_information(self, peptides: Union[str, Path, pd.DataFrame]) -> pd.DataFrame:
-        """Validate, read, and process peptide information."""
-        # Read
-        if isinstance(peptides, (str, Path)):
-            with open(peptides, "rt") as f:
-                line = f.readline()
-                if line[:7] != "spec_id":
-                    raise exceptions.InvalidPEPRECError()
-                sep = line[7]
-            data = pd.read_csv(
-                peptides,
-                sep=sep,
-                index_col=False,
-                dtype={"spec_id": str, "modifications": str},
-                nrows=self.limit,
-            )
-        elif isinstance(peptides, pd.DataFrame):
-            data = peptides
-        else:
-            raise TypeError("Invalid type for peptide file")
-
-        # Validate
-        if len(data) == 0:
-            raise exceptions.NoValidPeptideSequencesError()
-        data = data.fillna("-")
-        if not "ce" in data.columns:
-            data["ce"] = 30
-        else:
-            data["ce"] = data["ce"].astype(int)
-
-        data["charge"] = data["charge"].astype(int)
-
-        # Filter for unsupported peptides
-        num_pep = len(data)
-        data = data[
-            ~(data["peptide"].str.contains("B|J|O|U|X|Z"))
-            & ~(data["peptide"].str.len() < 3)
-            & ~(data["peptide"].str.len() > 99)
-        ].copy()
-        num_pep_filtered = num_pep - len(data)
-        if num_pep_filtered > 0:
-            logger.warning(
-                f"Removed {num_pep_filtered} unsupported peptide sequences (< 3, > 99 amino "
-                f"acids, or containing B, J, O, U, X or Z). Retained {len(data)} entries."
-            )
-
-        if len(data) == 0:
-            raise exceptions.NoValidPeptideSequencesError()
-
-        if not "psm_id" in data.columns:
-            logger.debug("Adding psm_id column to peptide file")
-            data.reset_index(inplace=True)
-            data["psm_id"] = data["index"].astype(str)
-            data.rename({"index": "psm_id"}, axis=1, inplace=True)
-
-        return data
 
     @staticmethod
     def _prepare_titles(titles, processes: int):
@@ -507,27 +409,53 @@ class MS2PIP:
         self.myPool.join()
         return results
 
-    def _process_peptides(self, peptides: pd.DataFrame):
+    def process_peptides(self, peprec: pd.DataFrame):
+        """
+        Process PSMs in parallel.
+
+        Parameters
+        ----------
+        peprec
+            PSMs to process in PeptideRecord format.
+
+        Returns
+        -------
+        List[multiprocessing.pool.AsyncResult]
+        """
         return self._execute_in_pool(
-            peptides,
+            peprec,
             process_peptides,
             (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
         )
 
-    def _process_spectra(
+    def process_spectra(
         self,
-        peptides: pd.DataFrame,
+        peprec: pd.DataFrame,
         spectrum_file: Union[str, Path],
         spectrum_id_pattern: str,
         vector_file: Optional[Union[str, Path]] = None,
     ):
         """
-        When an mgf file is provided, MS2PIP either saves the feature vectors to
-        train models with or writes a file with the predicted spectra next to
-        the empirical one.
+        Process PSMs and observed spectra in parallel.
+
+        Parameters
+        ----------
+        peprec
+            PSMs to process in PeptideRecord format.
+        spectrum_file
+            Path to spectrum file.
+        spectrum_id_pattern
+            Pattern to extract spectrum id from spectrum file.
+        vector_file
+            Path to write vector file to if required.
+
+        Returns
+        -------
+        List[multiprocessing.pool.AsyncResult]
+
         """
         return self._execute_in_pool(
-            peptides,
+            peprec,
             process_spectra,
             (
                 spectrum_file,
@@ -537,12 +465,12 @@ class MS2PIP:
                 self.modfile2,
                 self.mods.ptm_ids,
                 self.model,
-                self.fragerror,
+                self.ms2_tolerance,
                 spectrum_id_pattern,
             ),
         )
 
-    def _write_vector_file(self, results):
+    def write_vector_file(self, results):
         all_results = []
         for r in results:
             psmids, df, dtargets = r.get()
@@ -576,8 +504,8 @@ class MS2PIP:
 
         return all_results
 
-    def _merge_predictions(
-        self, peptides: pd.DataFrame, results: multiprocessing.pool.AsyncResult
+    def merge_predictions(
+        self, peptides: pd.DataFrame, results: List[multiprocessing.pool.AsyncResult]
     ):
         psm_id_bufs = []
         spec_id_bufs = []
@@ -659,13 +587,11 @@ class MS2PIP:
             all_preds["target"] = np.concatenate(target_bufs, axis=None)
 
         if "rt" in peptides.columns:
-            all_preds = all_preds.merge(
-                peptides[["psm_id", "rt"]], on="psm_id", copy=False
-            )
+            all_preds = all_preds.merge(peptides[["psm_id", "rt"]], on="psm_id", copy=False)
 
         return all_preds
 
-    def _write_predictions(
+    def write_predictions(
         self, all_preds: pd.DataFrame, peptides: pd.DataFrame, output_filename: str
     ):
         spec_out = spectrum_output.SpectrumOutput(
@@ -676,23 +602,24 @@ class MS2PIP:
         )
         spec_out.write_results(self.output_formats)
 
-    def _match_spectra(self, results, peptides, spectrum_files=None, sqldb_uri=None):
-        mz_bufs, prediction_bufs, _, _, _, pepid_bufs = zip(*(r.get() for r in results))
+    def match_spectra(self, results, peptides, spectrum_files=None, sqldb_uri=None):
+        psm_id_bufs, _, _, _, mz_bufs, _, prediction_bufs, _ = zip(*(r.get() for r in results))
+
         match_spectra = MatchSpectra(
             peptides,
             self.mods,
-            itertools.chain.from_iterable(pepid_bufs),
+            itertools.chain.from_iterable(psm_id_bufs),
             itertools.chain.from_iterable(mz_bufs),
             itertools.chain.from_iterable(prediction_bufs),
         )
         if spectrum_files:
-            return match_spectra.match_mgfs(spectrum_files)
+            return match_spectra.match_mgfs(spectrum_files, max_error=self.ms2_tolerance)
         elif sqldb_uri:
-            return match_spectra.match_sqldb(sqldb_uri)
+            return match_spectra.match_sqldb(sqldb_uri, max_error=self.ms2_tolerance)
         else:
             raise NotImplementedError
 
-    def _write_matched_spectra(self, matched_spectra, output_filename):
+    def write_matched_spectra(self, matched_spectra, output_filename):
         filename = f"{output_filename}_matched_spectra.csv"
         logger.info("Writing file %s...", filename)
 
@@ -701,3 +628,12 @@ class MS2PIP:
             csv_writer.writerow(("spec_id", "matched_file" "matched_title"))
             for pep, spec_file, spec in matched_spectra:
                 csv_writer.writerow((pep, spec_file, spec["params"]["title"]))
+
+    def cleanup(self):
+        """Cleanup temporary files."""
+        if self.afile:
+            os.remove(self.afile)
+        if self.modfile:
+            os.remove(self.modfile)
+        if self.modfile2:
+            os.remove(self.modfile2)
