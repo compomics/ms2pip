@@ -1,3 +1,4 @@
+"""Process batch of peptides and spectra in parallel."""
 from __future__ import annotations
 
 import re
@@ -8,10 +9,11 @@ import numpy as np
 import pandas as pd
 from rich.progress import track
 
-from ms2pip import exceptions
+import ms2pip.exceptions as exceptions
 from ms2pip._utils.peptides import apply_modifications, encode_peptide
 from ms2pip.constants import MODELS
 from ms2pip.cython_modules import ms2pip_pyx
+from ms2pip.result import ProcessingResult
 from ms2pip.spectrum_input import read_spectrum_file
 
 
@@ -44,32 +46,16 @@ def process_peptides(
     model: str
         Name of prediction model to be used
 
-    Returns
+    Yields
     -------
-    psm_id_buf: list
-    spec_id_buf: list
-    peplen_buf: list
-    charge_buf: list
-    mz_buf: list
-    target_buf: list
-    prediction_buf: list
-    vector_buf: list
+    ProcessingResult
 
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
-
-    # Prepare output variables
-    psm_id_buf = []
-    spec_id_buf = []
-    peplen_buf = []
-    charge_buf = []
-    mz_buf = []
-    target_buf = None
-    prediction_buf = []
-    vector_buf = []
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
 
     # Track progress for only one worker (good approximation of all workers' progress)
     for entry in track(
@@ -79,11 +65,6 @@ def process_peptides(
         transient=True,
         description="",
     ):
-        psm_id_buf.append(entry.psm_id)
-        spec_id_buf.append(entry.spec_id)
-        peplen_buf.append(len(entry.peptide))
-        charge_buf.append(entry.charge)
-
         try:
             enc_peptide = encode_peptide(entry.peptide)
             enc_peptidoform = apply_modifications(enc_peptide, entry.modifications, ptm_ids)
@@ -95,19 +76,19 @@ def process_peptides(
         ):
             continue
 
-        # Get ion mzs
+        # Get ion mzs and map to ion types
         mzs = ms2pip_pyx.get_mzs(enc_peptidoform, peaks_version)
-        mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+        mzs = {i: np.array(mz, dtype=np.float32) for i, mz in zip(ion_types, mzs)}
 
         # If using xgboost model file, get feature vectors to predict outside of MP.
         # Predictions will be added in `_merge_predictions` function.
         if "xgboost_model_files" in MODELS[model].keys():
-            vectors = np.array(
+            predictions = None
+            feature_vectors = np.array(
                 ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, entry.charge),
                 dtype=np.uint16,
             )
-            vector_buf.append(vectors)
-        # Else, get predictions from C models in multiprocessing.
+        # Else, get predictions from C models.
         else:
             predictions = ms2pip_pyx.get_predictions(
                 enc_peptide,
@@ -117,18 +98,23 @@ def process_peptides(
                 peaks_version,
                 entry.ce,
             )
-            prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
+            predictions = {
+                i: np.array(p, dtype=np.float32) for i, p in zip(ion_types, predictions)
+            }
+            feature_vectors = None
 
-    return (
-        psm_id_buf,
-        spec_id_buf,
-        peplen_buf,
-        charge_buf,
-        mz_buf,
-        target_buf,
-        prediction_buf,
-        vector_buf,
-    )
+        yield ProcessingResult(
+            psm_id=entry.psm_id,
+            spectrum_id=entry.spec_id,
+            sequence=entry.peptide,
+            modifications=entry.modifications,
+            charge=entry.charge,
+            retention_time=entry.rt if "rt" in data.columns else None,
+            theoretical_mz=mzs,
+            predicted_intensity=predictions,
+            observed_intensity=None,
+            feature_vectors=feature_vectors,
+        )
 
 
 def process_spectra(
@@ -175,35 +161,14 @@ def process_spectra(
 
     Returns
     -------
-    psm_id_buf: list
-    spec_id_buf: list
-    peplen_buf: list
-    charge_buf: list
-    mz_buf: list
-    target_buf: list
-    prediction_buf: list
-    vector_buf: list
+    ProcessingResult
 
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
 
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
-
-    # if vector_file
-    dvectors = []
-    dtargets = dict()
-    psmids = []
-
-    #
-    psm_id_buf = []
-    spec_id_buf = []
-    peplen_buf = []
-    charge_buf = []
-    mz_buf = []
-    target_buf = []
-    prediction_buf = []
-    vector_buf = []
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
 
     try:
         spectrum_id_regex = re.compile(spectrum_id_pattern)
@@ -255,98 +220,53 @@ def process_spectra(
             ):
                 continue
 
-            if vector_file:
-                targets = ms2pip_pyx.get_targets(
-                    enc_peptidoform,
-                    spectrum.mz,
-                    spectrum.intensity,
-                    float(fragerror),
-                    peaks_version,
-                )
-                psmids.extend([spectrum_id] * (len(targets[0])))
-                dvectors.append(
-                    np.array(
-                        ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, entry.charge),
-                        dtype=np.uint16,
-                    )
-                )
+            targets = ms2pip_pyx.get_targets(
+                enc_peptidoform,
+                spectrum.mz,
+                spectrum.intensity,
+                float(fragerror),
+                peaks_version,
+            )
+            targets = {i: np.array(t, dtype=np.float32) for i, t in zip(ion_types, targets)}
 
-                # Restructure to dict with entries per ion type
-                # Flip the order for C-terminal ion types
-                for i, t in enumerate(targets):
-                    if i in dtargets.keys():
-                        if i % 2 == 0:
-                            dtargets[i].extend(t)
-                        else:
-                            dtargets[i].extend(t[::-1])
-                    else:
-                        if i % 2 == 0:
-                            dtargets[i] = [t]
-                        else:
-                            dtargets[i] = [t[::-1]]
-
-            else:
-                # Predict the b- and y-ion intensities from the peptide
-                psm_id_buf.append(entry.psm_id)
-                spec_id_buf.append(spectrum_id)
-                peplen_buf.append(len(entry.peptide))
-                charge_buf.append(entry.charge)
-
-                targets = ms2pip_pyx.get_targets(
-                    enc_peptidoform,
-                    spectrum.mz,
-                    spectrum.intensity,
-                    float(fragerror),
-                    peaks_version,
-                )
-                target_buf.append([np.array(t, dtype=np.float32) for t in targets])
-
+            if not vector_file:
                 mzs = ms2pip_pyx.get_mzs(enc_peptidoform, peaks_version)
-                mz_buf.append([np.array(m, dtype=np.float32) for m in mzs])
+                mzs = {i: np.array(mz, dtype=np.float32) for i, mz in zip(ion_types, mzs)}
+            else:
+                mzs = None
 
-                # If using xgboost model file, get feature vectors to predict outside of MP.
-                # Predictions will be added in `_merge_predictions` function.
-                if "xgboost_model_files" in MODELS[model].keys():
-                    vector_buf.append(
-                        np.array(
-                            ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, entry.charge),
-                            dtype=np.uint16,
-                        )
-                    )
-                # Else, get predictions from C models in multiprocessing.
-                else:
-                    predictions = ms2pip_pyx.get_predictions(
-                        enc_peptide,
-                        enc_peptidoform,
-                        entry.charge,
-                        model_id,
-                        peaks_version,
-                        entry.ce,
-                    )
-                    prediction_buf.append([np.array(p, dtype=np.float32) for p in predictions])
+            # If using xgboost model file, get feature vectors to predict outside of MP.
+            # Predictions will be added in `_merge_predictions` function.
+            if vector_file or "xgboost_model_files" in MODELS[model].keys():
+                predictions = None
+                feature_vectors = np.array(
+                    ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, entry.charge),
+                    dtype=np.uint16,
+                )
+            # Else, get predictions from C models in multiprocessing.
+            else:
+                predictions = ms2pip_pyx.get_predictions(
+                    enc_peptide,
+                    enc_peptidoform,
+                    entry.charge,
+                    model_id,
+                    peaks_version,
+                    entry.ce,
+                )
+                predictions = {
+                    i: np.array(p, dtype=np.float32) for i, p in zip(ion_types, predictions)
+                }
+                feature_vectors = None
 
-    # If feature vectors requested, return specific data
-    if vector_file:
-        if dvectors:
-            # If processes > number of spectra, dvectors can be empty
-            if len(dvectors) >= 1:
-                # Concatenate dvectors into 2D ndarray before making DataFrame to reduce
-                # memory usage
-                dvectors = np.concatenate(dvectors)
-            df = pd.DataFrame(dvectors, dtype=np.uint16, copy=False)
-            df.columns = df.columns.astype(str)
-        else:
-            df = pd.DataFrame()
-        return psmids, df, dtargets
-
-    # Else, return general data
-    return (
-        psm_id_buf,
-        spec_id_buf,
-        peplen_buf,
-        charge_buf,
-        mz_buf,
-        target_buf,
-        prediction_buf,
-        vector_buf,
-    )
+            yield ProcessingResult(
+                spectrum_id=spectrum_id,
+                psm_id=entry.psm_id,
+                sequence=entry.peptide,
+                modifications=entry.modifications,
+                charge=entry.charge,
+                retention_time=entry.rt if "rt" in data.columns else None,
+                theoretical_mz=mzs,
+                predicted_intensity=predictions,
+                observed_intensity=targets,
+                feature_vectors=feature_vectors,
+            )

@@ -24,6 +24,7 @@ from ms2pip.exceptions import (
     UnknownModificationError,
     UnknownOutputFormatError,
 )
+from ms2pip.result import correlations_to_csv, results_to_csv
 
 __version__ = importlib_metadata.version("ms2pip")
 
@@ -78,10 +79,9 @@ def predict_batch(*args, **kwargs):
     predictions = ms2pip.core.predict_batch(*args, **kwargs)
 
     # Write output
-    # TODO: Support other output formats (Requires access to PEPREC? Or redesign output object?)
-    output_filename = output_name.with_suffix(".csv")
-    logger.info(f"Writing output to {output_filename}")
-    predictions.to_csv(output_filename, index=False)
+    output_name_csv = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
+    logger.info(f"Writing output to {output_name_csv}")
+    results_to_csv(predictions, output_name_csv)
 
 
 @cli.command(help=ms2pip.core.predict_library.__doc__)
@@ -106,16 +106,17 @@ def correlate(*args, **kwargs):
     output_name = _infer_output_name(kwargs["psms"], output_name)
 
     # Run
-    intensities, correlations = ms2pip.core.correlate(*args, **kwargs)
+    results = ms2pip.core.correlate(*args, **kwargs)
 
     # Write output
-    output_filenam_int = output_name.with_suffix("_intensities.csv")
-    logger.info(f"Writing intensities to {output_filenam_int}")
-    intensities.to_csv(output_filenam_int, index=False)
-    if correlations:
-        output_filename_corr = output_name.with_suffix("_correlations.csv")
-        logger.info(f"Writing correlations to {output_filename_corr}")
-        correlations.to_csv(output_filename_corr, index=False)
+    output_name_int = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
+    logger.info(f"Writing intensities to {output_name_int}")
+    results_to_csv(results, output_name_int)
+    if kwargs["compute_correlations"]:
+        output_name_corr = output_name.with_name(output_name.stem + "_correlations")
+        output_name_corr = output_name_corr.with_suffix(".csv")
+        logger.info(f"Writing correlations to {output_name_corr}")
+        correlations_to_csv(results, output_name_corr)
 
 
 @cli.command(help=ms2pip.core.get_training_data.__doc__)

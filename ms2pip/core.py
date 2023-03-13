@@ -27,7 +27,7 @@ from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
-from ms2pip.correlation import get_correlations
+from ms2pip.result import ProcessingResult, calculate_correlations
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def predict_batch(
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     processes: Optional[int] = None,
-) -> pd.DataFrame:
+) -> List[ProcessingResult]:
     """
     Predict fragmentation spectra for a batch of peptides.\f
 
@@ -64,7 +64,7 @@ def predict_batch(
 
     Returns
     -------
-    predictions
+    predictions: List[ProcessingResult]
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
@@ -83,10 +83,8 @@ def predict_batch(
     ) as ms2pip_core:
         logger.info("Processing peptides...")
         results = ms2pip_core.process_peptides(peprec)
-        logger.debug("Merging results ...")
-        predictions = ms2pip_core.merge_predictions(peprec, results)
 
-    return predictions
+    return results
 
 
 def predict_library():
@@ -104,7 +102,7 @@ def correlate(
     model_dir: Optional[Union[str, Path]] = None,
     ms2_tolerance: float = 0.02,
     processes: Optional[int] = None,
-) -> Optional[Tuple[pd.DataFrame, Optional[pd.DataFrame]]]:
+) -> List[ProcessingResult]:
     """
     Compare predicted and observed intensities and optionally compute correlations.\f
 
@@ -132,11 +130,9 @@ def correlate(
 
     Returns
     -------
-    pred_and_emp
-        ``pandas.DataFrame`` with predicted and empirical intensities.
-    correlations
-        ``pandas.DataFrame`` with correlations. Only returned if ``compute_correlations`` is
-        :py:const:`True`, else :py:const:`None`.
+    results: List[ProcessingResult]
+        Predicted spectra with theoretical m/z and predicted intensity values, and optionally,
+        correlations.
 
     """
     peprec, modification_config = read_psms(psms)
@@ -156,21 +152,14 @@ def correlate(
     ) as ms2pip_core:
         logger.info("Processing spectra and peptides...")
         results = ms2pip_core.process_spectra(peprec, spectrum_file, spectrum_id_pattern)
-        logger.debug("Merging results")
-        pred_and_emp = ms2pip_core.merge_predictions(peprec, results)
 
     # Correlations also requested
     if compute_correlations:
         logger.info("Computing correlations")
-        correlations = get_correlations(pred_and_emp)
-        logger.info(
-            "Median correlation: \n%s",
-            str(correlations["pearsonr"].median()),
-        )
-    else:
-        correlations = None
+        calculate_correlations(results)
+        logger.info(f"Median correlation: {np.median(list(r.correlation for r in results))}")
 
-    return pred_and_emp, correlations
+    return results
 
 
 def get_training_data(
@@ -321,6 +310,7 @@ class _Core:
         self.afile = None
         self.modfile = None
         self.modfile2 = None
+        self.mp_pool = None
 
         # Validate requested model
         if self.model in MODELS.keys():
@@ -362,12 +352,12 @@ class _Core:
                 "MS²PIP is running in a daemon process. Disabling multiprocessing as daemonic "
                 "processes cannot have children."
             )
-            self.myPool = multiprocessing.dummy.Pool(1)
+            self.mp_pool = multiprocessing.dummy.Pool(1)
         elif self.processes == 1:
             logger.debug("Using dummy multiprocessing pool.")
-            self.myPool = multiprocessing.dummy.Pool(1)
+            self.mp_pool = multiprocessing.dummy.Pool(1)
         else:
-            self.myPool = multiprocessing.Pool(self.processes)
+            self.mp_pool = multiprocessing.Pool(self.processes)
 
     def _validate_output_formats(self, output_formats: List[str]) -> List[str]:
         """Validate requested output formats."""
@@ -400,41 +390,45 @@ class _Core:
         for i in range(self.processes):
             tmp = split_spec_ids[i]
             results.append(
-                self.myPool.apply_async(
+                self.mp_pool.apply_async(
                     func,
                     args=(i, peptides[peptides.spec_id.isin(tmp)], *args),
                 )
             )
-        self.myPool.close()
-        self.myPool.join()
+        self.mp_pool.close()
+        self.mp_pool.join()
         return results
 
-    def process_peptides(self, peprec: pd.DataFrame):
-        """
-        Process PSMs in parallel.
-
-        Parameters
-        ----------
-        peprec
-            PSMs to process in PeptideRecord format.
-
-        Returns
-        -------
-        List[multiprocessing.pool.AsyncResult]
-        """
-        return self._execute_in_pool(
+    def process_peptides(self, peprec: pd.DataFrame) -> List[ProcessingResult]:
+        """Process PSMs in parallel."""
+        # Process peptides in parallel
+        mp_results = self._execute_in_pool(
             peprec,
             process_peptides,
             (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
         )
+        results = list(itertools.chain.from_iterable([r.get() for r in mp_results]))
+
+        # Validate number of results
+        if not results:
+            raise exceptions.NoValidPeptideSequencesError(
+                "No valid peptides were found in the input file."
+            )
+        logger.debug(f"Gathered data for {len(results)} peptides.")
+
+        # Add XGBoost predictions if required
+        if "xgboost_model_files" in MODELS[self.model].keys():
+            results = self._add_xgboost_predictions(results)
+
+        return results
 
     def process_spectra(
         self,
         peprec: pd.DataFrame,
         spectrum_file: Union[str, Path],
         spectrum_id_pattern: str,
-        vector_file: Optional[Union[str, Path]] = None,
-    ):
+        vector_file: bool = False,
+    ) -> List[ProcessingResult]:
         """
         Process PSMs and observed spectra in parallel.
 
@@ -451,24 +445,68 @@ class _Core:
 
         Returns
         -------
-        List[multiprocessing.pool.AsyncResult]
+        results
 
         """
-        return self._execute_in_pool(
-            peprec,
-            process_spectra,
-            (
-                spectrum_file,
-                vector_file,
-                self.afile,
-                self.modfile,
-                self.modfile2,
-                self.mods.ptm_ids,
-                self.model,
-                self.ms2_tolerance,
-                spectrum_id_pattern,
-            ),
+        # Process spectra in parallel
+        args = (
+            spectrum_file,
+            vector_file,
+            self.afile,
+            self.modfile,
+            self.modfile2,
+            self.mods.ptm_ids,
+            self.model,
+            self.ms2_tolerance,
+            spectrum_id_pattern,
         )
+        mp_results = self._execute_in_pool(peprec, process_spectra, args)
+        results = list(itertools.chain.from_iterable([r.get() for r in mp_results]))
+
+        # Validate number of results
+        if not results:
+            raise exceptions.NoMatchingSpectraFound(
+                "No spectra matching spectrum IDs from PSM list could be found in provided file."
+            )
+        logger.debug(f"Gathered data for {len(results)} PSMs.")
+
+        # Add XGBoost predictions if required
+        if not vector_file and "xgboost_model_files" in MODELS[self.model].keys():
+            results = self._add_xgboost_predictions(results)
+
+        return results
+
+    def _add_xgboost_predictions(self, results: List[ProcessingResult]) -> List[ProcessingResult]:
+        """
+        Add XGBoost predictions to results.
+
+        Notes
+        -----
+        This functions is applied after the parallel processing, as XGBoost implements its own
+        multiprocessing.
+        """
+
+        if not "xgboost_model_files" in MODELS[self.model].keys():
+            raise ValueError("XGBoost model files not found in MODELS dictionary.")
+
+        logger.debug("Converting feature vectors to XGBoost DMatrix...")
+        xgb_vector = xgb.DMatrix(np.vstack(list(r.feature_vectors for r in results)))
+        num_ions = [len(r.sequence) - 1 for r in results]
+
+        predictions = get_predictions_xgb(
+            xgb_vector,
+            num_ions,
+            MODELS[self.model],
+            self.model_dir,
+            processes=self.processes,
+        )
+
+        logger.debug("Adding XGBoost predictions to results...")
+        for r, preds in zip(results, predictions):
+            r.predicted_intensity = preds
+            r.feature_vectors = None
+
+        return results
 
     def write_vector_file(self, results):
         all_results = []
@@ -503,93 +541,6 @@ class _Core:
             all_results.to_hdf(self.vector_file, "table")
 
         return all_results
-
-    def merge_predictions(
-        self, peptides: pd.DataFrame, results: List[multiprocessing.pool.AsyncResult]
-    ):
-        psm_id_bufs = []
-        spec_id_bufs = []
-        peplen_bufs = []
-        charge_bufs = []
-        mz_bufs = []
-        target_bufs = []
-        prediction_bufs = []
-        vector_bufs = []
-        for r in results:
-            (
-                psm_id_buf,
-                spec_id_buf,
-                peplen_buf,
-                charge_buf,
-                mz_buf,
-                target_buf,
-                prediction_buf,
-                vector_buf,
-            ) = r.get()
-            psm_id_bufs.extend(psm_id_buf)
-            spec_id_bufs.extend(spec_id_buf)
-            peplen_bufs.extend(peplen_buf)
-            charge_bufs.extend(charge_buf)
-            mz_bufs.extend(mz_buf)
-            if target_buf:
-                target_bufs.extend(target_buf)
-            if prediction_buf:
-                prediction_bufs.extend(prediction_buf)
-            if vector_buf:
-                vector_bufs.extend(vector_buf)
-
-        # Validate number of results
-        if not mz_bufs:
-            raise exceptions.NoMatchingSpectraFound(
-                "No spectra matching titles/IDs from PEPREC could be found in "
-                "provided spectrum file."
-            )
-        logger.debug(f"Gathered data for {len(mz_bufs)} peptides/spectra.")
-
-        # If XGBoost model files are used, first predict outside of MP
-        # Temporary hack to move XGB prediction step out of MP; ultimately does not
-        # make sense to do this in the `_merge_predictions` step...
-        if "xgboost_model_files" in MODELS[self.model].keys():
-            logger.debug("Converting feature vectors to XGBoost DMatrix...")
-            xgb_vector = xgb.DMatrix(np.vstack(vector_bufs))
-            num_ions = [l - 1 for l in peplen_bufs]
-            prediction_bufs = get_predictions_xgb(
-                xgb_vector,
-                num_ions,
-                MODELS[self.model],
-                self.model_dir,
-                processes=self.processes,
-            )
-
-        # Reconstruct DataFrame
-        logger.debug("Constructing DataFrame with results...")
-        num_ion_types = len(MODELS[self.model]["ion_types"])
-        ions = []
-        ionnumbers = []
-        charges = []
-        pepids = []
-        psm_ids = []
-        for pi, pl in enumerate(peplen_bufs):
-            [ions.extend([ion_type] * (pl - 1)) for ion_type in MODELS[self.model]["ion_types"]]
-            ionnumbers.extend([x + 1 for x in range(pl - 1)] * num_ion_types)
-            charges.extend([charge_bufs[pi]] * (num_ion_types * (pl - 1)))
-            pepids.extend([spec_id_bufs[pi]] * (num_ion_types * (pl - 1)))
-            psm_ids.extend([psm_id_bufs[pi]] * (num_ion_types * (pl - 1)))
-        all_preds = pd.DataFrame()
-        all_preds["psm_id"] = psm_ids
-        all_preds["spec_id"] = pepids
-        all_preds["charge"] = charges
-        all_preds["ion"] = ions
-        all_preds["ionnumber"] = ionnumbers
-        all_preds["mz"] = np.concatenate(mz_bufs, axis=None)
-        all_preds["prediction"] = np.concatenate(prediction_bufs, axis=None)
-        if target_bufs:
-            all_preds["target"] = np.concatenate(target_bufs, axis=None)
-
-        if "rt" in peptides.columns:
-            all_preds = all_preds.merge(peptides[["psm_id", "rt"]], on="psm_id", copy=False)
-
-        return all_preds
 
     def write_predictions(
         self, all_preds: pd.DataFrame, peptides: pd.DataFrame, output_filename: str

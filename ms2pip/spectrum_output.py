@@ -1,7 +1,9 @@
 """
 Write spectrum files from MS2PIP predictions.
 """
+from __future__ import annotations
 
+import csv
 import itertools
 import logging
 import os
@@ -14,7 +16,7 @@ from typing import Any, Dict, List
 
 from ms2pip._utils.peptides import Modifications
 
-logger = logging.getLogger("ms2pip.spectrum_output")
+logger = logging.getLogger(__name__)
 
 
 class InvalidWriteModeError(ValueError):
@@ -47,72 +49,58 @@ def output_format(output_format):
 
 
 class SpectrumOutput:
-    """
-    Write MS2PIP predictions to various output formats.
-
-    Parameters
-    ----------
-    all_preds: pd.DataFrame
-        MS2PIP predictions
-    peprec: pd.DataFrame
-        PEPREC with peptide information
-    params: dict
-        MS2PIP parameters
-    output_filename: str, optional
-        path and name for output files, will be suffexed with `_predictions` and the
-        relevant file extension (default: ms2pip_predictions)
-    write_mode: str, optional
-        write mode to use: "wt+" to append to start a new file, "at" to append to an
-        existing file (default: "wt+")
-    return_stringbuffer: bool, optional
-        If True, files are written to a StringIO object, which the write function
-        returns. If False, files are written to a file on disk.
-    is_log_space: bool, optional
-        Set to true if predicted intensities in `all_preds` are in log-space. In that
-        case, intensities will first be transformed to "normal"-space.
-
-    Example
-    -------
-    >>> so = ms2pip.spectrum_tools.spectrum_output.SpectrumOutput(
-            all_preds,
-            peprec,
-            params
-        )
-    >>> so.write_msp()
-    >>> so.write_spectronaut()
-
-    """
+    """Write MS2PIP predictions to various output formats."""
 
     OUTPUT_FORMATS = {}
 
     def __init__(
         self,
-        all_preds,
-        peprec,
-        params,
+        results: List["ProcessingResult"],
         output_filename="ms2pip_predictions",
         write_mode="wt+",
         return_stringbuffer=False,
         is_log_space=True,
     ):
-        self.all_preds = all_preds
-        self.peprec = peprec
-        self.params = params
+        """
+        Write MS2PIP predictions to various output formats.
+
+        Parameters
+        ----------
+        results:
+            List of ProcessingResult objects
+        output_filename: str, optional
+            path and name for output files, will be suffexed with `_predictions` and the
+            relevant file extension (default: ms2pip_predictions)
+        write_mode: str, optional
+            write mode to use: "wt+" to append to start a new file, "at" to append to an
+            existing file (default: "wt+")
+        return_stringbuffer: bool, optional
+            If True, files are written to a StringIO object, which the write function
+            returns. If False, files are written to a file on disk.
+        is_log_space: bool, optional
+            Set to true if predicted intensities in `all_preds` are in log-space. In that
+            case, intensities will first be transformed to "normal"-space.
+
+        Example
+        -------
+        >>> so = ms2pip.spectrum_tools.spectrum_output.SpectrumOutput(
+                results
+            )
+        >>> so.write_msp()
+        >>> so.write_spectronaut()
+
+        """
+
+        self.results = results
         self.output_filename = output_filename
         self.write_mode = write_mode
         self.return_stringbuffer = return_stringbuffer
         self.is_log_space = is_log_space
 
-        self.peprec_dict = None
-        self.preds_dict = None
-        self.normalization = None
         self.diff_modification_mapping = {}
 
         self.has_rt = "rt" in self.peprec.columns
         self.has_protein_list = "protein_list" in self.peprec.columns
-
-        self.mods = Modifications()
-        self.mods.add_from_ms2pip_modstrings(params["ptm"])
 
         if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
             raise InvalidWriteModeError(self.write_mode)
@@ -120,85 +108,85 @@ class SpectrumOutput:
         if "a" in self.write_mode and self.return_stringbuffer:
             raise InvalidWriteModeError(self.write_mode)
 
-    def _generate_peprec_dict(self, rt_to_seconds=True):
-        """
-        Create easy to access dict from all_preds and peprec dataframes
-        """
-        peprec_tmp = self.peprec.copy()
+    # def _generate_peprec_dict(self, rt_to_seconds=True):
+    #     """
+    #     Create easy to access dict from all_preds and peprec dataframes
+    #     """
+    #     peprec_tmp = self.peprec.copy()
 
-        if self.has_rt and rt_to_seconds:
-            peprec_tmp["rt"] = peprec_tmp["rt"] * 60
+    #     if self.has_rt and rt_to_seconds:
+    #         peprec_tmp["rt"] = peprec_tmp["rt"] * 60
 
-        peprec_tmp.index = peprec_tmp["spec_id"]
-        peprec_tmp.drop("spec_id", axis=1, inplace=True)
+    #     peprec_tmp.index = peprec_tmp["spec_id"]
+    #     peprec_tmp.drop("spec_id", axis=1, inplace=True)
 
-        self.peprec_dict = peprec_tmp.to_dict(orient="index")
+    #     self.peprec_dict = peprec_tmp.to_dict(orient="index")
 
-    def _generate_preds_dict(self):
-        """
-        Create easy to access dict from peprec dataframes
-        """
-        self.preds_dict = {}
-        preds_list = self.all_preds[
-            ["spec_id", "charge", "ion", "ionnumber", "mz", "prediction"]
-        ].values.tolist()
+    # def _generate_preds_dict(self):
+    #     """
+    #     Create easy to access dict from peprec dataframes
+    #     """
+    #     self.preds_dict = {}
+    #     preds_list = self.all_preds[
+    #         ["spec_id", "charge", "ion", "ionnumber", "mz", "prediction"]
+    #     ].values.tolist()
 
-        for row in preds_list:
-            spec_id = row[0]
-            if spec_id in self.preds_dict.keys():
-                if row[2] in self.preds_dict[spec_id]["peaks"]:
-                    self.preds_dict[spec_id]["peaks"][row[2]].append(tuple(row[3:]))
-                else:
-                    self.preds_dict[spec_id]["peaks"][row[2]] = [tuple(row[3:])]
-            else:
-                self.preds_dict[spec_id] = {
-                    "charge": row[1],
-                    "peaks": {row[2]: [tuple(row[3:])]},
-                }
+    #     for row in preds_list:
+    #         spec_id = row[0]
+    #         if spec_id in self.preds_dict.keys():
+    #             if row[2] in self.preds_dict[spec_id]["peaks"]:
+    #                 self.preds_dict[spec_id]["peaks"][row[2]].append(tuple(row[3:]))
+    #             else:
+    #                 self.preds_dict[spec_id]["peaks"][row[2]] = [tuple(row[3:])]
+    #         else:
+    #             self.preds_dict[spec_id] = {
+    #                 "charge": row[1],
+    #                 "peaks": {row[2]: [tuple(row[3:])]},
+    #             }
 
-    def _normalize_spectra(self, method="basepeak_10000"):
-        """
-        Normalize spectra
-        """
-        if self.is_log_space:
-            self.all_preds["prediction"] = ((2 ** self.all_preds["prediction"]) - 0.001).clip(
-                lower=0
-            )
-            self.is_log_space = False
+    # def _normalize_spectra(self, method="basepeak_10000"):
+    #     """
+    #     Normalize spectra
+    #     """
+    #     if self.is_log_space:
+    #         self.all_preds["prediction"] = ((2 ** self.all_preds["prediction"]) - 0.001).clip(
+    #             lower=0
+    #         )
+    #         self.is_log_space = False
 
-        if method == "basepeak_10000":
-            if self.normalization == "basepeak_10000":
-                pass
-            elif self.normalization == "basepeak_1":
-                self.all_preds["prediction"] *= 10000
-            else:
-                self.all_preds["prediction"] = self.all_preds.groupby(
-                    ["spec_id"], group_keys=False
-                )["prediction"].apply(lambda x: (x / x.max()) * 10000)
-            self.normalization = "basepeak_10000"
+    #     if method == "basepeak_10000":
+    #         if self.normalization == "basepeak_10000":
+    #             pass
+    #         elif self.normalization == "basepeak_1":
+    #             self.all_preds["prediction"] *= 10000
+    #         else:
+    #             self.all_preds["prediction"] = self.all_preds.groupby(
+    #                 ["spec_id"], group_keys=False
+    #             )["prediction"].apply(lambda x: (x / x.max()) * 10000)
+    #         self.normalization = "basepeak_10000"
 
-        elif method == "basepeak_1":
-            if self.normalization == "basepeak_1":
-                pass
-            elif self.normalization == "basepeak_10000":
-                self.all_preds["prediction"] /= 10000
-            else:
-                self.all_preds["prediction"] = self.all_preds.groupby(
-                    ["spec_id"], group_keys=False
-                )["prediction"].apply(lambda x: (x / x.max()))
-            self.normalization = "basepeak_1"
+    #     elif method == "basepeak_1":
+    #         if self.normalization == "basepeak_1":
+    #             pass
+    #         elif self.normalization == "basepeak_10000":
+    #             self.all_preds["prediction"] /= 10000
+    #         else:
+    #             self.all_preds["prediction"] = self.all_preds.groupby(
+    #                 ["spec_id"], group_keys=False
+    #             )["prediction"].apply(lambda x: (x / x.max()))
+    #         self.normalization = "basepeak_1"
 
-        elif method == "tic":
-            if self.normalization != "tic":
-                self.all_preds["prediction"] = self.all_preds.groupby(
-                    ["spec_id"], group_keys=False
-                )["prediction"].apply(lambda x: x / x.sum())
-            self.normalization = "tic"
+    #     elif method == "tic":
+    #         if self.normalization != "tic":
+    #             self.all_preds["prediction"] = self.all_preds.groupby(
+    #                 ["spec_id"], group_keys=False
+    #             )["prediction"].apply(lambda x: x / x.sum())
+    #         self.normalization = "tic"
 
-        else:
-            raise NotImplementedError
+    #     else:
+    #         raise NotImplementedError
 
-    def _get_peak_string(
+    def _get_msp_peak_annotation(
         self,
         peak_dict,
         sep="\t",
@@ -355,7 +343,7 @@ class SpectrumOutput:
                 f"MW: {prec_mass}",
                 f"Comment:{comment_line}",
                 f"Num peaks: {num_peaks}",
-                self._get_peak_string(
+                self._get_msp_peak_annotation(
                     self.preds_dict[spec_id]["peaks"],
                     sep="\t",
                     include_annotations=True,
@@ -401,7 +389,7 @@ class SpectrumOutput:
                 out.append(f"RTINSECONDS={rt}")
 
             out.append(
-                self._get_peak_string(
+                self._get_msp_peak_annotation(
                     self.preds_dict[spec_id]["peaks"],
                     sep=" ",
                     include_annotations=False,
@@ -523,7 +511,7 @@ class SpectrumOutput:
             prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
             ms2_filename = os.path.basename(self.output_filename) + "_predictions.ms2"
 
-            peaks = self._get_peak_string(
+            peaks = self._get_msp_peak_annotation(
                 self.preds_dict[spec_id]["peaks"],
                 sep="\t",
                 include_annotations=False,

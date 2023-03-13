@@ -47,29 +47,36 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, processes=1
     )
 
     logger.debug("Predicting intensities from XGBoost model files...")
-    preds_list = []
+    prediction_dict = {}
     for ion_type, xgb_model in xgboost_models.items():
         # Get predictions from XGBoost model
         preds = xgb_model.predict(features)
         xgb_model.__del__()
 
         # Reshape into arrays for each peptide
-        preds = _split_list_by_lengths(preds, num_ions)
-        if ion_type in ["x", "y", "y2", "z"]:
-            preds = [np.array(x[::-1], dtype=np.float32) for x in preds]
-        elif ion_type in ["a", "b", "b2", "c"]:
-            preds = [np.array(x, dtype=np.float32) for x in preds]
+        if ion_type.lower() in ["x", "y", "y2", "z"]:
+            preds = _split_list_by_lengths(preds, num_ions, reverse=True)
+        elif ion_type.lower() in ["a", "b", "b2", "c"]:
+            preds = _split_list_by_lengths(preds, num_ions, reverse=False)
         else:
             raise ValueError(f"Unsupported ion_type: {ion_type}")
-        preds_list.append(preds)
+        prediction_dict[ion_type] = preds
 
-    predictions = [list(t) for t in zip(*preds_list)]
+    # Convert to list per peptide with dicts per ion type
+    num_peptides = len(list(prediction_dict.values())[0])
+    predictions = [{k: v[i] for k, v in prediction_dict.items()} for i in range(num_peptides)]
     return predictions
 
 
-def _split_list_by_lengths(list_in, lengths):
+def _split_list_by_lengths(list_in, lengths, reverse=False):
+    """Split list of predictions into sublists per peptide given their lengths."""
     list_in = iter(list_in)
-    return [list(islice(list_in, elem)) for elem in lengths]
+    if reverse:
+        list_out = [np.array(list(islice(list_in, e)), dtype=np.float32)[::-1] for e in lengths]
+    else:
+        list_out = [np.array(list(islice(list_in, e)), dtype=np.float32) for e in lengths]
+    return list_out
+
 
 
 def _check_model_presence(model, model_hash, model_dir):
