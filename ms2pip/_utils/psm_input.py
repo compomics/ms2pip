@@ -27,6 +27,13 @@ def read_psms(psm_list: Union[str, Path, PSMList]) -> Tuple[pd.DataFrame, dict]:
     psm_list.apply_fixed_modifications()
     peprec = psm_utils.io.peptide_record.to_dataframe(psm_list)
 
+    # Add psm_id column
+    if not "psm_id" in peprec.columns:
+        logger.debug("Adding psm_id column to peptide file")
+        peprec.reset_index(inplace=True)
+        peprec["psm_id"] = peprec["index"].astype(str)
+        peprec.rename({"index": "psm_id"}, axis=1, inplace=True)
+
     # Set modification config
     modification_config = _get_modification_config(psm_list)
 
@@ -57,13 +64,6 @@ def read_psms(psm_list: Union[str, Path, PSMList]) -> Tuple[pd.DataFrame, dict]:
 
     if len(peprec) == 0:
         raise exceptions
-
-    # Add psm_id column
-    if not "psm_id" in peprec.columns:
-        logger.debug("Adding psm_id column to peptide file")
-        peprec.reset_index(inplace=True)
-        peprec["psm_id"] = peprec["index"].astype(str)
-        peprec.rename({"index": "psm_id"}, axis=1, inplace=True)
 
     return peprec, modification_config
 

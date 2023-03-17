@@ -46,12 +46,14 @@ def process_peptides(
     model: str
         Name of prediction model to be used
 
-    Yields
+    Returns
     -------
-    ProcessingResult
+    list[ProcessingResult]
 
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
+
+    results = []
 
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
@@ -103,18 +105,21 @@ def process_peptides(
             }
             feature_vectors = None
 
-        yield ProcessingResult(
-            psm_id=entry.psm_id,
-            spectrum_id=entry.spec_id,
-            sequence=entry.peptide,
-            modifications=entry.modifications,
-            charge=entry.charge,
-            retention_time=entry.rt if "rt" in data.columns else None,
-            theoretical_mz=mzs,
-            predicted_intensity=predictions,
-            observed_intensity=None,
-            feature_vectors=feature_vectors,
+        results.append(
+            ProcessingResult(
+                psm_id=entry.psm_id,
+                spectrum_id=entry.spec_id,
+                sequence=entry.peptide,
+                modifications=entry.modifications,
+                charge=entry.charge,
+                retention_time=entry.rt if "rt" in data.columns else None,
+                theoretical_mz=mzs,
+                predicted_intensity=predictions,
+                observed_intensity=None,
+                feature_vectors=feature_vectors,
+            )
         )
+    return results
 
 
 def process_spectra(
@@ -161,10 +166,12 @@ def process_spectra(
 
     Returns
     -------
-    ProcessingResult
+    list[ProcessingResult]
 
     """
     ms2pip_pyx.ms2pip_init(afile, modfile, modfile2)
+
+    results = []
 
     model_id = MODELS[model]["id"]
     peaks_version = MODELS[model]["peaks_version"]
@@ -258,15 +265,19 @@ def process_spectra(
                 }
                 feature_vectors = None
 
-            yield ProcessingResult(
-                spectrum_id=spectrum_id,
-                psm_id=entry.psm_id,
-                sequence=entry.peptide,
-                modifications=entry.modifications,
-                charge=entry.charge,
-                retention_time=entry.rt if "rt" in data.columns else None,
-                theoretical_mz=mzs,
-                predicted_intensity=predictions,
-                observed_intensity=targets,
-                feature_vectors=feature_vectors,
+            results.append(
+                ProcessingResult(
+                    spectrum_id=spectrum_id,
+                    psm_id=entry.psm_id,
+                    sequence=entry.peptide,
+                    modifications=entry.modifications,
+                    charge=entry.charge,
+                    retention_time=entry.rt if "rt" in data.columns else None,
+                    theoretical_mz=mzs,
+                    predicted_intensity=predictions,
+                    observed_intensity=targets,
+                    feature_vectors=feature_vectors,
+                )
             )
+
+    return results
