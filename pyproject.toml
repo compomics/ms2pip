@@ -46,6 +46,8 @@ dependencies = [
     "lxml>=4",
     "rich>=13",
     "pydantic>=1.10,<2",
+    "psm_utils>=0.2.0",
+    "importlib-metadata; python_version<'3.8'",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +66,7 @@ docs = [
     "sphinx_rtd_theme",
     "sphinx-autobuild",
     "sphinx-automodapi",
+    "sphinx-click",
 ]
 
 [project.urls]
