@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from pydantic import BaseModel
+from psm_utils import PSM
 
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
@@ -13,12 +14,7 @@ from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 class ProcessingResult(BaseModel):
     """Result of processing a single PSM."""
 
-    psm_id: int
-    spectrum_id: str
-    sequence: str
-    modifications: str
-    charge: int
-    retention_time: Optional[float] = None
+    psm: PSM
     theoretical_mz: Optional[Dict[str, np.ndarray]] = None
     predicted_intensity: Optional[Dict[str, np.ndarray]] = None
     observed_intensity: Optional[Dict[str, np.ndarray]] = None
@@ -28,7 +24,12 @@ class ProcessingResult(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def as_spectra(self) -> Tuple[PredictedSpectrum, ObservedSpectrum]:
+    def __init__(__pydantic_self__, **data: Any) -> None:
+        """Result of processing a single PSM."""
+        super().__init__(**data)
+
+    def as_spectra(self) -> Tuple[Optional[PredictedSpectrum], Optional[ObservedSpectrum]]:
+        """Convert result to predicted and observed spectra."""
         if not self.theoretical_mz:
             raise ValueError("Theoretical m/z values required to convert to spectra.")
         mz = np.concatenate([i for i in self.theoretical_mz.values()])
@@ -68,7 +69,7 @@ class ProcessingResult(BaseModel):
 
 
 def calculate_correlations(results: List[ProcessingResult]) -> None:
-    """Calculate and add correlations to list of results."""
+    """Calculate and add Pearson correlations to list of results."""
     for result in results:
         pred_int = np.concatenate([i for i in result.predicted_intensity.values()])
         obs_int = np.concatenate([i for i in result.observed_intensity.values()])
@@ -79,7 +80,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
     """Write processing results to CSV file."""
     with open(output_file, "wt") as f:
         fieldnames = [
-            "psm_id",
+            # "psm_id",
             "ion_type",
             "ion_number",
             "mz",
@@ -93,7 +94,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
                 for i in range(len(result.theoretical_mz[ion_type])):
                     writer.writerow(
                         {
-                            "psm_id": result.psm_id,
+                            # "psm_id": result.psm_id,
                             "ion_type": ion_type,
                             "ion_number": i + 1,
                             "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
