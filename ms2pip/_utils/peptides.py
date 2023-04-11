@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import itertools
 import tempfile
+import logging
 
 import numpy as np
 from pyteomics import mass
 
 import ms2pip.exceptions as exceptions
+
+logger = logging.getLogger(__name__)
+
 
 AMINO_ACIDS = [
     "A",
@@ -104,8 +108,9 @@ class Modifications:
             elif amino_acid in AMINO_ACID_IDS:
                 amino_acid_id = AMINO_ACID_IDS[amino_acid]
             else:
-                raise exceptions.InvalidAminoAcidError(amino_acid)
-
+                logger.warn(f"Found modification on invalid aminoo acid ({amino_acid})\n skipping modification")
+                continue
+            
             self.modifications[mod_type][mod_name] = {
                 "mass_shift": float(mass_shift),
                 "amino_acid": amino_acid,
