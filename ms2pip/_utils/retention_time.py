@@ -2,7 +2,9 @@ import logging
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import psm_utils.io.peptide_record as peptide_record
 
 logger = logging.getLogger(__name__)
 
@@ -101,43 +103,35 @@ class RetentionTime:
         Prepare DeepLC peptide DataFrame
         """
         column_map = {"peptide": "seq", "modifications": "modifications"}
-        self.deeplc_pep_df = self.peprec[column_map.keys()].copy()
-        self.deeplc_pep_df.rename(columns=column_map, inplace=True)
+        peprec = peptide_record.to_dataframe(self.psm_list)[column_map.keys()]
+        self.deeplc_pep_df = peprec.rename(columns=column_map)
 
     def _run_deeplc(self):
-        """
-        Run DeepLC
-        """
+        """Run DeepLC."""
         logger.info("Predicting retention times with DeepLC...")
         self.deeplc_preds = self.deeplc_predictor.make_preds(
             seq_df=self.deeplc_pep_df.fillna("")
         )
 
     def _parse_deeplc_preds(self):
-        """
-        Add DeepLC predictions to peprec DataFrame
-        """
-        self.peprec["rt"] = self.deeplc_preds
+        """Add DeepLC predictions to peprec DataFrame."""
+        self.psm_list["retention_time"] = np.array(self.deeplc_preds, dtype=np.float32)
 
     def _predict_deeplc(self):
-        """
-        Predict retention times using DeepLC
-        """
+        """Predict retention times using DeepLC."""
         if not self.deeplc_predictor:
             self._init_deeplc()
         self._prepare_deeplc_peptide_df()
         self._run_deeplc()
         self._parse_deeplc_preds()
 
-    def add_rt_predictions(self, peprec):
+    def add_rt_predictions(self, psm_list):
         """
-        Run RT predictor and add predictions to peprec DataFrame.
+        Run RT predictor and add predictions to a PSMList.
 
-        peprec: pandas.DataFrame
-            MS2PIP-style peprec DataFrame with peptides for which to predict retention
-            times
+        psm_list: PSMList
         """
-        self.peprec = peprec
+        self.psm_list = psm_list
 
         if self.predictor == "deeplc":
             self._predict_deeplc()

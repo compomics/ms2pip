@@ -14,15 +14,13 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import xgboost as xgb
 from psm_utils import PSMList
 
-import ms2pip._utils.peptides
 import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
 from ms2pip._utils.batch_processing import process_peptides, process_spectra
+from ms2pip._utils.encoder import Encoder
 from ms2pip._utils.match_spectra import MatchSpectra
-from ms2pip._utils.peptides import Modifications
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
@@ -68,21 +66,21 @@ def predict_batch(
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
-    peprec, modification_config = read_psms(psms)
+    psm_list, encoder = read_psms(psms)
 
     if add_retention_time:
         logger.info("Adding retention time predictions")
         rt_predictor = RetentionTime(processes=processes)
-        rt_predictor.add_rt_predictions(peprec)
+        rt_predictor.add_rt_predictions(psm_list)
 
     with _Core(
-        modification_config=modification_config,
+        encoder=encoder,
         model=model,
         model_dir=model_dir,
         processes=processes,
     ) as ms2pip_core:
         logger.info("Processing peptides...")
-        results = ms2pip_core.process_peptides(peprec)
+        results = ms2pip_core.process_peptides(psm_list)
 
     return results
 
@@ -135,23 +133,23 @@ def correlate(
         correlations.
 
     """
-    peprec, modification_config = read_psms(psms)
+    psm_list, encoder = read_psms(psms)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     if add_retention_time:
         logger.info("Adding retention time predictions")
         rt_predictor = RetentionTime(processes=processes)
-        rt_predictor.add_rt_predictions(peprec)
+        rt_predictor.add_rt_predictions(psm_list)
 
     with _Core(
-        modification_config=modification_config,
+        encoder=encoder,
         model=model,
         model_dir=model_dir,
         ms2_tolerance=ms2_tolerance,
         processes=processes,
     ) as ms2pip_core:
         logger.info("Processing spectra and peptides...")
-        results = ms2pip_core.process_spectra(peprec, spectrum_file, spectrum_id_pattern)
+        results = ms2pip_core.process_spectra(psm_list, spectrum_file, spectrum_id_pattern)
 
     # Correlations also requested
     if compute_correlations:
@@ -192,20 +190,20 @@ def get_training_data(
         :py:class:`pandas.DataFrame` with feature vectors and targets.
 
     """
-    peprec, modification_config = read_psms(psms)
+    psm_list, encoder = read_psms(psms)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     with _Core(
-        modification_config=modification_config,
+        encoder=encoder,
         ms2_tolerance=ms2_tolerance,
         processes=processes,
     ) as ms2pip_core:
         logger.info("Processing spectra and peptides...")
         results = ms2pip_core.process_spectra(
-            peprec, spectrum_file, spectrum_id_pattern, vector_file=True
+            psm_list, spectrum_file, spectrum_id_pattern, vector_file=True
         )
         logger.debug("Merging results")
-        vectors = ms2pip_core.write_vector_file(peprec, results)
+        vectors = ms2pip_core.write_vector_file(results)
 
     return vectors
 
@@ -243,7 +241,7 @@ def match_spectra(
         Number of parallel processes for multiprocessing steps. By default, all available.
 
     """
-    peprec, modification_config = read_psms(psms)
+    psm_list, encoder = read_psms(psms)
 
     # Set spec_files based on spec_file or sqldb_uri
     if sqldb_uri:
@@ -256,16 +254,18 @@ def match_spectra(
 
     # Process
     with _Core(
-        modification_config=modification_config,
+        encoder=encoder,
         model=model,
         model_dir=model_dir,
         ms2_tolerance=ms2_tolerance,
         processes=processes,
     ) as ms2pip_core:
         logger.info("Processing spectra and peptides...")
-        results = ms2pip_core.process_peptides(peprec)
+        results = ms2pip_core.process_peptides(psm_list)
         logger.debug("Matching spectra")
-        matched_spectra = ms2pip_core.match_spectra(results, peprec, spectrum_files, sqldb_uri)
+        matched_spectra = ms2pip_core.match_spectra(
+            results, psm_list, spectrum_files, sqldb_uri
+        )  # TODO IMPLEMENT
         logger.debug("Writing results")
     return matched_spectra
 
@@ -275,7 +275,7 @@ class _Core:
 
     def __init__(
         self,
-        modification_config: Optional[Dict] = None,
+        encoder: Encoder = None,
         model: Optional[str] = None,
         model_dir: Optional[Union[str, Path]] = None,
         ms2_tolerance: float = 0.02,
@@ -286,9 +286,8 @@ class _Core:
 
         Parameters
         ----------
-        modification_config
-            Dictionary with modification information. Required if input peptides contain
-            modifications.
+        encoding
+            Configured encoding class instance. Required if input peptides contain modifications.
         model
             Name of the model to use for predictions. Overrides configuration file.
         model_dir
@@ -300,16 +299,13 @@ class _Core:
 
         """
         # Input parameters
-        self.modification_config = modification_config
+        self.encoder = encoder if encoder else Encoder()
         self.model = model
         self.model_dir = model_dir if model_dir else Path.home() / ".ms2pip"
         self.ms2_tolerance = ms2_tolerance
         self.processes = processes if processes else multiprocessing.cpu_count()
 
         # Instance variables
-        self.afile = None
-        self.modfile = None
-        self.modfile2 = None
         self.mp_pool = None
 
         # Validate requested model
@@ -328,21 +324,13 @@ class _Core:
         self._setup_multiprocessing()
 
         # Set up modifications and write to files for C-code
-        self.mods = Modifications()
-        self.mods.add_from_ms2pip_modstrings(self.modification_config)
-        self._setup_modification_files()
+        self.encoder.write_encoding_configuration()
 
     def __enter__(self):
         return self
 
     def __exit__(self, *args, **kwargs):
-        self.cleanup()
-
-    def _setup_modification_files(self):
-        """Write modification config to files for reading by C-code."""
-        self.afile = ms2pip._utils.peptides.write_amino_acid_masses()
-        self.modfile = self.mods.write_modifications_file(mod_type="ptm")
-        self.modfile2 = self.mods.write_modifications_file(mod_type="sptm")
+        self.encoder.cleanup()
 
     def _setup_multiprocessing(self):
         """Setup multiprocessing."""
@@ -384,28 +372,27 @@ class _Core:
         )
         return split_titles
 
-    def _execute_in_pool(self, peptides: pd.DataFrame, func: Callable, args: tuple):
-        split_spec_ids = self._prepare_titles(peptides["spec_id"].to_list(), self.processes)
+    def _execute_in_pool(self, psm_list: PSMList, func: Callable, args: tuple):
+        split_spec_ids = self._prepare_titles(list(psm_list["spectrum_id"]), self.processes)
         results = []
         for i in range(self.processes):
-            tmp = split_spec_ids[i]
             results.append(
                 self.mp_pool.apply_async(
                     func,
-                    args=(i, peptides[peptides.spec_id.isin(tmp)], *args),
+                    args=(i, psm_list[np.isin(psm_list["spectrum_id"], split_spec_ids[i])], *args),
                 )
             )
         self.mp_pool.close()
         self.mp_pool.join()
         return results
 
-    def process_peptides(self, peprec: pd.DataFrame) -> List[ProcessingResult]:
+    def process_peptides(self, psm_list: PSMList) -> List[ProcessingResult]:
         """Process PSMs in parallel."""
         # Process peptides in parallel
         mp_results = self._execute_in_pool(
-            peprec,
+            psm_list,
             process_peptides,
-            (self.afile, self.modfile, self.modfile2, self.mods.ptm_ids, self.model),
+            (self.encoder, self.model),
         )
         results = list(itertools.chain.from_iterable([r.get() for r in mp_results]))
 
@@ -424,43 +411,22 @@ class _Core:
 
     def process_spectra(
         self,
-        peprec: pd.DataFrame,
+        psm_list: PSMList,
         spectrum_file: Union[str, Path],
         spectrum_id_pattern: str,
         vector_file: bool = False,
     ) -> List[ProcessingResult]:
-        """
-        Process PSMs and observed spectra in parallel.
-
-        Parameters
-        ----------
-        peprec
-            PSMs to process in PeptideRecord format.
-        spectrum_file
-            Path to spectrum file.
-        spectrum_id_pattern
-            Pattern to extract spectrum id from spectrum file.
-        vector_file
-            Path to write vector file to if required.
-
-        Returns
-        -------
-        results
-
-        """
+        """Process PSMs and observed spectra in parallel."""
         # Process spectra in parallel
         args = (
             spectrum_file,
             vector_file,
-            self.afile,
-            self.modfile,
-            self.modfile2,
-            self.mods.ptm_ids,
+            self.encoder,
             self.model,
             self.ms2_tolerance,
             spectrum_id_pattern,
         )
-        mp_results = self._execute_in_pool(peprec, process_spectra, args)
+        mp_results = self._execute_in_pool(psm_list, process_spectra, args)
         results = list(itertools.chain.from_iterable([r.get() for r in mp_results]))
 
         # Validate number of results
@@ -490,8 +456,10 @@ class _Core:
             raise ValueError("XGBoost model files not found in MODELS dictionary.")
 
         logger.debug("Converting feature vectors to XGBoost DMatrix...")
+        import xgboost as xgb
+
         xgb_vector = xgb.DMatrix(np.vstack(list(r.feature_vectors for r in results)))
-        num_ions = [len(r.sequence) - 1 for r in results]
+        num_ions = [len(r.psm.peptidoform.parsed_sequence) - 1 for r in results]
 
         predictions = get_predictions_xgb(
             xgb_vector,
@@ -508,7 +476,8 @@ class _Core:
 
         return results
 
-    def write_vector_file(self, results):
+    # TODO IMPLEMENT
+    def write_vector_file(self, results: List[ProcessingResult]):
         all_results = []
         for r in results:
             psmids, df, dtargets = r.get()
@@ -542,6 +511,7 @@ class _Core:
 
         return all_results
 
+    # TODO IMPLEMENT
     def write_predictions(
         self, all_preds: pd.DataFrame, peptides: pd.DataFrame, output_filename: str
     ):
@@ -579,12 +549,3 @@ class _Core:
             csv_writer.writerow(("spec_id", "matched_file" "matched_title"))
             for pep, spec_file, spec in matched_spectra:
                 csv_writer.writerow((pep, spec_file, spec["params"]["title"]))
-
-    def cleanup(self):
-        """Cleanup temporary files."""
-        if self.afile:
-            os.remove(self.afile)
-        if self.modfile:
-            os.remove(self.modfile)
-        if self.modfile2:
-            os.remove(self.modfile2)
