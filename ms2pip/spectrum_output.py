@@ -14,7 +14,7 @@ from operator import itemgetter
 from time import localtime, strftime
 from typing import Any, Dict, List
 
-from ms2pip._utils.peptides import Modifications
+from ms2pip.result import ProcessingResult
 
 logger = logging.getLogger(__name__)
 
