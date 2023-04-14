@@ -2,23 +2,27 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import warnings
+from typing import Any, Optional, Union
 
 import numpy as np
-from pydantic import BaseModel, root_validator
+from psm_utils import Peptidoform
+from pydantic import BaseModel, root_validator, validator
 
 
 class Spectrum(BaseModel):
     """MS2 spectrum."""
 
-    identifier: str
     mz: np.ndarray
     intensity: np.ndarray
     annotations: Optional[np.ndarray] = None
-    peptidoform: Optional[str] = None
+    identifier: Optional[str] = None
+    peptidoform: Optional[Union[Peptidoform, str]] = None
     precursor_mz: Optional[float] = None
     precursor_charge: Optional[int] = None
     retention_time: Optional[float] = None
+    mass_tolerance: Optional[float] = None
+    mass_tolerance_unit: Optional[str] = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -29,22 +33,26 @@ class Spectrum(BaseModel):
 
         Parameters
         ----------
-        identifier
-            Spectrum identifier.
         mz
             Array of m/z values.
         intensity
             Array of intensity values.
         annotations
             Array of peak annotations.
+        identifier
+            Spectrum identifier.
         peptidoform
-            Peptidoform annotation.
+            Peptidoform.
         precursor_mz
             Precursor m/z.
         precursor_charge
             Precursor charge.
         retention_time
             Retention time.
+        mass_tolerance
+            Mass tolerance for spectrum annotation.
+        mass_tolerance_unit
+            Unit of mass tolerance for spectrum annotation.
 
         """
         super().__init__(**data)
@@ -53,7 +61,7 @@ class Spectrum(BaseModel):
         return "{}.{}({})".format(
             self.__class__.__module__,
             self.__class__.__qualname__,
-            f"title='{self.identifier}'",
+            f"identifier='{self.identifier}'",
         )
 
     @root_validator()
@@ -64,6 +72,18 @@ class Spectrum(BaseModel):
             if len(values["annotations"]) != len(values["intensity"]):
                 raise ValueError("Array lengths do not match.")
         return values
+
+    @validator("peptidoform")
+    def check_peptidoform(cls, value, values):
+        if not value:
+            pass
+        elif isinstance(value, str):
+            value = Peptidoform(value)
+        elif isinstance(value, Peptidoform):
+            pass
+        else:
+            raise ValueError("Peptidoform must be a string, a Peptidoform object, or None.")
+        return value
 
     @property
     def tic(self):
@@ -100,22 +120,51 @@ class Spectrum(BaseModel):
         """Log2-tranform spectrum."""
         self.intensity = np.log2(self.intensity + 0.001)
 
-    def to_spectrum_utils(self):
-        """Convert to spectrum_utils.MsmsSpectrum."""
-        if not self.precursor_charge or not self.precursor_mz:
-            raise ValueError("Precursor charge and m/z must be set.")
+    def clip_intensity(self, min_intensity=0.0) -> None:
+        """Clip intensity values."""
+        self.intensity = np.clip(self.intensity, min_intensity, None)
+
+    def to_spectrum_utils(self) -> "spectrum_utils.spectrum.MsmsSpectrum":
+        """
+        Convert to spectrum_utils.spectrum.MsmsSpectrum.
+
+        Notes
+        -----
+        - Requires spectrum_utils to be installed.
+        - If the ``precursor_mz`` or ``precursor_charge`` attributes are not set, the theoretical
+        m/z and precursor charge of the ``peptidoform`` attribute are used, if present. Otherwise,
+        ``ValueError`` is raised.
+
+        """
+        if not self.precursor_charge:
+            if not self.peptidoform:
+                raise ValueError("Precursor charge or peptidoform must be set.")
+            else:
+                precursor_charge = self.peptidoform.precursor_charge
+
+        if not self.precursor_mz:
+            if not self.peptidoform:
+                raise ValueError("Precursor m/z or peptidoform must be set.")
+            else:
+                warnings.warn("Precursor m/z not set, using theoretical precursor m/z.")
+                precursor_mz = self.peptidoform.theoretical_mz
+        else:
+            precursor_mz = self.precursor_mz
+
         from spectrum_utils.spectrum import MsmsSpectrum
 
         spectrum = MsmsSpectrum(
-            identifier=str(self.peptidoform) if self.peptidoform else "spectrum",
-            precursor_mz=self.precursor_mz,
-            precursor_charge=self.precursor_charge,
+            identifier=self.identifier if self.identifier else "spectrum",
+            precursor_mz=precursor_mz,
+            precursor_charge=precursor_charge,
             mz=self.mz,
             intensity=self.intensity,
             retention_time=self.retention_time,
         )
         if self.peptidoform:
-            spectrum.annotate_proforma(self.peptidoform)
+            spectrum.annotate_proforma(
+                str(self.peptidoform), self.mass_tolerance, self.mass_tolerance_unit
+            )
         return spectrum
 
 
@@ -127,5 +176,8 @@ class ObservedSpectrum(Spectrum):
 
 class PredictedSpectrum(Spectrum):
     """Predicted MS2 spectrum."""
+
+    mass_tolerance: Optional[float] = 0.001
+    mass_tolerance_unit: Optional[str] = "Da"
 
     pass

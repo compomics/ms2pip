@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import csv
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from pydantic import BaseModel
 from psm_utils import PSM
+from pydantic import BaseModel
 
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
 
 class ProcessingResult(BaseModel):
     """Result of processing a single PSM."""
-
-    psm: PSM
+    psm_index: int
+    psm: Optional[PSM] = None
     theoretical_mz: Optional[Dict[str, np.ndarray]] = None
     predicted_intensity: Optional[Dict[str, np.ndarray]] = None
     observed_intensity: Optional[Dict[str, np.ndarray]] = None
@@ -45,10 +45,11 @@ class ProcessingResult(BaseModel):
             pred_int = np.concatenate([i for i in self.predicted_intensity.values()])
             pred_int = (2 ** pred_int[peak_order]) - 0.001  # Unlog intensities
             predicted = PredictedSpectrum(
-                identifier=self.psm_id,
                 mz=mz[peak_order],
                 intensity=pred_int[peak_order],
                 annotations=annotations[peak_order],
+                peptidoform=self.psm.peptidoform if self.psm else None,
+                precursor_charge=self.psm.charge if self.psm else None,
             )
         else:
             predicted = None
@@ -57,10 +58,11 @@ class ProcessingResult(BaseModel):
             obs_int = np.concatenate([i for i in self.observed_intensity.values()])
             obs_int = (2 ** pred_int[peak_order]) - 0.001  # Unlog intensities
             observed = ObservedSpectrum(
-                identifier=self.psm_id,
                 mz=mz[peak_order],
                 intensity=obs_int[peak_order],
                 annotations=annotations[peak_order],
+                peptidoform=self.psm.peptidoform if self.psm else None,
+                precursor_charge=self.psm.charge if self.psm else None,
             )
         else:
             observed = None
@@ -80,7 +82,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
     """Write processing results to CSV file."""
     with open(output_file, "wt") as f:
         fieldnames = [
-            # "psm_id",
+            "psm_index",
             "ion_type",
             "ion_number",
             "mz",
@@ -90,27 +92,28 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
         writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for result in results:
-            for ion_type in result.theoretical_mz:
-                for i in range(len(result.theoretical_mz[ion_type])):
-                    writer.writerow(
-                        {
-                            # "psm_id": result.psm_id,
-                            "ion_type": ion_type,
-                            "ion_number": i + 1,
-                            "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
-                            "predicted": "{:.6g}".format(result.predicted_intensity[ion_type][i]),
-                            "observed": "{:.6g}".format(result.observed_intensity[ion_type][i])
-                            if result.observed_intensity
-                            else None,
-                        }
-                    )
+            if result.theoretical_mz is not None:
+                for ion_type in result.theoretical_mz:
+                    for i in range(len(result.theoretical_mz[ion_type])):
+                        writer.writerow(
+                            {
+                                "psm_index": result.psm_index,
+                                "ion_type": ion_type,
+                                "ion_number": i + 1,
+                                "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
+                                "predicted": "{:.6g}".format(result.predicted_intensity[ion_type][i]),
+                                "observed": "{:.6g}".format(result.observed_intensity[ion_type][i])
+                                if result.observed_intensity
+                                else None,
+                            }
+                        )
 
 
 def correlations_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
     """Write correlations to CSV file."""
     with open(output_file, "wt") as f:
-        fieldnames = ["psm_id", "correlation"]
+        fieldnames = ["psm_index", "correlation"]
         writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for result in results:
-            writer.writerow({"psm_id": result.psm_id, "correlation": result.correlation})
+            writer.writerow({"psm_index": result.psm_id, "correlation": result.correlation})

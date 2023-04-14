@@ -1,16 +1,6 @@
 import numpy as np
 
 
-def get_correlations(df):
-    correlations = (
-        df.groupby(["spec_id", "ion"])[["target", "prediction"]].corr().iloc[::2]["prediction"]
-    )
-    correlations.index = correlations.index.droplevel(2)
-    correlations = correlations.to_frame().reset_index()
-    correlations.columns = ["spec_id", "ion", "pearsonr"]
-    return correlations
-
-
 def ms2pip_pearson(true, pred):
     """
     Return pearson of tic-normalized, log-transformed intensities,

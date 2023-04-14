@@ -15,14 +15,10 @@ from rich.logging import RichHandler
 import ms2pip.core
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.exceptions import (
-    FragmentationModelRequiredError,
-    InvalidModificationFormattingError,
-    InvalidPEPRECError,
     InvalidXGBoostModelError,
-    NoValidPeptideSequencesError,
     UnknownModelError,
-    UnknownModificationError,
     UnknownOutputFormatError,
+    UnresolvableModificationError,
 )
 from ms2pip.result import correlations_to_csv, results_to_csv
 
@@ -144,21 +140,10 @@ def main():
 
     try:
         cli()
-
-    except InvalidPEPRECError:
-        logger.critical("PEPREC file should start with header column")
-        sys.exit(1)
-    except NoValidPeptideSequencesError:
+    except UnresolvableModificationError as e:
         logger.critical(
-            "No peptides for which to predict intensities. \
-            please provide at least one valid peptide sequence."
+            "Unresolvable modification: `%s`. See [TODO: URL TO DOCS] for more info.", e
         )
-        sys.exit(1)
-    except UnknownModificationError as e:
-        logger.critical("Unknown modification: %s", e)
-        sys.exit(1)
-    except InvalidModificationFormattingError as e:
-        logger.critical("Invalid formatting of modifications: %s", e)
         sys.exit(1)
     except UnknownOutputFormatError as o:
         logger.critical(
@@ -168,11 +153,11 @@ def main():
     except UnknownModelError as f:
         logger.critical(f"Unknown model: `{f}` (supported models: {set(MODELS.keys())})")
         sys.exit(1)
-    except FragmentationModelRequiredError:
-        logger.critical("Please specify model in config file.")
-        sys.exit(1)
     except InvalidXGBoostModelError:
-        logger.critical(f"Could not download XGBoost model properly\nTry manual download")
+        logger.critical(f"Could not download XGBoost model properly\nTry a manual download.")
+        sys.exit(1)
+    except Exception:
+        logger.exception("An unexpected error occurred in MS²PIP.")
         sys.exit(1)
 
 

@@ -2,7 +2,7 @@ class MS2PIPError(Exception):
     pass
 
 
-class InvalidPeptideError(MS2PIPError):
+class InvalidPeptidoformError(MS2PIPError):
     pass
 
 
@@ -10,15 +10,7 @@ class InvalidInputError(MS2PIPError):
     pass
 
 
-class UnknownModificationError(ValueError):
-    pass
-
-
-class InvalidPEPRECError(Exception):
-    pass
-
-
-class NoValidPeptideSequencesError(Exception):
+class UnresolvableModificationError(MS2PIPError):
     pass
 
 
@@ -30,27 +22,19 @@ class UnknownModelError(ValueError):
     pass
 
 
-class MissingConfigurationError(Exception):
+class MissingConfigurationError(MS2PIPError):
     pass
 
 
-class FragmentationModelRequiredError(Exception):
+class InvalidAminoAcidError(MS2PIPError):
     pass
 
 
-class InvalidModificationFormattingError(Exception):
+class UnsupportedSpectrumFiletypeError(MS2PIPError):
     pass
 
 
-class InvalidAminoAcidError(Exception):
-    pass
-
-
-class UnsupportedSpectrumFiletypeError(Exception):
-    pass
-
-
-class InvalidSpectrumError(Exception):
+class InvalidSpectrumError(MS2PIPError):
     pass
 
 
@@ -63,4 +47,4 @@ class TitlePatternError(MS2PIPError):
 
 
 class InvalidXGBoostModelError(MS2PIPError):
-    """XGBoost model file could not be read."""
+    pass
