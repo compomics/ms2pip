@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import os
 import tempfile
+import logging
 
 import numpy as np
 from psm_utils import PSM, Peptidoform, PSMList
 from pyteomics import proforma
 
 import ms2pip.exceptions as exceptions
+
+logger = logging.getLogger(__name__)
 
 AMINO_ACIDS = [
     "A",
@@ -160,7 +163,7 @@ class Encoder:
         elif target in AMINO_ACID_IDS:
             amino_acid_id = AMINO_ACID_IDS[target]
         else:
-            raise exceptions.InvalidAminoAcidError(target)
+            logger.warning(f"Skipping modification for invalid amino acid: {target}")
 
         self.modifications[(target, modification.key)] = {
             "mod_id": self._next_mod_id,
