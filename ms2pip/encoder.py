@@ -165,6 +165,7 @@ class Encoder:
             amino_acid_id = AMINO_ACID_IDS[target]
         else:
             logger.warning(f"Skipping modification for invalid amino acid: {target}")
+            return
 
         self.modifications[(target, modification.key)] = {
             "mod_id": self._next_mod_id,
