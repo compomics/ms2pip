@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import tempfile
 import logging
+from typing import Generator
 
 import numpy as np
 from psm_utils import PSM, Peptidoform, PSMList
@@ -227,7 +228,7 @@ class Encoder:
         # PTM file
         mod_file = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="\n")
         mod_file.write("{}\n".format(len(self.modifications)))
-        for (target, mod_key), mod in self.modifications.items():
+        for mod in self.modifications.values():
             mod_file.write(
                 "{},1,{},{}\n".format(mod["mass_shift"], mod["amino_acid_id"], mod["mod_id"])
             )
@@ -246,6 +247,7 @@ class Encoder:
         if self.encoder_files:
             for f in self.encoder_files:
                 os.remove(f)
+            self.encoder_files = None
 
     @staticmethod
     def validate_peptidoform(peptidoform: Peptidoform):
@@ -289,7 +291,7 @@ class Encoder:
 
         """
 
-        def _generate_encoding(peptidoform):
+        def _generate_encoding(peptidoform) -> Generator[int, None, None]:
             if peptidoform.properties["n_term"]:
                 mod_key = peptidoform.properties["n_term"][0].key
                 yield self.modifications["n_term", mod_key]["mod_id"]
@@ -297,15 +299,15 @@ class Encoder:
                 yield 0
 
             for aa, mods in peptidoform.parsed_sequence:
-                if not mods:
-                    try:
+                try:
+                    if not mods:
                         yield AMINO_ACID_IDS[aa]
-                    except KeyError as e:
-                        raise exceptions.InvalidAminoAcidError(
-                            f"Unsupported amino acid found in peptide `{peptidoform.proforma}`"
-                        ) from e
-                else:
-                    yield self.modifications[aa, mods[0].key]["mod_id"]
+                    else:
+                        yield self.modifications[aa, mods[0].key]["mod_id"]
+                except KeyError as e:
+                    raise exceptions.InvalidAminoAcidError(
+                        f"Unsupported amino acid found in peptide `{peptidoform.proforma}`"
+                    ) from e
 
             if peptidoform.properties["c_term"]:
                 mod_key = peptidoform.properties["c_term"][0].key
