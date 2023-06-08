@@ -124,7 +124,7 @@ class Spectrum(BaseModel):
         """Clip intensity values."""
         self.intensity = np.clip(self.intensity, min_intensity, None)
 
-    def to_spectrum_utils(self) -> "spectrum_utils.spectrum.MsmsSpectrum":
+    def to_spectrum_utils(self):
         """
         Convert to spectrum_utils.spectrum.MsmsSpectrum.
 
