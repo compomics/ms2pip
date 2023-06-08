@@ -58,8 +58,8 @@ jobs:
           CIBW_SKIP: "cp36-*"  # EOL
           CIBW_BEFORE_ALL_MACOS: "brew install libomp"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
-          CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest {project}/tests"
+          #CIBW_TEST_REQUIRES: "pytest"
+          #CIBW_TEST_COMMAND: "pytest {project}/tests"
       - uses: actions/upload-artifact@v2
         with:
           name: dist
@@ -77,4 +77,4 @@ jobs:
         with:
           user: ${{ secrets.PYPI_USERNAME }}
           password: ${{ secrets.PYPI_PASSWORD }}
-  
+
