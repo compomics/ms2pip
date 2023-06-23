@@ -21,7 +21,6 @@ from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
-from ms2pip._utils.match_spectra import MatchSpectra
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
@@ -226,69 +225,6 @@ def get_training_data(
         vectors = ms2pip_core.write_vector_file(results)
 
     return vectors
-
-
-def match_spectra(
-    psms: Union[PSMList, str, Path],
-    spectrum_file: Union[str, Path],
-    sqldb_uri: str,
-    model: Optional[str] = "HCD",
-    model_dir: Optional[Union[str, Path]] = None,
-    ms2_tolerance: float = 0.02,
-    processes: Optional[int] = None,
-):
-    """
-    Match spectra to peptides based on peak intensities (experimental).\f
-
-    Match spectra in `spectrum_file` or `sqldb_uri` to peptides in `pep_file` based on
-    predicted intensities.
-
-    Parameters
-    ----------
-    psms
-        PSMList or path to PSM file that is supported by psm_utils.
-    spectrum_file
-        Path to spectrum file or directory with spectrum files.
-    sqldb_uri
-        URI to prebuilt SQL database with spectra.
-    model
-        Model to use for prediction. Default: "HCD".
-    model_dir
-        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
-    ms2_tolerance
-        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
-    processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
-
-    """
-    psm_list = read_psms(psms)
-
-    # Set spec_files based on spec_file or sqldb_uri
-    if sqldb_uri:
-        spectrum_files = None
-    elif os.path.isdir(spectrum_file):
-        spectrum_files = glob.glob("{}/*.mgf".format(spectrum_file))
-    else:
-        spectrum_files = [spectrum_file]
-    logger.debug("Using spectrum files %s", spectrum_files)
-
-    # Process
-    with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_core = Core(
-            encoder=encoder,
-            model=model,
-            model_dir=model_dir,
-            ms2_tolerance=ms2_tolerance,
-            processes=processes,
-        )
-        logger.info("Processing spectra and peptides...")
-        results = ms2pip_core.process_peptides(psm_list)
-        logger.debug("Matching spectra")
-        matched_spectra = ms2pip_core.match_spectra(
-            results, psm_list, spectrum_files, sqldb_uri
-        )  # TODO IMPLEMENT
-        logger.debug("Writing results")
-    return matched_spectra
 
 
 class Core:
@@ -575,35 +511,6 @@ class Core:
             output_filename=output_filename,
         )
         spec_out.write_results(self.output_formats)
-
-    # TODO REIMPLEMENT
-    def match_spectra(self, results, peptides, spectrum_files=None, sqldb_uri=None):
-        psm_id_bufs, _, _, _, mz_bufs, _, prediction_bufs, _ = zip(*(r.get() for r in results))
-
-        match_spectra = MatchSpectra(
-            peptides,
-            self.mods,
-            itertools.chain.from_iterable(psm_id_bufs),
-            itertools.chain.from_iterable(mz_bufs),
-            itertools.chain.from_iterable(prediction_bufs),
-        )
-        if spectrum_files:
-            return match_spectra.match_mgfs(spectrum_files, max_error=self.ms2_tolerance)
-        elif sqldb_uri:
-            return match_spectra.match_sqldb(sqldb_uri, max_error=self.ms2_tolerance)
-        else:
-            raise NotImplementedError
-
-    # TODO REIMPLEMENT
-    def write_matched_spectra(self, matched_spectra, output_filename):
-        filename = f"{output_filename}_matched_spectra.csv"
-        logger.info("Writing file %s...", filename)
-
-        with open(filename, mode="w") as csv_file:
-            csv_writer = csv.writer(csv_file)
-            csv_writer.writerow(("spec_id", "matched_file" "matched_title"))
-            for pep, spec_file, spec in matched_spectra:
-                csv_writer.writerow((pep, spec_file, spec["params"]["title"]))
 
 
 def _process_peptidoform(

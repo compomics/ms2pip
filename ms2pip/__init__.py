@@ -3,11 +3,17 @@
 
 __version__ = "4.0.0-dev0"
 
+from warnings import filterwarnings
+
+filterwarnings(
+    "ignore", message="hdf5plugin is missing", category=UserWarning, module="psims.mzmlb"
+)
+
+
 from ms2pip.core import (
     predict_single,
     predict_batch,
     predict_library,
     correlate,
     get_training_data,
-    match_spectra,
 )

@@ -108,6 +108,8 @@ def correlate(*args, **kwargs):
     output_name_int = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
     logger.info(f"Writing intensities to {output_name_int}")
     results_to_csv(results, output_name_int)
+
+    # Write correlations
     if kwargs["compute_correlations"]:
         output_name_corr = output_name.with_name(output_name.stem + "_correlations")
         output_name_corr = output_name_corr.with_suffix(".csv")
@@ -118,11 +120,6 @@ def correlate(*args, **kwargs):
 @cli.command(help=ms2pip.core.get_training_data.__doc__)
 def get_training_data(*args, **kwargs):
     ms2pip.core.get_training_data(*args, **kwargs)
-
-
-@cli.command(help=ms2pip.core.match_spectra.__doc__)
-def match_spectra(*args, **kwargs):
-    ms2pip.core.match_spectra(*args, **kwargs)
 
 
 def main():
