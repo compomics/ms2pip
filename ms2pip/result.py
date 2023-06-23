@@ -13,6 +13,7 @@ from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
 class ProcessingResult(BaseModel):
     """Result of processing a single PSM."""
+
     psm_index: int
     psm: Optional[PSM] = None
     theoretical_mz: Optional[Dict[str, np.ndarray]] = None
@@ -49,7 +50,7 @@ class ProcessingResult(BaseModel):
                 intensity=pred_int[peak_order],
                 annotations=annotations[peak_order],
                 peptidoform=self.psm.peptidoform if self.psm else None,
-                precursor_charge=self.psm.charge if self.psm else None,
+                precursor_charge=self.psm.peptidoform.precursor_charge if self.psm else None,
             )
         else:
             predicted = None
@@ -62,7 +63,7 @@ class ProcessingResult(BaseModel):
                 intensity=obs_int[peak_order],
                 annotations=annotations[peak_order],
                 peptidoform=self.psm.peptidoform if self.psm else None,
-                precursor_charge=self.psm.charge if self.psm else None,
+                precursor_charge=self.psm.peptidoform.precursor_charge if self.psm else None,
             )
         else:
             observed = None
@@ -101,7 +102,9 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
                                 "ion_type": ion_type,
                                 "ion_number": i + 1,
                                 "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
-                                "predicted": "{:.6g}".format(result.predicted_intensity[ion_type][i]),
+                                "predicted": "{:.6g}".format(
+                                    result.predicted_intensity[ion_type][i]
+                                ),
                                 "observed": "{:.6g}".format(result.observed_intensity[ion_type][i])
                                 if result.observed_intensity
                                 else None,

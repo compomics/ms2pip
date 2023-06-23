@@ -27,8 +27,8 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, processes=1
 
     Parameters
     ----------
-    features: xgb.DMatrix
-        Feature vectors in DMatrix object
+    features: xgb.DMatrix, np.ndarray
+        Feature vectors in DMatrix object or as Numpy array.
     num_ions: list[int]
         List with number of ions (per series) for each peptide, i.e. peptide length - 1
     model_params: dict
@@ -45,6 +45,8 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, processes=1
         model_dir,
         processes,
     )
+    if isinstance(features, np.ndarray):
+        features = xgb.DMatrix(features)
 
     logger.debug("Predicting intensities from XGBoost model files...")
     prediction_dict = {}
@@ -76,7 +78,6 @@ def _split_list_by_lengths(list_in, lengths, reverse=False):
     else:
         list_out = [np.array(list(islice(list_in, e)), dtype=np.float32) for e in lengths]
     return list_out
-
 
 
 def _check_model_presence(model, model_hash, model_dir):

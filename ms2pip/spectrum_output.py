@@ -11,8 +11,11 @@ from ast import literal_eval
 from functools import wraps
 from io import StringIO
 from operator import itemgetter
+from pathlib import Path
 from time import localtime, strftime
 from typing import Any, Dict, List
+
+import matplotlib.pyplot as plt
 
 from ms2pip.result import ProcessingResult
 
@@ -793,3 +796,27 @@ class SpectrumOutput:
                 file_object, float_format="%.6g", index=False, line_terminator="\n"
             )
         return file_object
+
+
+def write_single_spectrum_csv(spectrum, filepath):
+    """Write a single spectrum to a CSV file."""
+    with open(filepath, "wt") as f:
+        writer = csv.writer(f, delimiter=",", lineterminator="\n")
+        writer.writerow(["mz", "intensity", "annotation"])
+        for mz, intensity, annotation in zip(
+            spectrum.mz,
+            spectrum.intensity,
+            spectrum.annotations,
+        ):
+            writer.writerow([mz, intensity, annotation])
+
+
+def write_single_spectrum_png(spectrum, filepath):
+    """Plot a single spectrum and write to a PNG file."""
+    import spectrum_utils.plot as sup
+
+    ax = plt.gca()
+    ax.set_title("MS²PIP prediction for " + str(spectrum.peptidoform))
+    sup.spectrum(spectrum.to_spectrum_utils(), ax=ax)
+    plt.savefig(Path(filepath).with_suffix(".png"))
+    plt.close()

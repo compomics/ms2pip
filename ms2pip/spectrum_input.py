@@ -86,7 +86,7 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
     Parameters
     ----------
     spectrum_file
-        Path to mzML file.
+        Path to MGF or mzML file.
 
     """
     filetype = Path(spectrum_file).suffix.lower()

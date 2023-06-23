@@ -141,6 +141,8 @@ class Spectrum(BaseModel):
                 raise ValueError("Precursor charge or peptidoform must be set.")
             else:
                 precursor_charge = self.peptidoform.precursor_charge
+        else:
+            precursor_charge = self.precursor_charge
 
         if not self.precursor_mz:
             if not self.peptidoform:

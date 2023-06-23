@@ -14,10 +14,9 @@ logger = logging.getLogger(__name__)
 
 def read_psms(psms: Union[str, Path, PSMList]) -> PSMList:
     """Read PSMList or PSM file."""
-    logger.info("Reading PSMs...")
-
     # Read PSMs
     if isinstance(psms, (str, Path)):
+        logger.info("Reading PSMs...")
         psm_list = psm_utils.io.read_file(psms)
     elif isinstance(psms, PSMList):
         psm_list = psms

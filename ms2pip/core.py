@@ -7,7 +7,6 @@ import itertools
 import logging
 import multiprocessing
 import multiprocessing.dummy
-import os
 import re
 from collections import defaultdict
 from math import ceil
@@ -28,7 +27,6 @@ from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.cython_modules import ms2pip_pyx
 from ms2pip.encoder import Encoder
 from ms2pip.result import ProcessingResult, calculate_correlations
-from ms2pip.spectrum import PredictedSpectrum
 from ms2pip.spectrum_input import read_spectrum_file
 
 logger = logging.getLogger(__name__)
@@ -38,19 +36,32 @@ def predict_single(
     peptidoform: Union[Peptidoform, str],
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
-) -> PredictedSpectrum:
+) -> ProcessingResult:
     """
     Predict fragmentation spectrum for a single peptide.\f
     """
     if isinstance(peptidoform, str):
         peptidoform = Peptidoform(peptidoform)
+    psm = PSM(peptidoform=peptidoform, spectrum_id=0)
+    model_dir = model_dir if model_dir else Path.home() / ".ms2pip"
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
 
     with Encoder.from_peptidoform(peptidoform) as encoder:
         ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
-        result = _process_peptidoform(peptidoform, model, encoder)
-    predicted_spectrum, _ = result.as_spectra()
-    predicted_spectrum.peptidoform = peptidoform
-    return predicted_spectrum
+        result = _process_peptidoform(0, psm, model, encoder, ion_types=ion_types)
+
+        if "xgboost_model_files" in MODELS[model].keys():
+            enc_peptide = encoder.encode_peptide(peptidoform)
+            enc_peptidoform = encoder.encode_peptidoform(peptidoform)
+            num_ions = [len(peptidoform.parsed_sequence) - 1]
+            features = np.array(
+                ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, peptidoform.precursor_charge)
+            )
+            intensity = np.array(get_predictions_xgb(features, num_ions, MODELS[model], model_dir))
+            result.predicted_intensity = intensity[0]  # Only one spectrum in predictions
+            result.feature_vectors = None
+
+    return result
 
 
 def predict_batch(
@@ -90,21 +101,21 @@ def predict_batch(
         rt_predictor.add_rt_predictions(psm_list)
 
     with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_core = Core(
+        ms2pip_parallelized = _Parallelized(
             encoder=encoder,
             model=model,
             model_dir=model_dir,
             processes=processes,
         )
         logger.info("Processing peptides...")
-        results = ms2pip_core.process_peptides(psm_list)
+        results = ms2pip_parallelized.process_peptides(psm_list)
 
     return results
 
 
 def predict_library():
     """Predict spectral library from protein FASTA file."""
-    pass
+    raise NotImplementedError
 
 
 def correlate(
@@ -159,7 +170,7 @@ def correlate(
         rt_predictor.add_rt_predictions(psm_list)
 
     with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_core = Core(
+        ms2pip_parallelized = _Parallelized(
             encoder=encoder,
             model=model,
             model_dir=model_dir,
@@ -167,7 +178,7 @@ def correlate(
             processes=processes,
         )
         logger.info("Processing spectra and peptides...")
-        results = ms2pip_core.process_spectra(psm_list, spectrum_file, spectrum_id_pattern)
+        results = ms2pip_parallelized.process_spectra(psm_list, spectrum_file, spectrum_id_pattern)
 
     # Correlations also requested
     if compute_correlations:
@@ -208,27 +219,28 @@ def get_training_data(
         :py:class:`pandas.DataFrame` with feature vectors and targets.
 
     """
+    raise NotImplementedError
     psm_list = read_psms(psms)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_core = Core(
+        ms2pip_parallelized = _Parallelized(
             encoder=encoder,
             ms2_tolerance=ms2_tolerance,
             processes=processes,
         )
         logger.info("Processing spectra and peptides...")
-        results = ms2pip_core.process_spectra(
+        results = ms2pip_parallelized.process_spectra(
             psm_list, spectrum_file, spectrum_id_pattern, vector_file=True
         )
         logger.debug("Merging results")
-        vectors = ms2pip_core.write_vector_file(results)
+        vectors = ms2pip_parallelized.write_vector_file(results)
 
     return vectors
 
 
-class Core:
-    """MS²PIP core class implementing common functionality accross usage modes."""
+class _Parallelized:
+    """Implementations of common multiprocessing functionality across MS²PIP usage modes."""
 
     def __init__(
         self,
@@ -239,7 +251,7 @@ class Core:
         processes: Optional[int] = None,
     ):
         """
-        MS²PIP core class.
+        Implementations of common multiprocessing functionality across MS²PIP usage modes.
 
         Parameters
         ----------
@@ -379,8 +391,7 @@ class Core:
         return results
 
     def process_peptides(self, psm_list: PSMList) -> List[ProcessingResult]:
-        """Process PSMs in parallel."""
-        # Process peptides in parallel
+        """Process peptides in parallel."""
         results = self._execute_in_pool(
             psm_list,
             _process_peptides,
@@ -402,7 +413,6 @@ class Core:
         vector_file: bool = False,
     ) -> List[ProcessingResult]:
         """Process PSMs and observed spectra in parallel."""
-        # Process spectra in parallel
         args = (
             spectrum_file,
             vector_file,
@@ -467,6 +477,7 @@ class Core:
 
     # TODO IMPLEMENT
     def write_vector_file(self, results: List[ProcessingResult]):
+        raise NotImplementedError
         all_results = []
         for r in results:
             psmids, df, dtargets = r.get()
@@ -504,6 +515,7 @@ class Core:
     def write_predictions(
         self, all_preds: pd.DataFrame, peptides: pd.DataFrame, output_filename: str
     ):
+        raise NotImplementedError
         spec_out = spectrum_output.SpectrumOutput(
             all_preds,
             peptides,

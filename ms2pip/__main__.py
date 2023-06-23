@@ -1,18 +1,16 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Union
-
-try:
-    import importlib.metadata as importlib_metadata
-except ImportError:
-    import importlib_metadata
+from typing import Optional
 
 import click
 from rich.console import Console
 from rich.logging import RichHandler
+from werkzeug.utils import secure_filename
 
 import ms2pip.core
+from ms2pip import __version__
+from ms2pip._utils.cli import build_credits, build_prediction_table
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.exceptions import (
     InvalidXGBoostModelError,
@@ -21,18 +19,18 @@ from ms2pip.exceptions import (
     UnresolvableModificationError,
 )
 from ms2pip.result import correlations_to_csv, results_to_csv
+from ms2pip.spectrum_output import write_single_spectrum_csv, write_single_spectrum_png
 
-__version__ = importlib_metadata.version("ms2pip")
-
+console = Console()
 logger = logging.getLogger(__name__)
 
-
-def print_logo():
-    print(
-        f"\nMS²PIP v{__version__}\n"
-        "CompOmics, VIB / Ghent University, Belgium\n"
-        "https://github.com/compomics/ms2pip\n"
-    )
+LOGGING_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
 
 
 def _infer_output_name(
@@ -47,14 +45,42 @@ def _infer_output_name(
 
 
 @click.group()
+@click.option("--logging-level", "-l", type=click.Choice(LOGGING_LEVELS.keys()), default="INFO")
 @click.version_option(version=__version__)
 def cli(*args, **kwargs):
-    pass
+    logging.basicConfig(
+        format="%(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        level=LOGGING_LEVELS[kwargs["logging_level"]],
+        handlers=[
+            RichHandler(rich_tracebacks=True, console=console, show_level=True, show_path=False)
+        ],
+    )
+    console.print(build_credits())
 
 
 @cli.command(help=ms2pip.core.predict_single.__doc__)
+@click.argument("peptidoform", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--model-dir")
+@click.option("--plot", "-p", is_flag=True)
 def predict_single(*args, **kwargs):
-    ms2pip.core.predict_single(*args, **kwargs)
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    plot = kwargs.pop("plot")
+    if not output_name:
+        output_name = "ms2pip_prediction_" + secure_filename(kwargs["peptidoform"]) + ".csv"
+
+    # Predict spectrum
+    result = ms2pip.core.predict_single(*args, **kwargs)
+    predicted_spectrum, _ = result.as_spectra()
+
+    # Write output
+    console.print(build_prediction_table(predicted_spectrum))
+    write_single_spectrum_csv(predicted_spectrum, output_name)
+    if plot:
+        write_single_spectrum_png(predicted_spectrum, output_name)
 
 
 @cli.command(help=ms2pip.core.predict_batch.__doc__)
@@ -78,7 +104,7 @@ def predict_batch(*args, **kwargs):
     output_name_csv = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
     logger.info(f"Writing output to {output_name_csv}")
     results_to_csv(predictions, output_name_csv)
-
+    # TODO: add support for other output formats
 
 @cli.command(help=ms2pip.core.predict_library.__doc__)
 def predict_library(*args, **kwargs):
@@ -108,6 +134,7 @@ def correlate(*args, **kwargs):
     output_name_int = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
     logger.info(f"Writing intensities to {output_name_int}")
     results_to_csv(results, output_name_int)
+    # TODO: add support for other output formats
 
     # Write correlations
     if kwargs["compute_correlations"]:
@@ -123,18 +150,6 @@ def get_training_data(*args, **kwargs):
 
 
 def main():
-    logging.basicConfig(
-        format="%(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=logging.DEBUG,
-        handlers=[
-            RichHandler(rich_tracebacks=True, console=Console(), show_level=True, show_path=False)
-        ],
-    )
-    logger = logging.getLogger(__name__)
-
-    # print_logo()
-
     try:
         cli()
     except UnresolvableModificationError as e:
