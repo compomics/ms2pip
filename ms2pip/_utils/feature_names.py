@@ -1,4 +1,4 @@
-from peptides import AMINO_ACIDS
+from ms2pip._utils.encoder import AMINO_ACIDS
 
 
 def get_feature_names():

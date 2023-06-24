@@ -22,19 +22,11 @@ class UnknownModelError(ValueError):
     pass
 
 
-class MissingConfigurationError(MS2PIPError):
-    pass
-
-
 class InvalidAminoAcidError(MS2PIPError):
     pass
 
 
 class UnsupportedSpectrumFiletypeError(MS2PIPError):
-    pass
-
-
-class InvalidSpectrumError(MS2PIPError):
     pass
 
 

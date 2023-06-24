@@ -15,7 +15,6 @@ from pathlib import Path
 from time import localtime, strftime
 from typing import Any, Dict, List
 
-import matplotlib.pyplot as plt
 
 from ms2pip.result import ProcessingResult
 
@@ -813,6 +812,7 @@ def write_single_spectrum_csv(spectrum, filepath):
 
 def write_single_spectrum_png(spectrum, filepath):
     """Plot a single spectrum and write to a PNG file."""
+    import matplotlib.pyplot as plt
     import spectrum_utils.plot as sup
 
     ax = plt.gca()

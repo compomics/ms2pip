@@ -1,1 +1,1 @@
-ms2pip/models_c/**/*.c filter=lfs diff=lfs merge=lfs -text
+ms2pip/_models_c/**/*.c filter=lfs diff=lfs merge=lfs -text

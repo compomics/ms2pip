@@ -85,8 +85,8 @@ ms2pip-single-prediction = "ms2pip._utils.single_prediction:_main"
 requires = ["setuptools", "cython", "oldest-supported-numpy"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages]
-find = {}
+[tool.setuptools.packages.find]
+include = ["ms2pip*"]
 
 [tool.black]
 line-length = 99

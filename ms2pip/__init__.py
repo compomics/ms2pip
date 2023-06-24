@@ -16,4 +16,5 @@ from ms2pip.core import (
     predict_library,
     correlate,
     get_training_data,
+    download_models
 )

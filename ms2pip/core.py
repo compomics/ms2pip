@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-import csv
-import glob
 import itertools
 import logging
 import multiprocessing
@@ -20,12 +18,12 @@ from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
+from ms2pip._cython_modules import ms2pip_pyx
+from ms2pip._utils.encoder import Encoder
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
-from ms2pip.cython_modules import ms2pip_pyx
-from ms2pip.encoder import Encoder
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.spectrum_input import read_spectrum_file
 
@@ -239,6 +237,42 @@ def get_training_data(
     return vectors
 
 
+def download_models(
+    models: Optional[List[str]] = None,
+    model_dir: Optional[Union[str, Path]] = None
+):
+    """
+    Download all specified models to the specified directory.
+
+    Parameters
+    ----------
+    models
+        List of models to download. If not specified, all models will be downloaded.
+    model_dir
+        Directory where XGBoost model files are to be stored. Default: ``~/.ms2pip``.
+
+    """
+    model_dir = model_dir if model_dir else Path.home() / ".ms2pip"
+    model_dir = Path(model_dir).expanduser()
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    if not models:
+        models = list(MODELS.keys())
+
+    for model in models:
+        try:
+            if "xgb_model_files" in MODELS[model].keys():
+                continue
+        except KeyError:
+            raise exceptions.UnknownModelError(model)
+        logger.debug("Downloading %s model files", model)
+        validate_requested_xgb_model(
+            MODELS[model]["xgboost_model_files"],
+            MODELS[model]["model_hash"],
+            model_dir,
+        )
+
+
 class _Parallelized:
     """Implementations of common multiprocessing functionality across MS²PIP usage modes."""
 
@@ -281,7 +315,7 @@ class _Parallelized:
 
         # Validate requested model
         if self.model in MODELS.keys():
-            logger.debug("Using %s models", self.model)
+            logger.debug("Using %s model", self.model)
             if "xgboost_model_files" in MODELS[self.model].keys():
                 validate_requested_xgb_model(
                     MODELS[self.model]["xgboost_model_files"],
