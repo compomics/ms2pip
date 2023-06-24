@@ -45,6 +45,7 @@ dependencies = [
     "rich>=13",
     "pydantic>=1.10,<2",
     "psm_utils>=0.2.0",
+    "werkzeug>=2",
 ]
 
 [project.optional-dependencies]
