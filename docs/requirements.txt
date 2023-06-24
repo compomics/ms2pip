@@ -1,0 +1,7 @@
+sphinx
+numpydoc>=1,<2
+recommonmark
+toml
+semver>=2
+sphinx_rtd_theme
+sphinx-autobuild

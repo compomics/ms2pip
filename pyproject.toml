@@ -61,7 +61,6 @@ docs = [
     "sphinx",
     "numpydoc>=1,<2",
     "recommonmark",
-    "sphinx-mdinclude",
     "toml",
     "semver>=2",
     "sphinx_rtd_theme",

@@ -132,8 +132,8 @@ class Spectrum(BaseModel):
         -----
         - Requires spectrum_utils to be installed.
         - If the ``precursor_mz`` or ``precursor_charge`` attributes are not set, the theoretical
-        m/z and precursor charge of the ``peptidoform`` attribute are used, if present. Otherwise,
-        ``ValueError`` is raised.
+          m/z and precursor charge of the ``peptidoform`` attribute are used, if present.
+          Otherwise, ``ValueError`` is raised.
 
         """
         if not self.precursor_charge:
