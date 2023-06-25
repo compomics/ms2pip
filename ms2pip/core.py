@@ -49,14 +49,19 @@ def predict_single(
         result = _process_peptidoform(0, psm, model, encoder, ion_types=ion_types)
 
         if "xgboost_model_files" in MODELS[model].keys():
-            enc_peptide = encoder.encode_peptide(peptidoform)
-            enc_peptidoform = encoder.encode_peptidoform(peptidoform)
-            num_ions = [len(peptidoform.parsed_sequence) - 1]
-            features = np.array(
-                ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, peptidoform.precursor_charge)
+            validate_requested_xgb_model(
+                MODELS[model]["xgboost_model_files"],
+                MODELS[model]["model_hash"],
+                model_dir,
             )
-            intensity = np.array(get_predictions_xgb(features, num_ions, MODELS[model], model_dir))
-            result.predicted_intensity = intensity[0]  # Only one spectrum in predictions
+            result.predicted_intensity = np.array(
+                get_predictions_xgb(
+                    result.feature_vectors,
+                    [len(peptidoform.parsed_sequence) - 1],
+                    MODELS[model],
+                    model_dir
+                )
+            )[0]  # Only one spectrum in predictions
             result.feature_vectors = None
 
     return result
