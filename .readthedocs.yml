@@ -20,7 +20,7 @@ build:
       - ./git-lfs fetch
       # Make local files to have the real content on them
       - ./git-lfs checkout
-    post_build:
+    post_install:
       - rm -r ms2pip
 
 python:
