@@ -20,10 +20,12 @@ build:
       - ./git-lfs fetch
       # Make local files to have the real content on them
       - ./git-lfs checkout
+    post_build:
+      - rm -r ms2pip
 
 python:
   install:
-    - method: setuptools
+    - method: pip
       path: .
       extra_requirements:
         - docs
