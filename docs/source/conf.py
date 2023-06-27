@@ -11,7 +11,7 @@ from ms2pip import __version__
 project = "ms2pip"
 author = "CompOmics"
 github_project_url = "https://github.com/compomics/ms2pip/"
-github_doc_root = "https://github.com/compomics/ms2pip/tree/main/docs/"
+github_doc_root = "https://github.com/compomics/ms2pip/tree/releases/docs/"
 
 # Version
 release = __version__

@@ -106,6 +106,7 @@ def predict_batch(*args, **kwargs):
     results_to_csv(predictions, output_name_csv)
     # TODO: add support for other output formats
 
+
 @cli.command(help=ms2pip.core.predict_library.__doc__)
 def predict_library(*args, **kwargs):
     ms2pip.core.predict_library(*args, **kwargs)
@@ -154,7 +155,10 @@ def main():
         cli()
     except UnresolvableModificationError as e:
         logger.critical(
-            "Unresolvable modification: `%s`. See [TODO: URL TO DOCS] for more info.", e
+            "Unresolvable modification: `%s`. See "
+            "https://ms2pip.readthedocs.io/en/stable/usage/#amino-acid-modifications "
+            "for more info.",
+            e,
         )
         sys.exit(1)
     except UnknownOutputFormatError as o:
