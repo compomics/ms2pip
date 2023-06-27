@@ -38,6 +38,11 @@ select discriminative transitions for targeted proteomics. MS²PIP employs the
 `XGBoost <https://xgboost.readthedocs.io/en/stable/>`_ machine learning algorithm and is written in
 Python and C.
 
+.. figure:: https://raw.githubusercontent.com/compomics/ms2pip/v4.0.0/img/mirror-DVAQIFNNILR-2.png
+
+   Mirror plot of an observed (top) and MS²PIP-predicted (bottom) spectrum for the peptide
+   ``DVAQIFNNILR/2``.
+
 You can install MS²PIP on your machine by following the
 `installation instructions <https://ms2pip.readthedocs.io/installation/>`_. For a more
 user-friendly experience, go to the `MS²PIP web server <https://iomics.ugent.be/ms2pip>`_. There,
@@ -56,7 +61,8 @@ The MS³PIP Python application can perform the following tasks:
   training.
 
 MS²PIP supports a wide range of PSM input formats and spectrum output formats, and includes
-pre-trained models for multiple fragmentation methods, instruments and labeling techniques.
+pre-trained models for multiple fragmentation methods, instruments and labeling techniques. See
+`Usage <https://ms2pip.readthedocs.io/en/latest/usage>`_ for more information.
 
 Related projects
 ----------------
@@ -100,3 +106,10 @@ Full documentation
 The full documentation, including installation instructions, usage examples,
 and the command-line and Python API reference, can be found at
 `ms2pip.readthedocs.io <https://ms2pip.readthedocs.io>`_.
+
+Contributing
+------------
+
+Bugs, questions or suggestions? Feel free to post an issue in the
+`issue tracker <https://github.com/compomics/ms2pip/issues/>`_ or to make a pull
+request. Any contribution, small or large, is welcome!

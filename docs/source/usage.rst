@@ -115,9 +115,9 @@ Spectrum file
 -------------
 
 In the :ref:`correlate` and :ref:`get-training-data` usage modes, an MGF or mzML file with observed
-spectra must be provided to MS²PIP. Make sure that the PSM file `spectrum_id` matches the MGF
-`TITLE` field or mzML `nativeID` fields. Spectra present in the spectrum file, but missing in the
-PEPREC file (and vice versa) will be skipped.
+spectra must be provided to MS²PIP. Make sure that the PSM file ``spectrum_id`` matches the MGF
+``TITLE`` field or mzML ``nativeID`` fields. Spectra present in the spectrum file, but missing in
+the PSM file (and vice versa) will be skipped.
 
 
 Output
@@ -126,4 +126,8 @@ Output
 The predictions are saved in the output file(s) specified command. Note that the normalization of
 intensities depends on the output file format. In the CSV file output, intensities are
 log2-transformed. To "unlog" the intensities, use the following formula:
-``intensity = (2 ** log2_intensity) - 0.001``.
+
+.. code-block::
+
+    intensity = (2 ** log2_intensity) - 0.001
+
