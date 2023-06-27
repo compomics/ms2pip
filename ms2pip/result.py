@@ -44,7 +44,7 @@ class ProcessingResult(BaseModel):
 
         if self.predicted_intensity:
             pred_int = np.concatenate([i for i in self.predicted_intensity.values()])
-            pred_int = (2 ** pred_int[peak_order]) - 0.001  # Unlog intensities
+            pred_int = (2**pred_int) - 0.001  # Unlog intensities
             predicted = PredictedSpectrum(
                 mz=mz[peak_order],
                 intensity=pred_int[peak_order],
@@ -57,7 +57,7 @@ class ProcessingResult(BaseModel):
 
         if self.observed_intensity:
             obs_int = np.concatenate([i for i in self.observed_intensity.values()])
-            obs_int = (2 ** pred_int[peak_order]) - 0.001  # Unlog intensities
+            obs_int = (2**obs_int) - 0.001  # Unlog intensities
             observed = ObservedSpectrum(
                 mz=mz[peak_order],
                 intensity=obs_int[peak_order],
