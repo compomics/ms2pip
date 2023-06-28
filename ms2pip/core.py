@@ -54,14 +54,15 @@ def predict_single(
                 MODELS[model]["model_hash"],
                 model_dir,
             )
-            result.predicted_intensity = np.array(
+            predictions = np.array(
                 get_predictions_xgb(
                     result.feature_vectors,
                     [len(peptidoform.parsed_sequence) - 1],
                     MODELS[model],
-                    model_dir
+                    model_dir,
                 )
-            )[0]  # Only one spectrum in predictions
+            )
+            result.predicted_intensity = predictions[0]  # Only one spectrum in predictions
             result.feature_vectors = None
 
     return result
@@ -243,8 +244,7 @@ def get_training_data(
 
 
 def download_models(
-    models: Optional[List[str]] = None,
-    model_dir: Optional[Union[str, Path]] = None
+    models: Optional[List[str]] = None, model_dir: Optional[Union[str, Path]] = None
 ):
     """
     Download all specified models to the specified directory.
@@ -545,8 +545,11 @@ class _Parallelized:
             except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
                 all_results.to_csv(self.vector_file, line_terminator="\n")
         else:
-            # "table" is a tag used to read back the .h5
-            all_results.to_hdf(self.vector_file, "table")
+            raise ValueError("Unknown vector file extension: {}".format(ext))
+        # Avoid PyTables dependency
+        # else:
+        # "table" is a tag used to read back the .h5
+        # all_results.to_hdf(self.vector_file, "table")
 
         return all_results
 

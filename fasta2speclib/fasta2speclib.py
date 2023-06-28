@@ -43,21 +43,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
-from ms2pip.ms2pip_tools import spectrum_output
-from ms2pip.ms2pipC import MODELS, MS2PIP
-from ms2pip.peptides import Modifications as MS2PIPModifications
-from ms2pip.retention_time import RetentionTime
 from pydantic import BaseModel, validator
 from pyteomics.fasta import FASTA, Protein, decoy_db
 from pyteomics.parser import icleave
 from rich.logging import RichHandler
 from rich.progress import track
 
+from ms2pip._utils.retention_time import RetentionTime
+from ms2pip.core import MODELS, _Parallelized
+from ms2pip.peptides import Modifications as MS2PIPModifications
+from ms2pip.utils import spectrum_output
+
 logger = logging.getLogger(__name__)
 
 
 class Peptide(BaseModel):
     """Peptide representation within the fasta2speclib search space."""
+
     sequence: str
     proteins: List[str]
     is_n_term: Optional[bool] = None
@@ -68,6 +70,7 @@ class Peptide(BaseModel):
 
 class ModificationConfig(BaseModel):
     """Configuration for a single modification in the search space."""
+
     name: str
     mass_shift: float
     unimod_accession: Optional[int] = None
@@ -136,7 +139,7 @@ class Configuration(BaseModel):
 
     @validator("output_filetype")
     def _validate_output_filetypes(cls, v):
-        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib", "hdf"]
+        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib"]# , "hdf"]
         v = [filetype.lower() for filetype in v]
         for filetype in v:
             if filetype not in allowed_types:
@@ -352,7 +355,7 @@ class Fasta2SpecLib:
 
         # Predict spectra
         logger.info("Predicting spectra with MS²PIP...")
-        ms2pip = MS2PIP(
+        ms2pip = _Parallelized(
             peprec,
             num_cpu=self.config.num_cpu,
             params=self.ms2pip_params,
@@ -582,7 +585,7 @@ class Fasta2SpecLib:
                     "peptide": peptide.sequence,
                     "modifications": modifications,
                     "charge": charge,
-                    "protein_list": peptide.proteins
+                    "protein_list": peptide.proteins,
                 }
                 for peptide in peptides
                 for charge in peptide.charge_options
@@ -604,18 +607,19 @@ class Fasta2SpecLib:
     ):
         """Write predictions (for batch) to requested output file formats."""
         write_mode = "a" if append else "w"
-        if "hdf" in filetypes:
-            logger.info(f"Writing results to {filename}_predictions.hdf")
-            predictions.astype(str).to_hdf(
-                f"{filename}_predictions.hdf",
-                key="table",
-                format="table",
-                complevel=3,
-                complib="zlib",
-                mode=write_mode,
-                append=append,
-                min_itemsize=50,
-            )
+        # Remove to avoid PyTables dependency?
+        # if "hdf" in filetypes:
+        #     logger.info(f"Writing results to {filename}_predictions.hdf")
+        #     predictions.astype(str).to_hdf(
+        #         f"{filename}_predictions.hdf",
+        #         key="table",
+        #         format="table",
+        #         complevel=3,
+        #         complib="zlib",
+        #         mode=write_mode,
+        #         append=append,
+        #         min_itemsize=50,
+        #     )
         spec_out = spectrum_output.SpectrumOutput(
             predictions,
             peprec,

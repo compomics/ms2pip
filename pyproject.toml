@@ -2,7 +2,7 @@
 name = "ms2pip"
 version = "4.0.0-dev0"
 description = "MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."
-readme = "README.md"
+readme = "README.rst"
 license = {file = "LICENSE"}
 keywords = [
     "MS2PIP",
@@ -36,7 +36,6 @@ dependencies = [
     "numpy>=1.16,<2",
     "pandas>=1,<2",
     "pyteomics>=3.5,<5",
-    "tables>=3.4",
     "tomlkit>=0.5,<1",
     "sqlalchemy>=1.3,<2",
     "click>=7,<9",
@@ -71,15 +70,14 @@ docs = [
 ]
 
 [project.urls]
-documentation = "http://compomics.github.io/projects/ms2pip_c"
-source = "https://github.com/compomics/ms2pip_c"
-tracker = "https://github.com/compomics/ms2pip_c/issues"
+documentation = "http://compomics.github.io/projects/ms2pip"
+source = "https://github.com/compomics/ms2pip"
+tracker = "https://github.com/compomics/ms2pip/issues"
 webserver = "https://iomics.ugent.be/ms2pip/"
-publication = "https://doi.org/10.1093/nar/gkz299/"
+publication = "https://doi.org/10.1093/nar/gkad335/"
 
 [project.scripts]
 ms2pip = "ms2pip.__main__:main"
-ms2pip-single-prediction = "ms2pip._utils.single_prediction:_main"
 
 [build-system]
 requires = ["setuptools", "cython", "oldest-supported-numpy"]
