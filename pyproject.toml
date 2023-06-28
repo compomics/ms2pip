@@ -1,9 +1,9 @@
 [project]
 name = "ms2pip"
-version = "4.0.0-dev0"
 description = "MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."
 readme = "README.rst"
 license = {file = "LICENSE"}
+dynamic = ["version"]
 keywords = [
     "MS2PIP",
     "proteomics",

@@ -7,6 +7,14 @@ from Cython.Distutils import build_ext
 from setuptools import setup
 from setuptools.extension import Extension
 
+
+def _get_version():
+    with open("ms2pip/__init__.py") as f:
+        for line in f:
+            if line.startswith("__version__"):
+                return line.split("=")[1].strip().strip('"').strip("'")
+
+
 to_remove = [
     "ms2pip/_cython_modules/ms2pip_pyx.c*",
     "ms2pip/_cython_modules/ms2pip_pyx.so",
@@ -43,6 +51,7 @@ extensions = [
 ]
 
 setup(
+    version=_get_version(),
     ext_modules=extensions,
     include_dirs=[numpy.get_include()],
     cmdclass={"build_ext": build_ext},
