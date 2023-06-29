@@ -92,3 +92,13 @@ target-version = ['py38']
 
 [tool.isort]
 profile = "black"
+
+[tool.cibuildwheel]
+build = "cp3*-manylinux_x86_64 cp3*-win_amd64 cp3*-macosx_x86_64"
+skip = "cp36-* cp37-*" # EOL
+manylinux-x86_64-image = "manylinux2014"
+# test-command = "pytest {package}/tests"
+test-command = "ms2pip --help"
+
+[tool.cibuildwheel.macos]
+before-all = "brew install libomp"

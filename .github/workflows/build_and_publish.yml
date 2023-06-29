@@ -44,19 +44,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.3.1
+        run: python -m pip install cibuildwheel>=2
       - name: Build wheels
         run: python -m cibuildwheel --output-dir dist
-        env:
-          # No XGBoost wheels for 32bit Windows
-          CIBW_BUILD: "cp3*-manylinux_x86_64 cp3*-win_amd64 cp3*-macosx_x86_64"
-          CIBW_SKIP: "cp36-* cp37-*" # EOL
-          CIBW_BEFORE_ALL_MACOS: "brew install libomp"
-          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
-          # Temporarily until tests are updated
-          CIBW_TEST_COMMAND: "ms2pip --help"
-          #CIBW_TEST_REQUIRES: "pytest"
-          #CIBW_TEST_COMMAND: "pytest {project}/tests"
       - uses: actions/upload-artifact@v2
         with:
           name: dist
