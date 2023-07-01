@@ -8,6 +8,12 @@ from typing import Any, Optional, Union
 import numpy as np
 from psm_utils import Peptidoform
 from pydantic import BaseModel, root_validator, validator
+try:
+    import spectrum_utils.spectrum as sus
+    import spectrum_utils.plot as sup
+except ImportError:
+    sus = None
+    sup = None
 
 
 class Spectrum(BaseModel):
@@ -136,26 +142,27 @@ class Spectrum(BaseModel):
           Otherwise, ``ValueError`` is raised.
 
         """
-        if not self.precursor_charge:
+        if not sus:
+            raise ImportError("Optional dependency spectrum_utils not installed.")
+
+        if self.precursor_charge:
+            precursor_charge = self.precursor_charge
+        else:
             if not self.peptidoform:
-                raise ValueError("Precursor charge or peptidoform must be set.")
+                raise ValueError("`precursor_charge` or `peptidoform` must be set.")
             else:
                 precursor_charge = self.peptidoform.precursor_charge
-        else:
-            precursor_charge = self.precursor_charge
 
-        if not self.precursor_mz:
-            if not self.peptidoform:
-                raise ValueError("Precursor m/z or peptidoform must be set.")
-            else:
-                warnings.warn("Precursor m/z not set, using theoretical precursor m/z.")
-                precursor_mz = self.peptidoform.theoretical_mz
-        else:
+        if self.precursor_mz:
             precursor_mz = self.precursor_mz
+        else:
+            if not self.peptidoform:
+                raise ValueError("`precursor_mz` or `peptidoform` must be set.")
+            else:
+                warnings.warn("precursor_mz not set, using theoretical precursor m/z.")
+                precursor_mz = self.peptidoform.theoretical_mz
 
-        from spectrum_utils.spectrum import MsmsSpectrum
-
-        spectrum = MsmsSpectrum(
+        spectrum = sus.MsmsSpectrum(
             identifier=self.identifier if self.identifier else "spectrum",
             precursor_mz=precursor_mz,
             precursor_charge=precursor_charge,
