@@ -64,6 +64,7 @@ AMINO_ACID_IDS["L"] = AMINO_ACID_IDS["I"]
 
 class Encoder:
     """Modification-aware encoding of peptidoforms."""
+
     def __init__(self) -> None:
         """
         Modification-aware encoding of peptidoforms.
@@ -98,7 +99,7 @@ class Encoder:
         self.remove_encoder_files()
 
     def __repr__(self) -> str:
-        return "{}.{}({})".format(
+        return "{}.{}(modifications={})".format(
             self.__class__.__module__,
             self.__class__.__qualname__,
             self.modifications,
@@ -168,7 +169,7 @@ class Encoder:
             logger.warning(f"Skipping modification for invalid amino acid: {target}")
             return None
 
-        self.modifications[(target, modification.key)] = {
+        self.modifications[(target, str(modification))] = {
             "mod_id": self._next_mod_id,
             "mass_shift": modification.mass,
             "amino_acid": target,
@@ -180,42 +181,42 @@ class Encoder:
     def _configure_from_peptidoform(self, peptidoform: Peptidoform):
         """Configure encoder with modifications from single Peptidoform."""
         # Get unique modifications from psm
+        unique_modifications = dict()
         try:
-            unique_modifications = set()
             for aa, mods in peptidoform.parsed_sequence:
                 if mods:
-                    unique_modifications.update([(aa, mod) for mod in mods])
+                    unique_modifications.update({(aa, str(mod)): mod for mod in mods})
             for term in ["n_term", "c_term"]:
                 if peptidoform.properties[term]:
                     unique_modifications.update(
-                        [(term, mod) for mod in peptidoform.properties[term]]
+                        {(term, str(mod)): mod for mod in peptidoform.properties[term]}
                     )
         except KeyError as e:
             raise exceptions.UnresolvableModificationError(e.args[0]) from e
 
         # Add modification entries
-        for target, mod in unique_modifications:
+        for (target, _), mod in unique_modifications.items():
             self._configure_modification(target, mod)
 
     def _configure_from_psm_list(self, psm_list: PSMList):
         """Configure encoder with modifications from PSMList."""
         # Get unique modifications from psm_list
+        unique_modifications = dict()
         try:
-            unique_modifications = set()
             for psm in psm_list:
                 for aa, mods in psm.peptidoform.parsed_sequence:
                     if mods:
-                        unique_modifications.update([(aa, mod) for mod in mods])
+                        unique_modifications.update({(aa, str(mod)): mod for mod in mods})
                 for term in ["n_term", "c_term"]:
                     if psm.peptidoform.properties[term]:
                         unique_modifications.update(
-                            [(term, mod) for mod in psm.peptidoform.properties[term]]
+                            {(term, str(mod)): mod for mod in psm.peptidoform.properties[term]}
                         )
         except KeyError as e:
             raise exceptions.UnresolvableModificationError(e.args[0]) from e
 
         # Add modification entries
-        for target, mod in unique_modifications:
+        for (target, _), mod in unique_modifications.items():
             self._configure_modification(target, mod)
 
     def write_encoder_files(self) -> str:
@@ -295,8 +296,8 @@ class Encoder:
 
         def _generate_encoding(peptidoform) -> Generator[int, None, None]:
             if peptidoform.properties["n_term"]:
-                mod_key = peptidoform.properties["n_term"][0].key
-                yield self.modifications["n_term", mod_key]["mod_id"]
+                mod_str = str(peptidoform.properties["n_term"][0])
+                yield self.modifications["n_term", mod_str]["mod_id"]
             else:
                 yield 0
 
@@ -305,15 +306,15 @@ class Encoder:
                     if not mods:
                         yield AMINO_ACID_IDS[aa]
                     else:
-                        yield self.modifications[aa, mods[0].key]["mod_id"]
+                        yield self.modifications[aa, str(mods[0])]["mod_id"]
                 except KeyError as e:
                     raise exceptions.InvalidAminoAcidError(
                         f"Unsupported amino acid found in peptide `{peptidoform.proforma}`"
                     ) from e
 
             if peptidoform.properties["c_term"]:
-                mod_key = peptidoform.properties["c_term"][0].key
-                yield self.modifications["c_term", mod_key]["mod_id"]
+                mod_str = str(peptidoform.properties["c_term"][0])
+                yield self.modifications["c_term", mod_str]["mod_id"]
             else:
                 yield 0
 
