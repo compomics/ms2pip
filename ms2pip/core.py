@@ -20,6 +20,7 @@ import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
 from ms2pip._cython_modules import ms2pip_pyx
 from ms2pip._utils.encoder import Encoder
+from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
@@ -197,6 +198,7 @@ def get_training_data(
     psms: Union[PSMList, str, Path],
     spectrum_file: Union[str, Path],
     spectrum_id_pattern: Optional[str] = None,
+    model: Optional[str] = "HCD",
     ms2_tolerance: float = 0.02,
     processes: Optional[int] = None,
 ):
@@ -212,6 +214,9 @@ def get_training_data(
     spectrum_id_pattern
         Regular expression pattern to apply to spectrum titles before matching to
         peptide file ``spec_id`` entries.
+    model
+        Model to use as reference for the ion types that are extracted from the observed spectra.
+        Default: "HCD", which results in the extraction of singly charged b- and y-ions.
     ms2_tolerance
         MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
     processes
@@ -223,13 +228,13 @@ def get_training_data(
         :py:class:`pandas.DataFrame` with feature vectors and targets.
 
     """
-    raise NotImplementedError
     psm_list = read_psms(psms)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     with Encoder.from_psm_list(psm_list) as encoder:
         ms2pip_parallelized = _Parallelized(
             encoder=encoder,
+            model=model,
             ms2_tolerance=ms2_tolerance,
             processes=processes,
         )
@@ -237,10 +242,11 @@ def get_training_data(
         results = ms2pip_parallelized.process_spectra(
             psm_list, spectrum_file, spectrum_id_pattern, vector_file=True
         )
-        logger.debug("Merging results")
-        vectors = ms2pip_parallelized.write_vector_file(results)
 
-    return vectors
+        logger.info("Assembling training data in DataFrame...")
+        training_data = _assemble_training_data(results, model)
+
+    return training_data
 
 
 def download_models(
@@ -485,7 +491,7 @@ class _Parallelized:
         multiprocessing.
         """
 
-        if not "xgboost_model_files" in MODELS[self.model].keys():
+        if "xgboost_model_files" not in MODELS[self.model].keys():
             raise ValueError("XGBoost model files not found in MODELS dictionary.")
 
         logger.debug("Converting feature vectors to XGBoost DMatrix...")
@@ -513,45 +519,6 @@ class _Parallelized:
             result.feature_vectors = None
 
         return results
-
-    # TODO IMPLEMENT
-    def write_vector_file(self, results: List[ProcessingResult]):
-        raise NotImplementedError
-        all_results = []
-        for r in results:
-            psmids, df, dtargets = r.get()
-
-            # dtargets is a dict, containing targets for every ion type (keys are int)
-            for i, t in dtargets.items():
-                df["targets_{}".format(MODELS[self.model]["ion_types"][i])] = np.concatenate(
-                    t, axis=None
-                )
-            df["psmid"] = psmids
-
-            all_results.append(df)
-
-        # Only concat DataFrames with content (we get empty ones if more CPUs than peptides)
-        all_results = pd.concat([df for df in all_results if len(df) != 0])
-
-        logger.info("Writing vector file %s...", self.vector_file)
-        # TODO Consider writing to DMatrix XGBoost binary file instead.
-        # write result. write format depends on extension:
-        ext = self.vector_file.split(".")[-1]
-        if ext == "pkl":
-            all_results.to_pickle(self.vector_file + ".pkl")
-        elif ext == "csv":
-            try:
-                all_results.to_csv(self.vector_file, lineterminator="\n")
-            except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-                all_results.to_csv(self.vector_file, line_terminator="\n")
-        else:
-            raise ValueError("Unknown vector file extension: {}".format(ext))
-        # Avoid PyTables dependency
-        # else:
-        # "table" is a tag used to read back the .h5
-        # all_results.to_hdf(self.vector_file, "table")
-
-        return all_results
 
     # TODO IMPLEMENT
     def write_predictions(
@@ -706,7 +673,7 @@ def _process_spectra(
     # Restructure PeptideRecord entries as spec_id -> [(id, psm_1), (id, psm_2), ...]
     psms_by_specid = defaultdict(list)
     for psm_index, psm in enumerated_psm_list:
-        psms_by_specid[psm.spectrum_id].append((psm_index, psm))
+        psms_by_specid[str(psm.spectrum_id)].append((psm_index, psm))
 
     # Track progress for only one worker (good approximation of all workers' progress)
     for spectrum in read_spectrum_file(spec_file):
@@ -782,3 +749,33 @@ def _process_spectra(
             results.append(result)
 
     return results
+
+
+def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.DataFrame:
+    """Assemble training data from results list to single pandas DataFrame."""
+    # Get ion types
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+
+    # Assemble feature vectors, PSM indices, and targets
+    training_data = pd.DataFrame(
+        np.vstack([r.feature_vectors for r in results if r.feature_vectors is not None]),
+        columns=get_feature_names(),
+    )
+    training_data["psm_index"] = np.concatenate(
+        [
+            np.repeat(r.psm_index, r.feature_vectors.shape[0])
+            for r in results
+            if r.feature_vectors is not None
+        ]
+    )
+    for ion_type in ion_types:
+        training_data[f"target_{ion_type}"] = np.concatenate(
+            [r.observed_intensity[ion_type] for r in results if r.feature_vectors is not None]
+        )
+
+    # Reorder columns
+    training_data = training_data[
+        ["psm_index"] + get_feature_names() + [f"target_{it}" for it in ion_types]
+    ]
+
+    return training_data

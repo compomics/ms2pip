@@ -146,8 +146,24 @@ def correlate(*args, **kwargs):
 
 
 @cli.command(help=ms2pip.core.get_training_data.__doc__)
+@click.argument("psms", required=True)
+@click.argument("spectrum_file", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--spectrum-id-pattern", "-p")
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option("--processes", "-n", type=int)
 def get_training_data(*args, **kwargs):
-    ms2pip.core.get_training_data(*args, **kwargs)
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    output_name = _infer_output_name(kwargs["psms"], output_name).with_suffix(".feather")
+
+    # Run
+    training_data = ms2pip.core.get_training_data(*args, **kwargs)
+
+    # Write output
+    logger.info(f"Writing training data to {output_name}")
+    training_data.to_feather(output_name)
 
 
 def main():
