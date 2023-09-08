@@ -143,5 +143,20 @@ MODELS = {
             "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e",
         },
     },
+    "timsTOF": {
+        "id": 12,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "phospho_timsTOF_b_maxdepth.xgboost",
+            "y": "phospho_timsTOF_y_maxdepth.xgboost",
+        },
+        "model_hash": {
+            "phospho_timsTOF_b_maxdepth.xgboost": "87ee90fbdb2033380fc6f2b543173016404b782b",
+            "phospho_timsTOF_y_maxdepth.xgboost": "8c1d062ba86415e5cf5bf16a0cc161f11da2d87e",
+        },
+    },
 }
+
 MODELS["HCD"] = MODELS["HCD2021"]
