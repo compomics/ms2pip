@@ -769,9 +769,18 @@ def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.D
         ]
     )
     for ion_type in ion_types:
-        training_data[f"target_{ion_type}"] = np.concatenate(
-            [r.observed_intensity[ion_type] for r in results if r.feature_vectors is not None]
-        )
+        if ion_type in ["a", "b", "b2", "c"]:
+            training_data[f"target_{ion_type}"] = np.concatenate(
+                [r.observed_intensity[ion_type] for r in results if r.feature_vectors is not None]
+            )
+        elif ion_type in ["x", "y", "y2", "z"]:
+            training_data[f"target_{ion_type}"] = np.concatenate(
+                [
+                    r.observed_intensity[ion_type][::-1]
+                    for r in results
+                    if r.feature_vectors is not None
+                ]
+            )
 
     # Reorder columns
     training_data = training_data[
