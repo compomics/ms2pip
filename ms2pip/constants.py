@@ -149,12 +149,12 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "11092023_172748_training_datafeature_vector_b.xgboost",
-            "y": "12092023_103353_training_datafeature_vector_inverse_y.xgboost",
+            "b": "model_20230912_timsTOF_B.xgboost",
+            "y": "model_20230912_timsTOF_Y.xgboost",
         },
         "model_hash": {
-            "11092023_172748_training_datafeature_vector_b.xgboost": "6beb557052455310d8c66311c86866dda8291f4b",
-            "12092023_103353_training_datafeature_vector_inverse_y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
+            "model_20230912_timsTOF_B.xgboost": "6beb557052455310d8c66311c86866dda8291f4b",
+            "model_20230912_timsTOF_Y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
         },
     },
 }
