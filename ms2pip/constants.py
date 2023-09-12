@@ -149,12 +149,12 @@ MODELS = {
         "peaks_version": "general",
         "features_version": "normal",
         "xgboost_model_files": {
-            "b": "phospho_timsTOF_b_maxdepth.xgboost",
-            "y": "phospho_timsTOF_y_maxdepth.xgboost",
+            "b": "11092023_172748_training_datafeature_vector_b.xgboost",
+            "y": "12092023_103353_training_datafeature_vector_inverse_y.xgboost",
         },
         "model_hash": {
-            "phospho_timsTOF_b_maxdepth.xgboost": "87ee90fbdb2033380fc6f2b543173016404b782b",
-            "phospho_timsTOF_y_maxdepth.xgboost": "8c1d062ba86415e5cf5bf16a0cc161f11da2d87e",
+            "11092023_172748_training_datafeature_vector_b.xgboost": "6beb557052455310d8c66311c86866dda8291f4b",
+            "12092023_103353_training_datafeature_vector_inverse_y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
         },
     },
 }
