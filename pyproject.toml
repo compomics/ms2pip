@@ -2,7 +2,7 @@
 name = "ms2pip"
 description = "MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."
 readme = "README.rst"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 dynamic = ["version"]
 keywords = [
     "MS2PIP",
@@ -15,11 +15,11 @@ keywords = [
     "fasta2speclib",
 ]
 authors = [
-    {name = "Ralf Gabriels", email = "ralf@gabriels.dev"},
-    {name = "Sven Degroeve", email = "sven.degroeve@ugent.be"},
-    {name = "Arthur Declercq", email = "arthur.declercq@ugent.be"},
-    {name = "Kevin Velghe", email = "kevin.velghe@ugent.be"},
-    {name = "Ana Sílvia C. Silva"},
+    { name = "Ralf Gabriels", email = "ralf@gabriels.dev" },
+    { name = "Sven Degroeve", email = "sven.degroeve@ugent.be" },
+    { name = "Arthur Declercq", email = "arthur.declercq@ugent.be" },
+    { name = "Kevin Velghe", email = "kevin.velghe@ugent.be" },
+    { name = "Ana Sílvia C. Silva" },
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
@@ -49,15 +49,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-plotting = [
-    "matplotlib>=3.0",
-    "spectrum-utils>=0.4",
-]
-dev = [
-    "black",
-    "isort>5",
-    "pytest",
-]
+plotting = ["matplotlib>=3.0", "spectrum-utils>=0.4"]
+dev = ["black", "isort>5", "pytest"]
 docs = [
     "sphinx",
     "numpydoc>=1,<2",
@@ -97,7 +90,7 @@ target-version = 'py38'
 
 [tool.cibuildwheel]
 build = "cp3*-manylinux_x86_64 cp3*-win_amd64 cp3*-macosx_x86_64"
-skip = "cp36-* cp37-*" # EOL
+skip = "cp36-* cp37-* cp312-*"                                    # EOL / no Numpy wheels available yet for Python 3.12
 manylinux-x86_64-image = "manylinux2014"
 # test-command = "pytest {package}/tests"
 test-command = "ms2pip --help"
