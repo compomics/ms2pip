@@ -69,12 +69,16 @@ def read_mzml(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
                 precursor = spectrum["precursorList"]["precursor"][0]["selectedIonList"][
                     "selectedIon"
                 ][0]
+                try:
+                    precursor_charge = precursor["charge state"]
+                except KeyError:
+                    precursor_charge = None
                 spectrum = ObservedSpectrum(
                     identifier=spectrum["id"],
                     mz=spectrum["m/z array"],
                     intensity=spectrum["intensity array"],
                     precursor_mz=precursor["selected ion m/z"],
-                    precursor_charge=precursor["charge state"],
+                    precursor_charge=precursor_charge,
                 )
                 yield spectrum
 

@@ -10,7 +10,7 @@ filterwarnings(
 )
 
 
-from ms2pip.core import (
+from ms2pip.core import (  # noqa: F401 E402
     predict_single,
     predict_batch,
     predict_library,
