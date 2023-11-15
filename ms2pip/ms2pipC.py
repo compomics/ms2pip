@@ -180,6 +180,21 @@ MODELS = {
             "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e",
         },
     },
+    "timsTOF": {
+        "id": 12,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20230912_timsTOF_B.xgboost",
+            "y": "model_20230912_timsTOF_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20230912_timsTOF_B.xgboost": "6beb557052455310d8c66311c86866dda8291f4b",
+            "model_20230912_timsTOF_Y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
+        },
+    },
+
 }
 MODELS["HCD"] = MODELS["HCD2021"]
 
