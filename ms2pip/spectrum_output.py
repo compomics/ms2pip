@@ -124,69 +124,84 @@ class SpectrumOutput:
 
     #     self.peprec_dict = peprec_tmp.to_dict(orient="index")
 
-    # def _generate_preds_dict(self):
-    #     """
-    #     Create easy to access dict from peprec dataframes
-    #     """
-    #     self.preds_dict = {}
-    #     preds_list = self.all_preds[
-    #         ["spec_id", "charge", "ion", "ionnumber", "mz", "prediction"]
-    #     ].values.tolist()
+    def _generate_preds_dict(self):
+        """
+        Create easy to access dict from results data.
+        """
+        self.preds_dict = {}
 
-    #     for row in preds_list:
-    #         spec_id = row[0]
-    #         if spec_id in self.preds_dict.keys():
-    #             if row[2] in self.preds_dict[spec_id]["peaks"]:
-    #                 self.preds_dict[spec_id]["peaks"][row[2]].append(tuple(row[3:]))
-    #             else:
-    #                 self.preds_dict[spec_id]["peaks"][row[2]] = [tuple(row[3:])]
-    #         else:
-    #             self.preds_dict[spec_id] = {
-    #                 "charge": row[1],
-    #                 "peaks": {row[2]: [tuple(row[3:])]},
-    #             }
+        for result in self.results:
+            spec_id = result.psm_index
+            if spec_id in self.preds_dict.keys():
+                for ion, ion_numbers in result.theoretical_mz.items():
+                    for i, ion_number in enumerate(ion_numbers):
+                        mz = result.theoretical_mz[ion][i]
+                        prediction = result.predicted_intensity[ion][i] if result.predicted_intensity else None
 
-    # def _normalize_spectra(self, method="basepeak_10000"):
-    #     """
-    #     Normalize spectra
-    #     """
-    #     if self.is_log_space:
-    #         self.all_preds["prediction"] = ((2 ** self.all_preds["prediction"]) - 0.001).clip(
-    #             lower=0
-    #         )
-    #         self.is_log_space = False
+                        if ion in self.preds_dict[spec_id]["peaks"]:
+                            self.preds_dict[spec_id]["peaks"][ion].append((ion_number, mz, prediction))
+                        else:
+                            self.preds_dict[spec_id]["peaks"][ion] = [(ion_number, mz, prediction)]
+            else:
+                self.preds_dict[spec_id] = {
+                    "peaks": {}
+                }
 
-    #     if method == "basepeak_10000":
-    #         if self.normalization == "basepeak_10000":
-    #             pass
-    #         elif self.normalization == "basepeak_1":
-    #             self.all_preds["prediction"] *= 10000
-    #         else:
-    #             self.all_preds["prediction"] = self.all_preds.groupby(
-    #                 ["spec_id"], group_keys=False
-    #             )["prediction"].apply(lambda x: (x / x.max()) * 10000)
-    #         self.normalization = "basepeak_10000"
+                if result.psm and result.psm.peptidoform:
+                    self.preds_dict[spec_id]["charge"] = result.psm.peptidoform.precursor_charge
 
-    #     elif method == "basepeak_1":
-    #         if self.normalization == "basepeak_1":
-    #             pass
-    #         elif self.normalization == "basepeak_10000":
-    #             self.all_preds["prediction"] /= 10000
-    #         else:
-    #             self.all_preds["prediction"] = self.all_preds.groupby(
-    #                 ["spec_id"], group_keys=False
-    #             )["prediction"].apply(lambda x: (x / x.max()))
-    #         self.normalization = "basepeak_1"
 
-    #     elif method == "tic":
-    #         if self.normalization != "tic":
-    #             self.all_preds["prediction"] = self.all_preds.groupby(
-    #                 ["spec_id"], group_keys=False
-    #             )["prediction"].apply(lambda x: x / x.sum())
-    #         self.normalization = "tic"
+    def _normalize_spectra(self, method="basepeak_10000"):
+        """
+        Normalize spectra
+        """
+        if self.is_log_space:
+            for result in self.results:
+                if result.predicted_intensity:
+                    for ion, intensities in result.predicted_intensity.items():
+                        result.predicted_intensity[ion] = ((2 ** intensities) - 0.001).clip(lower=0)
+            self.is_log_space = False
 
-    #     else:
-    #         raise NotImplementedError
+        if method == "basepeak_10000":
+            if self.normalization == "basepeak_10000":
+                pass
+            elif self.normalization == "basepeak_1":
+                for result in self.results:
+                    if result.predicted_intensity:
+                         for ion, intensities in result.predicted_intensity.items():
+                            result.predicted_intensity[ion] *= 10000
+            else:
+                for result in self.results:
+                    if result.predicted_intensity:
+                        for ion, intensities in result.predicted_intensity.items():
+                            result.predicted_intensity[ion] = (intensities / intensities.max()) * 10000
+            self.normalization = "basepeak_10000"
+
+        elif method == "basepeak_1":
+            if self.normalization == "basepeak_1":
+                pass
+            elif self.normalization == "basepeak_10000":
+                for result in self.results:
+                    if result.predicted_intensity:
+                        for ion, intensities in result.predicted_intensity.items():
+                            result.predicted_intensity[ion] /= 10000
+            else:
+                for result in self.results:
+                    if result.predicted_intensity:
+                        for ion, intensities in result.predicted_intensity.items():
+                            result.predicted_intensity[ion] = (intensities / intensities.max())
+            self.normalization = "basepeak_1"
+
+        elif method == "tic":
+            if self.normalization != "tic":
+                for result in self.results:
+                    if result.predicted_intensity:
+                        for ion, intensities in result.predicted_intensity.items():
+                            result.predicted_intensity[ion] = (intensities / intensities.sum())
+            self.normalization = "tic"
+
+        else:
+            raise NotImplementedError
 
     def _get_msp_peak_annotation(
         self,
