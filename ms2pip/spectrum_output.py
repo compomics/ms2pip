@@ -124,31 +124,31 @@ class SpectrumOutput:
 
     #     self.peprec_dict = peprec_tmp.to_dict(orient="index")
 
-    def _generate_preds_dict(self):
-        """
-        Create easy to access dict from results data.
-        """
-        self.preds_dict = {}
+    # def _generate_preds_dict(self):
+    #     """
+    #     Create easy to access dict from results data.
+    #     """
+    #     self.preds_dict = {}
 
-        for result in self.results:
-            spec_id = result.psm_index
-            if spec_id in self.preds_dict.keys():
-                for ion, ion_numbers in result.theoretical_mz.items():
-                    for i, ion_number in enumerate(ion_numbers):
-                        mz = result.theoretical_mz[ion][i]
-                        prediction = result.predicted_intensity[ion][i] if result.predicted_intensity else None
+    #     for result in self.results:
+    #         spec_id = result.psm_index
+    #         if spec_id in self.preds_dict.keys():
+    #             for ion, ion_numbers in result.theoretical_mz.items():
+    #                 for i, ion_number in enumerate(ion_numbers):
+    #                     mz = result.theoretical_mz[ion][i]
+    #                     prediction = result.predicted_intensity[ion][i] if result.predicted_intensity else None
 
-                        if ion in self.preds_dict[spec_id]["peaks"]:
-                            self.preds_dict[spec_id]["peaks"][ion].append((ion_number, mz, prediction))
-                        else:
-                            self.preds_dict[spec_id]["peaks"][ion] = [(ion_number, mz, prediction)]
-            else:
-                self.preds_dict[spec_id] = {
-                    "peaks": {}
-                }
+    #                     if ion in self.preds_dict[spec_id]["peaks"]:
+    #                         self.preds_dict[spec_id]["peaks"][ion].append((ion_number, mz, prediction))
+    #                     else:
+    #                         self.preds_dict[spec_id]["peaks"][ion] = [(ion_number, mz, prediction)]
+    #         else:
+    #             self.preds_dict[spec_id] = {
+    #                 "peaks": {}
+    #             }
 
-                if result.psm and result.psm.peptidoform:
-                    self.preds_dict[spec_id]["charge"] = result.psm.peptidoform.precursor_charge
+    #             if result.psm and result.psm.peptidoform:
+    #                 self.preds_dict[spec_id]["charge"] = result.psm.peptidoform.precursor_charge
 
 
     def _normalize_spectra(self, method="basepeak_10000"):
@@ -202,6 +202,15 @@ class SpectrumOutput:
 
         else:
             raise NotImplementedError
+        
+        
+    def _tic_normalize(intensities):
+        """Normalize intensities to total ion current (TIC)."""
+        return intensities / intensities.sum()
+
+    def _basepeak_normalize(intensities):
+        """Normalize intensities to most intense peak."""
+        return intensities / intensities.max()
 
     def _get_msp_peak_annotation(
         self,
@@ -320,52 +329,56 @@ class SpectrumOutput:
             results[output_format] = writer(self)
         return results
 
-    @output_format("msp")
-    @writer(
-        file_suffix="_predictions.msp",
-        normalization_method="basepeak_10000",
-        requires_dicts=True,
-        requires_diff_modifications=False,
-    )
-    def write_msp(self, file_object):
+    # @output_format("msp")
+    # @writer(
+    #     file_suffix="_predictions.msp",
+    #     normalization_method="basepeak_10000",
+    # )
+    def write_msp(self, file_object, normalization_method="basepeak_10000"):
         """
         Construct MSP string and write to file_object.
         """
 
-        for spec_id in sorted(self.peprec_dict.keys()):
-            seq = self.peprec_dict[spec_id]["peptide"]
-            mods = self.peprec_dict[spec_id]["modifications"]
-            charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-            msp_modifications = self._get_msp_modifications(seq, mods)
-            num_peaks = sum(
-                [len(peaklist) for _, peaklist in self.preds_dict[spec_id]["peaks"].items()]
-            )
+        for result in self.results:
 
-            comment_line = f" Mods={msp_modifications} Parent={prec_mz}"
+            sequence = result.psm.peptidoform.sequence
+            charge = result.psm.peptidoform.precursor_charge
+            mw = result.psm.peptidoform.theoretical_mass
 
-            if self.has_protein_list:
-                protein_list = self.peprec_dict[spec_id]["protein_list"]
-                protein_string = self._parse_protein_string(protein_list)
-                comment_line += f' Protein="{protein_string}"'
+            result_spectrum = result.as_spectra()[0]
 
-            if self.has_rt:
-                rt = self.peprec_dict[spec_id]["rt"]
-                comment_line += f" RetentionTime={rt}"
+            num_peaks = len(result_spectrum.mz)
 
-            comment_line += f' MS2PIP_ID="{spec_id}"'
+            if normalization_method == "basepeak_10000":
+                intensity_normalized = self._basepeak_normalize(result_spectrum.intensity) * 10000
+            elif normalization_method == "tic":
+                intensity_normalized = self._tic_normalize(result_spectrum.intensity)
+            else:
+                intensity_normalized = result_spectrum.intensity
+
+            peaks = zip(result_spectrum.mz, intensity_normalized, result_spectrum.annotations)
+
+            # TODO: change modification info for comment line to use result
+
+            # comment_line = f" Mods={msp_modifications} Parent={prec_mz}"
+
+            # if self.has_protein_list:
+            #     protein_list = self.peprec_dict[spec_id]["protein_list"]
+            #     protein_string = self._parse_protein_string(protein_list)
+            #     comment_line += f' Protein="{protein_string}"'
+
+            # if self.has_rt:
+            #     rt = self.peprec_dict[spec_id]["rt"]
+            #     comment_line += f" RetentionTime={rt}"
+
+            # comment_line += f' MS2PIP_ID="{spec_id}"'
 
             out = [
-                f"Name: {seq}/{charge}",
-                f"MW: {prec_mass}",
-                f"Comment:{comment_line}",
+                f"Name: {sequence}/{charge}",
+                f"MW: {mw}",
+               # f"Comment:{comment_line}",
                 f"Num peaks: {num_peaks}",
-                self._get_msp_peak_annotation(
-                    self.preds_dict[spec_id]["peaks"],
-                    sep="\t",
-                    include_annotations=True,
-                    intensity_type=int,
-                ),
+                f"{mz}\t{intensity}\t{annotation}/0.0ppm\n" for mz, intensity, annotation in peaks
             ]
 
             file_object.writelines([line + "\n" for line in out] + ["\n"])
