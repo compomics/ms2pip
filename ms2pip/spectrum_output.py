@@ -185,21 +185,15 @@ def write_msp(processing_results: List[ProcessingResult], file_object):
         # comment_line += f' MS2PIP_ID="{spec_id}"'
 
         out = [
-            f"\nName: {sequence}/{charge}",
+            f"Name: {sequence}/{charge}",
             f"MW: {mw}",
             # f"Comment:{comment_line}",
             f"Num peaks: {num_peaks}",
             [f"{mz}\t{intensity}\t{annotation}/0.0\n" for mz, intensity, annotation in peaks]
         ]
         file_object.writelines(''.join(line) if isinstance(line, list) else line + "\n" for line in out)
+        file_object.write('\n')
 
-# @output_format("mgf")
-# @writer(
-#     file_suffix="_predictions.mgf",
-#     normalization_method="basepeak_10000",
-#     requires_dicts=True,
-#     requires_diff_modifications=False,
-# )
 def write_mgf(processing_results: List[ProcessingResult], file_object):
     """
     Construct MGF string and write to file_object
@@ -212,7 +206,7 @@ def write_mgf(processing_results: List[ProcessingResult], file_object):
         mw = result.psm.peptidoform.theoretical_mass
 
         result_spectrum = result.as_spectra()[0]
-        intensity_normalized = _tic_normalize(result_spectrum.intensity)
+        intensity_normalized = _basepeak_normalize(result_spectrum.intensity) * 10000
 
         peaks = zip(result_spectrum.mz, intensity_normalized)
 
