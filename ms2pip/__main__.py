@@ -166,6 +166,28 @@ def get_training_data(*args, **kwargs):
     training_data.to_feather(output_name)
 
 
+@cli.command(help=ms2pip.core.annotate_spectra.__doc__)
+@click.argument("psms", required=True)
+@click.argument("spectrum_file", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--spectrum-id-pattern", "-p")
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option("--processes", "-n", type=int)
+def annotate_spectra(*args, **kwargs):
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    output_name = _infer_output_name(kwargs["psms"], output_name)
+
+    # Run
+    results = ms2pip.core.annotate_spectra(*args, **kwargs)
+
+    # Write output
+    output_name_int = output_name.with_name(output_name.stem + "_observations").with_suffix(".csv")
+    logger.info(f"Writing intensities to {output_name_int}")
+    results_to_csv(results, output_name_int)
+
+
 def main():
     try:
         cli()

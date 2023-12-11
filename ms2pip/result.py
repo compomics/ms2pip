@@ -142,7 +142,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
                                 "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
                                 "predicted": "{:.6g}".format(
                                     result.predicted_intensity[ion_type][i]
-                                ),
+                                ) if result.predicted_intensity else None,
                                 "observed": "{:.6g}".format(result.observed_intensity[ion_type][i])
                                 if result.observed_intensity
                                 else None,

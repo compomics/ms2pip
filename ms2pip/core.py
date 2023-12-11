@@ -249,6 +249,58 @@ def get_training_data(
     return training_data
 
 
+def annotate_spectra(
+    psms: Union[PSMList, str, Path],
+    spectrum_file: Union[str, Path],
+    spectrum_id_pattern: Optional[str] = None,
+    model: Optional[str] = "HCD",
+    ms2_tolerance: float = 0.02,
+    processes: Optional[int] = None,
+):
+    """
+    Extract feature vectors and target intensities from observed spectra for training.\f
+
+    Parameters
+    ----------
+    psms
+        PSMList or path to PSM file that is supported by psm_utils.
+    spectrum_file
+        Path to spectrum file with target intensities.
+    spectrum_id_pattern
+        Regular expression pattern to apply to spectrum titles before matching to
+        peptide file ``spec_id`` entries.
+    model
+        Model to use as reference for the ion types that are extracted from the observed spectra.
+        Default: "HCD", which results in the extraction of singly charged b- and y-ions.
+    ms2_tolerance
+        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
+    Returns
+    -------
+    results: List[ProcessingResult]
+        List of ProcessingResult objects with theoretical m/z and observed intensity values.
+
+    """
+    psm_list = read_psms(psms)
+    spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
+
+    with Encoder.from_psm_list(psm_list) as encoder:
+        ms2pip_parallelized = _Parallelized(
+            encoder=encoder,
+            model=model,
+            ms2_tolerance=ms2_tolerance,
+            processes=processes,
+        )
+        logger.info("Processing spectra and peptides...")
+        results = ms2pip_parallelized.process_spectra(
+            psm_list, spectrum_file, spectrum_id_pattern, vector_file=False, annotations_only=True
+        )
+
+    return results
+
+
 def download_models(
     models: Optional[List[str]] = None, model_dir: Optional[Union[str, Path]] = None
 ):
@@ -456,8 +508,26 @@ class _Parallelized:
         spectrum_file: Union[str, Path],
         spectrum_id_pattern: str,
         vector_file: bool = False,
+        annotations_only: bool = False,
     ) -> List[ProcessingResult]:
-        """Process PSMs and observed spectra in parallel."""
+        """
+        Process PSMs and observed spectra in parallel
+
+        Parameters
+        ----------
+        psm_list
+            psm_utils.PSMList instance with PSMs to process
+        spectrum_file
+            Filename of spectrum file
+        spectrum_id_pattern
+            Regular expression pattern to apply to spectrum titles before matching to
+            peptide file entries
+        vector_file
+            If feature vectors should be extracted instead of predictions
+        annotations_only
+            If only peak annotations should be extracted from the spectrum file
+
+        """
         args = (
             spectrum_file,
             vector_file,
@@ -465,6 +535,7 @@ class _Parallelized:
             self.model,
             self.ms2_tolerance,
             spectrum_id_pattern,
+            annotations_only,
         )
         results = self._execute_in_pool(psm_list, _process_spectra, args)
 
@@ -476,7 +547,10 @@ class _Parallelized:
         logger.debug(f"Gathered data for {len(results)} PSMs.")
 
         # Add XGBoost predictions if required
-        if not vector_file and "xgboost_model_files" in MODELS[self.model].keys():
+        if (
+            not (vector_file or annotations_only)
+            and "xgboost_model_files" in MODELS[self.model].keys()
+        ):
             results = self._add_xgboost_predictions(results)
 
         return results
@@ -638,6 +712,7 @@ def _process_spectra(
     model: str,
     ms2_tolerance: float,
     spectrum_id_pattern: str,
+    annotations_only: bool = False,
 ) -> List[ProcessingResult, None]:
     """
     Perform requested tasks for each spectrum in spectrum file.
@@ -659,6 +734,8 @@ def _process_spectra(
     spectrum_id_pattern
         Regular expression pattern to apply to spectrum titles before matching to
         peptide file entries
+    annotations_only
+        If only peak annotations should be extracted from the spectrum file
 
     """
     ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
@@ -735,7 +812,23 @@ def _process_spectra(
                     feature_vectors=feature_vectors,
                 )
 
+            elif annotations_only:
+                # Only return mz and targets
+                mz = ms2pip_pyx.get_mzs(enc_peptidoform, MODELS[model]["peaks_version"])
+                mz = {i: np.array(mz, dtype=np.float32) for i, mz in zip(ion_types, mz)}
+
+                result = ProcessingResult(
+                    psm_index=psm_index,
+                    psm=psm,
+                    theoretical_mz=mz,
+                    predicted_intensity=None,
+                    observed_intensity=targets,
+                    correlation=None,
+                    feature_vectors=None,
+                )
+
             else:
+                # Predict with C model or get feature vectors for XGBoost
                 try:
                     result = _process_peptidoform(psm_index, psm, model, encoder, ion_types)
                 except (
