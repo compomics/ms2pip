@@ -185,7 +185,7 @@ def write_msp(processing_results: List[ProcessingResult], file_object):
         # comment_line += f' MS2PIP_ID="{spec_id}"'
 
         out = [
-            f"Name: {sequence}/{charge}",
+            f"\nName: {sequence}/{charge}",
             f"MW: {mw}",
             # f"Comment:{comment_line}",
             f"Num peaks: {num_peaks}",
@@ -200,56 +200,66 @@ def write_msp(processing_results: List[ProcessingResult], file_object):
 #     requires_dicts=True,
 #     requires_diff_modifications=False,
 # )
-def write_mgf(self, file_object, normalization_method="basepeak_10000"):
+def write_mgf(processing_results: List[ProcessingResult], file_object):
     """
     Construct MGF string and write to file_object
     """
     
-    for result in self.results:
+    for result in processing_results:
 
         sequence = result.psm.peptidoform.sequence
         charge = result.psm.peptidoform.precursor_charge
         mw = result.psm.peptidoform.theoretical_mass
 
+        result_spectrum = result.as_spectra()[0]
+        intensity_normalized = _tic_normalize(result_spectrum.intensity)
+
+        peaks = zip(result_spectrum.mz, intensity_normalized)
+
         out = [
             "BEGIN IONs",
-            f"TITLE={result.psm_index} {sequence}/{charge}"
-            f"CHARGE={charge}+"
-        ]
-
-    for spec_id in sorted(self.peprec_dict.keys()):
-        seq = self.peprec_dict[spec_id]["peptide"]
-        mods = self.peprec_dict[spec_id]["modifications"]
-        charge = self.peprec_dict[spec_id]["charge"]
-        _, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-        msp_modifications = self._get_msp_modifications(seq, mods)
-
-        if self.has_protein_list:
-            protein_list = self.peprec_dict[spec_id]["protein_list"]
-            protein_string = self._parse_protein_string(protein_list)
-        else:
-            protein_string = ""
-
-        out = [
-            "BEGIN IONS",
-            f"TITLE={spec_id} {seq}/{charge} {msp_modifications} {protein_string}",
-            f"PEPMASS={prec_mz}",
+            f"TITLE={result.psm_index} {sequence}/{charge}",
+            f"PEPMASS={mw}",
             f"CHARGE={charge}+",
+            [f"{mz}\t{intensity}\n" for mz, intensity in peaks],
+            "END IONs\n"
         ]
+        file_object.writelines(''.join(line) if isinstance(line, list) else line + "\n" for line in out)
 
-        if self.has_rt:
-            rt = self.peprec_dict[spec_id]["rt"]
-            out.append(f"RTINSECONDS={rt}")
 
-        out.append(
-            self._get_msp_peak_annotation(
-                self.preds_dict[spec_id]["peaks"],
-                sep=" ",
-                include_annotations=False,
-            )
-        )
-        out.append("END IONS\n")
-        file_object.writelines([line for line in out] + ["\n"])
+    # for spec_id in sorted(self.peprec_dict.keys()):
+    #     seq = self.peprec_dict[spec_id]["peptide"]
+    #     mods = self.peprec_dict[spec_id]["modifications"]
+    #     charge = self.peprec_dict[spec_id]["charge"]
+    #     _, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
+    #     msp_modifications = self._get_msp_modifications(seq, mods)
+
+    #     if self.has_protein_list:
+    #         protein_list = self.peprec_dict[spec_id]["protein_list"]
+    #         protein_string = self._parse_protein_string(protein_list)
+    #     else:
+    #         protein_string = ""
+
+    #     out = [
+    #         "BEGIN IONS",
+    #         f"TITLE={spec_id} {seq}/{charge} {msp_modifications} {protein_string}",
+    #         f"PEPMASS={prec_mz}",
+    #         f"CHARGE={charge}+",
+    #     ]
+
+    #     if self.has_rt:
+    #         rt = self.peprec_dict[spec_id]["rt"]
+    #         out.append(f"RTINSECONDS={rt}")
+
+    #     out.append(
+    #         self._get_msp_peak_annotation(
+    #             self.preds_dict[spec_id]["peaks"],
+    #             sep=" ",
+    #             include_annotations=False,
+    #         )
+    #     )
+    #     out.append("END IONS\n")
+    #     file_object.writelines([line for line in out] + ["\n"])
 
 # @output_format("spectronaut")
 # @writer(
