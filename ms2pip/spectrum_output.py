@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 class InvalidWriteModeError(ValueError):
     pass
 
-
     # def _generate_peprec_dict(self, rt_to_seconds=True):
     #     """
     #     Create easy to access dict from all_preds and peprec dataframes
@@ -164,11 +163,11 @@ def write_msp(processing_results: List[ProcessingResult], file_object):
         sequence = result.psm.peptidoform.sequence
         charge = result.psm.peptidoform.precursor_charge
         mw = result.psm.peptidoform.theoretical_mass
-        result_spectrum = result.as_spectra()[0]
-        num_peaks = len(result_spectrum.mz)
-        intensity_normalized = _basepeak_normalize(result_spectrum.intensity) * 10000
+        result = result.as_spectra()[0]
+        num_peaks = len(result.mz)
+        intensity_normalized = _basepeak_normalize(result.intensity) * 10000
 
-        peaks = zip(result_spectrum.mz, intensity_normalized, result_spectrum.annotations)
+        peaks = zip(result.mz, intensity_normalized, result.annotations)
 
         # TODO: change modification info for comment line to use result
         # comment_line = f" Mods={msp_modifications} Parent={prec_mz}"
@@ -205,10 +204,10 @@ def write_mgf(processing_results: List[ProcessingResult], file_object):
         charge = result.psm.peptidoform.precursor_charge
         mw = result.psm.peptidoform.theoretical_mass
 
-        result_spectrum = result.as_spectra()[0]
-        intensity_normalized = _basepeak_normalize(result_spectrum.intensity) * 10000
+        result = result.as_spectra()[0]
+        intensity_normalized = _basepeak_normalize(result.intensity) * 10000
 
-        peaks = zip(result_spectrum.mz, intensity_normalized)
+        peaks = zip(result.mz, intensity_normalized)
 
         out = [
             "BEGIN IONs",
@@ -399,49 +398,49 @@ def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
             + "\n"
         )
 
-def _write_general(
-    self,
-    write_function,
-    file_suffix,
-    normalization_method,
-    requires_dicts,
-    requires_diff_modifications,
-    diff_modification_precision=1,
-):
-    """
-    General write function to call core write functions.
+# def _write_general(
+#     self,
+#     write_function,
+#     file_suffix,
+#     normalization_method,
+#     requires_dicts,
+#     requires_diff_modifications,
+#     diff_modification_precision=1,
+# ):
+#     """
+#     General write function to call core write functions.
 
-    Note: Does not work for write_bibliospec and write_dlib functions.
-    """
+#     Note: Does not work for write_bibliospec and write_dlib functions.
+#     """
 
-    # Normalize if necessary and make dicts
-    if not self.normalization == normalization_method:
-        self._normalize_spectra(method=normalization_method)
-        if requires_dicts:
-            self._generate_preds_dict()
-    elif requires_dicts and not self.preds_dict:
-        self._generate_preds_dict()
-    if requires_dicts and not self.peprec_dict:
-        self._generate_peprec_dict()
+#     # Normalize if necessary and make dicts
+#     if not self.normalization == normalization_method:
+#         self._normalize_spectra(method=normalization_method)
+#         if requires_dicts:
+#             self._generate_preds_dict()
+#     elif requires_dicts and not self.preds_dict:
+#         self._generate_preds_dict()
+#     if requires_dicts and not self.peprec_dict:
+#         self._generate_peprec_dict()
 
-    if (
-        requires_diff_modifications
-        and diff_modification_precision not in self.diff_modification_mapping
-    ):
-        self._generate_diff_modification_mapping(diff_modification_precision)
+#     if (
+#         requires_diff_modifications
+#         and diff_modification_precision not in self.diff_modification_mapping
+#     ):
+#         self._generate_diff_modification_mapping(diff_modification_precision)
 
-    # Write to file or stringbuffer
-    if self.return_stringbuffer:
-        file_object = StringIO()
-        logger.info("Writing results to StringIO using %s", write_function.__name__)
-    else:
-        f_name = self.output_filename + file_suffix
-        file_object = open(f_name, self.write_mode)
-        logger.info("Writing results to %s", f_name)
+#     # Write to file or stringbuffer
+#     if self.return_stringbuffer:
+#         file_object = StringIO()
+#         logger.info("Writing results to StringIO using %s", write_function.__name__)
+#     else:
+#         f_name = self.output_filename + file_suffix
+#         file_object = open(f_name, self.write_mode)
+#         logger.info("Writing results to %s", f_name)
 
-    write_function(self, file_object)
+#     write_function(self, file_object)
 
-    return file_object
+#     return file_object
 
 # @output_format("bibliospec")
 # def write_bibliospec(self):
@@ -493,76 +492,76 @@ def _write_general(
 
 #     return file_obj_ssl, file_obj_ms2
 
-# def _write_dlib_metadata(self, connection):
-#     from sqlalchemy import select
+def _write_dlib_metadata(self, connection):
+    from sqlalchemy import select
 
-#     from ms2pip._utils.dlib import DLIB_VERSION, Metadata
+    from ms2pip._utils.dlib import DLIB_VERSION, Metadata
 
-#     with connection.begin():
-#         version = connection.execute(
-#             select([Metadata.c.Value]).where(Metadata.c.Key == "version")
-#         ).scalar()
-#         if version is None:
-#             connection.execute(
-#                 Metadata.insert().values(
-#                     Key="version",
-#                     Value=DLIB_VERSION,
-#                 )
-#             )
+    with connection.begin():
+        version = connection.execute(
+            select([Metadata.c.Value]).where(Metadata.c.Key == "version")
+        ).scalar()
+        if version is None:
+            connection.execute(
+                Metadata.insert().values(
+                    Key="version",
+                    Value=DLIB_VERSION,
+                )
+            )
 
-def _write_dlib_entries(self, connection, precision):
+def _write_dlib_entries(processing_results: List[ProcessingResult], connection, precision, output_filename: str):
     from ms2pip._utils.dlib import Entry
 
     peptide_to_proteins = set()
 
     with connection.begin():
-        for spec_id, peprec in self.peprec_dict.items():
-            seq = peprec["peptide"]
-            mods = peprec["modifications"]
-            charge = peprec["charge"]
+        
+        for result in processing_results:
 
-            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-            mod_seq = self._get_diff_modified_sequence(seq, mods, precision=precision)
+            precursor_mz = result.precursor_mz
+            precursor_charge = result.psm.peptidoform.precursor_charge
+            seq = result.psm.peptidoform.sequence
+            rt = result.psm.retention_time #TODO: check if this is the right rt
+            mzs = result.theoretical_mz
 
-            all_peaks = sorted(
-                itertools.chain.from_iterable(self.preds_dict[spec_id]["peaks"].values()),
-                key=itemgetter(1),
-            )
-            mzs = [peak[1] for peak in all_peaks]
-            intensities = [peak[2] for peak in all_peaks]
+            # TODO: get mod_seq
+            # mod_seq = 
+
+            result = result.as_spectra()[0]
+            intensity_normalized = _basepeak_normalize(result.intensity) * 10000
 
             connection.execute(
                 Entry.insert().values(
-                    PrecursorMz=prec_mz,
-                    PrecursorCharge=charge,
+                    PrecursorMz=precursor_mz,
+                    PrecursorCharge=precursor_charge,
                     PeptideModSeq=mod_seq,
                     PeptideSeq=seq,
                     Copies=1,
-                    RTInSeconds=peprec["rt"],
+                    RTInSeconds=rt, 
                     Score=0,
                     MassEncodedLength=len(mzs),
                     MassArray=mzs,
-                    IntensityEncodedLength=len(intensities),
-                    IntensityArray=intensities,
-                    SourceFile=self.output_filename,
+                    IntensityEncodedLength=len(intensity_normalized),
+                    IntensityArray=intensity_normalized,
+                    SourceFile=output_filename,
                 )
             )
 
-            if self.has_protein_list:
-                protein_list = peprec["protein_list"]
-                if isinstance(protein_list, str):
-                    protein_list = literal_eval(protein_list)
+            if result.psm.protein_list is not None:
+                protein_list = result.psm.protein_list
+            if isinstance(protein_list, str):
+                protein_list = literal_eval(protein_list)
 
-                for protein in protein_list:
-                    peptide_to_proteins.add((seq, protein))
+            for protein in protein_list:
+                peptide_to_proteins.add((seq, protein))
 
     return peptide_to_proteins
-
-def _write_dlib_peptide_to_protein(self, connection, peptide_to_proteins):
+   
+def _write_dlib_peptide_to_protein(connection, peptide_to_proteins):
     from ms2pip._utils.dlib import PeptideToProtein
 
-    if not self.has_protein_list:
-        return
+    # if not self.has_protein_list:
+    #     return
 
     with connection.begin():
         sql_peptide_to_proteins = set()
@@ -586,40 +585,40 @@ def _write_dlib_peptide_to_protein(self, connection, peptide_to_proteins):
             )
 
 # @output_format("dlib")
-# def write_dlib(self):
-#     """Write MS2PIP predictions to a DLIB SQLite file."""
-#     from ms2pip._utils.dlib import metadata, open_sqlite
+def write_dlib(processing_results: List[ProcessingResult], output_filename: str):
+    """Write MS2PIP predictions to a DLIB SQLite file."""
+    from ms2pip._utils.dlib import metadata, open_sqlite
 
-#     normalization = "basepeak_10000"
-#     precision = 5
-#     if not self.normalization == normalization:
-#         self._normalize_spectra(method=normalization)
-#         self._generate_preds_dict()
-#     if not self.peprec_dict:
-#         self._generate_peprec_dict()
-#     if precision not in self.diff_modification_mapping:
-#         self._generate_diff_modification_mapping(precision)
+    # normalization = "basepeak_10000"
+    precision = 5
+    # if not self.normalization == normalization:
+    #     self._normalize_spectra(method=normalization)
+    #     self._generate_preds_dict()
+    # if not self.peprec_dict:
+    #     self._generate_peprec_dict()
+    # if precision not in self.diff_modification_mapping:
+    #     self._generate_diff_modification_mapping(precision)
 
-#     filename = "{}.dlib".format(self.output_filename)
-#     logger.info("Writing results to %s", filename)
+    filename = "{}.dlib".format(output_filename)
+    logger.info("Writing results to %s", filename)
 
-#     logger.debug(
-#         "write mode is ignored for DLIB at the file mode, although append or not is respected"
-#     )
-#     if "a" not in self.write_mode and os.path.exists(filename):
-#         os.remove(filename)
+    logger.debug(
+        "write mode is ignored for DLIB at the file mode, although append or not is respected"
+    )
+    # if "a" not in self.write_mode and os.path.exists(filename):
+    #     os.remove(filename)
 
-#     if self.return_stringbuffer:
-#         raise NotImplementedError("`return_stringbuffer` not implemented for DLIB output.")
+    # if self.return_stringbuffer:
+    #     raise NotImplementedError("`return_stringbuffer` not implemented for DLIB output.")
 
-#     if not self.has_rt:
-#         raise NotImplementedError("Retention times required to write DLIB file.")
+    # if not self.has_rt:
+    #     raise NotImplementedError("Retention times required to write DLIB file.")
 
-#     with open_sqlite(filename) as connection:
-#         metadata.create_all()
-#         self._write_dlib_metadata(connection)
-#         peptide_to_proteins = self._write_dlib_entries(connection, precision)
-#         self._write_dlib_peptide_to_protein(connection, peptide_to_proteins)
+    with open_sqlite(filename) as connection:
+        metadata.create_all()
+        _write_dlib_metadata(connection)
+        peptide_to_proteins = _write_dlib_entries(processing_results, connection, precision, filename)
+        _write_dlib_peptide_to_protein(connection, peptide_to_proteins)
 
 def write_csv(processing_results: List[ProcessingResult], file_obj):
     """Write processing results to CSV file."""
@@ -642,13 +641,13 @@ def write_csv(processing_results: List[ProcessingResult], file_obj):
                         {
                             "spec_id": result.psm_index,
                             "charge": result.psm.peptidoform.precursor_charge,
-                            "ion": ion_type,
+                            "ion": ion_type, # TODO: change to upper(ion_type) ?
                             "ionnumber": i + 1,
                             "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
                             "prediction": "{:.6g}".format(
                                 result.predicted_intensity[ion_type][i]
                             ),
-                            "rt": result.psm.retention_time # TODO: is always empty now
+                            "rt": result.psm.retention_time # TODO: results in empty string while testing
                         }
                     )
 
