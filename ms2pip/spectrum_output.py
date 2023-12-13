@@ -518,7 +518,7 @@ def _write_dlib_entries(processing_results: List[ProcessingResult], connection, 
         
         for result in processing_results:
 
-            precursor_mz = result.precursor_mz
+            precursor_mz = result.psm.precursor_mz
             precursor_charge = result.psm.peptidoform.precursor_charge
             seq = result.psm.peptidoform.sequence
             rt = result.psm.retention_time #TODO: check if this is the right rt
@@ -526,6 +526,14 @@ def _write_dlib_entries(processing_results: List[ProcessingResult], connection, 
 
             # TODO: get mod_seq
             # mod_seq = 
+
+            if result.psm.protein_list is not None:
+                protein_list = result.psm.protein_list
+            if isinstance(protein_list, str):
+                protein_list = literal_eval(protein_list)
+
+            for protein in protein_list:
+                peptide_to_proteins.add((seq, protein))
 
             result = result.as_spectra()[0]
             intensity_normalized = _basepeak_normalize(result.intensity) * 10000
@@ -546,15 +554,6 @@ def _write_dlib_entries(processing_results: List[ProcessingResult], connection, 
                     SourceFile=output_filename,
                 )
             )
-
-            if result.psm.protein_list is not None:
-                protein_list = result.psm.protein_list
-            if isinstance(protein_list, str):
-                protein_list = literal_eval(protein_list)
-
-            for protein in protein_list:
-                peptide_to_proteins.add((seq, protein))
-
     return peptide_to_proteins
    
 def _write_dlib_peptide_to_protein(connection, peptide_to_proteins):
