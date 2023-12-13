@@ -262,100 +262,100 @@ def write_mgf(processing_results: List[ProcessingResult], file_object):
 #     requires_dicts=False,
 #     requires_diff_modifications=True,
 # )
-# def write_spectronaut(self, file_obj):
-#     """
-#     Construct spectronaut DataFrame and write to file_object.
-#     """
-#     if "w" in self.write_mode:
-#         header = True
-#     elif "a" in self.write_mode:
-#         header = False
-#     else:
-#         raise InvalidWriteModeError(self.write_mode)
+def write_spectronaut(processing_results: List[ProcessingResult], file_obj, header: bool):
+    """
+    Construct spectronaut DataFrame and write to file_object.
+    """
+    # if "w" in self.write_mode:
+    #     header = True
+    # elif "a" in self.write_mode:
+    #     header = False
+    # else:
+    #     raise InvalidWriteModeError(self.write_mode)
 
-#     spectronaut_peprec = self.peprec.copy()
+    spectronaut_peprec = self.peprec.copy()
 
-#     # ModifiedPeptide and PrecursorMz columns
-#     spectronaut_peprec["ModifiedPeptide"] = spectronaut_peprec.apply(
-#         lambda row: self._get_diff_modified_sequence(row["peptide"], row["modifications"]),
-#         axis=1,
-#     )
-#     spectronaut_peprec["PrecursorMz"] = spectronaut_peprec.apply(
-#         lambda row: self.mods.calc_precursor_mz(
-#             row["peptide"], row["modifications"], row["charge"]
-#         )[1],
-#         axis=1,
-#     )
-#     spectronaut_peprec["ModifiedPeptide"] = "_" + spectronaut_peprec["ModifiedPeptide"] + "_"
+    # ModifiedPeptide and PrecursorMz columns
+    spectronaut_peprec["ModifiedPeptide"] = spectronaut_peprec.apply(
+        lambda row: self._get_diff_modified_sequence(row["peptide"], row["modifications"]),
+        axis=1,
+    )
+    spectronaut_peprec["PrecursorMz"] = spectronaut_peprec.apply(
+        lambda row: self.mods.calc_precursor_mz(
+            row["peptide"], row["modifications"], row["charge"]
+        )[1],
+        axis=1,
+    )
+    spectronaut_peprec["ModifiedPeptide"] = "_" + spectronaut_peprec["ModifiedPeptide"] + "_"
 
-#     # Additional columns
-#     spectronaut_peprec["FragmentLossType"] = "noloss"
+    # Additional columns
+    spectronaut_peprec["FragmentLossType"] = "noloss"
 
-#     # Retention time
-#     if "rt" in spectronaut_peprec.columns:
-#         rt_cols = ["iRT"]
-#         spectronaut_peprec["iRT"] = spectronaut_peprec["rt"]
-#     else:
-#         rt_cols = []
+    # Retention time
+    if "rt" in spectronaut_peprec.columns:
+        rt_cols = ["iRT"]
+        spectronaut_peprec["iRT"] = spectronaut_peprec["rt"]
+    else:
+        rt_cols = []
 
-#     # ProteinId
-#     if self.has_protein_list:
-#         spectronaut_peprec["ProteinId"] = spectronaut_peprec["protein_list"].apply(
-#             self._parse_protein_string
-#         )
-#     else:
-#         spectronaut_peprec["ProteinId"] = spectronaut_peprec["spec_id"]
+    # ProteinId
+    if self.has_protein_list:
+        spectronaut_peprec["ProteinId"] = spectronaut_peprec["protein_list"].apply(
+            self._parse_protein_string
+        )
+    else:
+        spectronaut_peprec["ProteinId"] = spectronaut_peprec["spec_id"]
 
-#     # Rename columns and merge with predictions
-#     spectronaut_peprec = spectronaut_peprec.rename(
-#         columns={"charge": "PrecursorCharge", "peptide": "StrippedPeptide"}
-#     )
-#     peptide_cols = (
-#         [
-#             "ModifiedPeptide",
-#             "StrippedPeptide",
-#             "PrecursorCharge",
-#             "PrecursorMz",
-#             "ProteinId",
-#         ]
-#         + rt_cols
-#         + ["FragmentLossType"]
-#     )
-#     spectronaut_df = spectronaut_peprec[peptide_cols + ["spec_id"]]
-#     spectronaut_df = self.all_preds.merge(spectronaut_df, on="spec_id")
+    # Rename columns and merge with predictions
+    spectronaut_peprec = spectronaut_peprec.rename(
+        columns={"charge": "PrecursorCharge", "peptide": "StrippedPeptide"}
+    )
+    peptide_cols = (
+        [
+            "ModifiedPeptide",
+            "StrippedPeptide",
+            "PrecursorCharge",
+            "PrecursorMz",
+            "ProteinId",
+        ]
+        + rt_cols
+        + ["FragmentLossType"]
+    )
+    spectronaut_df = spectronaut_peprec[peptide_cols + ["spec_id"]]
+    spectronaut_df = self.all_preds.merge(spectronaut_df, on="spec_id")
 
-#     # Fragment columns
-#     spectronaut_df["FragmentCharge"] = (
-#         spectronaut_df["ion"].str.contains("2").map({True: 2, False: 1})
-#     )
-#     spectronaut_df["FragmentType"] = spectronaut_df["ion"].str[0].str.lower()
+    # Fragment columns
+    spectronaut_df["FragmentCharge"] = (
+        spectronaut_df["ion"].str.contains("2").map({True: 2, False: 1})
+    )
+    spectronaut_df["FragmentType"] = spectronaut_df["ion"].str[0].str.lower()
 
-#     # Rename and sort columns
-#     spectronaut_df = spectronaut_df.rename(
-#         columns={
-#             "mz": "FragmentMz",
-#             "prediction": "RelativeIntensity",
-#             "ionnumber": "FragmentNumber",
-#         }
-#     )
-#     fragment_cols = [
-#         "FragmentCharge",
-#         "FragmentMz",
-#         "RelativeIntensity",
-#         "FragmentType",
-#         "FragmentNumber",
-#     ]
-#     spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
-#     try:
-#         spectronaut_df.to_csv(
-#             file_obj, index=False, header=header, sep=";", lineterminator="\n"
-#         )
-#     except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-#         spectronaut_df.to_csv(
-#             file_obj, index=False, header=header, sep=";", line_terminator="\n"
-#         )
+    # Rename and sort columns
+    spectronaut_df = spectronaut_df.rename(
+        columns={
+            "mz": "FragmentMz",
+            "prediction": "RelativeIntensity",
+            "ionnumber": "FragmentNumber",
+        }
+    )
+    fragment_cols = [
+        "FragmentCharge",
+        "FragmentMz",
+        "RelativeIntensity",
+        "FragmentType",
+        "FragmentNumber",
+    ]
+    spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
+    try:
+        spectronaut_df.to_csv(
+            file_obj, index=False, header=header, sep=";", lineterminator="\n"
+        )
+    except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+        spectronaut_df.to_csv(
+            file_obj, index=False, header=header, sep=";", line_terminator="\n"
+        )
 
-#     return file_obj
+    return file_obj
 
 def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
     """Construct Bibliospec SSL/MS2 strings and write to file_objects."""
@@ -621,35 +621,36 @@ def _write_dlib_peptide_to_protein(self, connection, peptide_to_proteins):
 #         peptide_to_proteins = self._write_dlib_entries(connection, precision)
 #         self._write_dlib_peptide_to_protein(connection, peptide_to_proteins)
 
-# def get_normalized_predictions(self, normalization_method="tic"):
-#     """Return normalized copy of predictions."""
-#     self._normalize_spectra(method=normalization_method)
-#     return self.all_preds.copy()
-
-# @output_format("csv")
-# def write_csv(self):
-#     """Write MS2PIP predictions to CSV."""
-
-#     self._normalize_spectra(method="tic")
-
-#     # Write to file or stringbuffer
-#     if self.return_stringbuffer:
-#         file_object = StringIO()
-#         logger.info("Writing results to StringIO using %s", "write_csv")
-#     else:
-#         f_name = "{}_predictions.csv".format(self.output_filename)
-#         file_object = open(f_name, self.write_mode)
-#         logger.info("Writing results to %s", f_name)
-
-#     try:
-#         self.all_preds.to_csv(
-#             file_object, float_format="%.6g", index=False, lineterminator="\n"
-#         )
-#     except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-#         self.all_preds.to_csv(
-#             file_object, float_format="%.6g", index=False, line_terminator="\n"
-#         )
-#     return file_object
+def write_csv(processing_results: List[ProcessingResult], file_obj):
+    """Write processing results to CSV file."""
+    fieldnames = [
+        "spec_id",
+        "charge",
+        "ion",
+        "ionnumber",
+        "mz",
+        "prediction",
+        "rt"
+    ]
+    writer = csv.DictWriter(file_obj, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    for result in processing_results:
+        if result.theoretical_mz is not None:
+            for ion_type in result.theoretical_mz:
+                for i in range(len(result.theoretical_mz[ion_type])):
+                    writer.writerow(
+                        {
+                            "spec_id": result.psm_index,
+                            "charge": result.psm.peptidoform.precursor_charge,
+                            "ion": ion_type,
+                            "ionnumber": i + 1,
+                            "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
+                            "prediction": "{:.6g}".format(
+                                result.predicted_intensity[ion_type][i]
+                            ),
+                            "rt": result.psm.retention_time # TODO: is always empty now
+                        }
+                    )
 
 
 # def write_single_spectrum_csv(spectrum, filepath):
