@@ -156,7 +156,7 @@ MODELS = {
             "model_20230912_timsTOF_B.xgboost": "6beb557052455310d8c66311c86866dda8291f4b",
             "model_20230912_timsTOF_Y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
         },
-    "timsTOF_ch2": {
+    "timsTOF_cl2": {
         "id": 13,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
