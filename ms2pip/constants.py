@@ -156,6 +156,19 @@ MODELS = {
             "model_20230912_timsTOF_B.xgboost": "6beb557052455310d8c66311c86866dda8291f4b",
             "model_20230912_timsTOF_Y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
         },
+    "timsTOF_ch2": {
+        "id": 13,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "2024-01-05_15-11-52_timstof_b.xgboost",
+            "y": "2024-01-05_15-13-49_timstof_y.xgboost",
+        },
+        "model_hash": {
+            "2024-01-05_15-11-52_timstof_b.xgboost": "d70e145c15cf2bfa30968077a68409699b2fa541",
+            "2024-01-05_15-13-49_timstof_y.xgboost": "3f0414ee1ad7cff739e0d6242e25bfc22b6ebfe5",
+        },
     },
 }
 
