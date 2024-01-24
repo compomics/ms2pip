@@ -81,7 +81,7 @@ Training new MS²PIP models
 [todo]
 
 
-Prediciton features
+Prediction features
 -------------------
 
 The table below lists and describes all features generated and used by MS²PIP. These are mostly
