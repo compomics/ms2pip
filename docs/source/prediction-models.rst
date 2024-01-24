@@ -81,6 +81,296 @@ Training new MS²PIP models
 [todo]
 
 
+Prediciton features
+-------------------
+
+The table below lists and describes all features generated and used by MS²PIP. These are mostly
+based on four amino acid properties (basicity, hydrophobicity, helicity and isoelectric point)
+for the full precursor and for the N- and C-terminal ions.
+
++-----------------+--------------------------------------------------------------+
+| Feature         | Description                                                  |
++=================+==============================================================+
+| ``p_length``    | Precursor length                                             |
++-----------------+--------------------------------------------------------------+
+| ``p_charge``    | Precursor charge                                             |
++-----------------+--------------------------------------------------------------+
+| ``p_charge1``   | Precursor charge is 1 (one-hot encoding)                     |
++-----------------+--------------------------------------------------------------+
+| ``p_charge2``   | Precursor charge is 2 (one-hot encoding)                     |
++-----------------+--------------------------------------------------------------+
+| ``p_charge3``   | Precursor charge is 3 (one-hot encoding)                     |
++-----------------+--------------------------------------------------------------+
+| ``p_charge4``   | Precursor charge is 4 (one-hot encoding)                     |
++-----------------+--------------------------------------------------------------+
+| ``p_charge5``   | Precursor charge is 5 (one-hot encoding)                     |
++-----------------+--------------------------------------------------------------+
+| ``p_basi_min``  | Minimum basicity of the precursor                            |
++-----------------+--------------------------------------------------------------+
+| ``p_basi_q1``   | First quartile of basicity of the precursor                  |
++-----------------+--------------------------------------------------------------+
+| ``p_basi_q2``   | Second quartile of basicity of the precursor                 |
++-----------------+--------------------------------------------------------------+
+| ``p_basi_q3``   | Third quartile of basicity of the precursor                  |
++-----------------+--------------------------------------------------------------+
+| ``p_basi_max``  | Maximum basicity of the precursor                            |
++-----------------+--------------------------------------------------------------+
+| ``p_heli_min``  | Minimum helicity of the precursor                            |
++-----------------+--------------------------------------------------------------+
+| ``p_heli_q1``   | First quartile of helicity of the precursor                  |
++-----------------+--------------------------------------------------------------+
+| ``p_heli_q2``   | Second quartile of helicity of the precursor                 |
++-----------------+--------------------------------------------------------------+
+| ``p_heli_q3``   | Third quartile of helicity of the precursor                  |
++-----------------+--------------------------------------------------------------+
+| ``p_heli_max``  | Maximum helicity of the precursor                            |
++-----------------+--------------------------------------------------------------+
+| ``p_hydro_min`` | Minimum hydrophobicity of the precursor                      |
++-----------------+--------------------------------------------------------------+
+| ``p_hydro_q1``  | First quartile of hydrophobicity of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``p_hydro_q2``  | Second quartile of hydrophobicity of the precursor           |
++-----------------+--------------------------------------------------------------+
+| ``p_hydro_q3``  | Third quartile of hydrophobicity of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``p_hydro_max`` | Maximum hydrophobicity of the precursor                      |
++-----------------+--------------------------------------------------------------+
+| ``p_iso_min``   | Minimum isoelectric point of the precursor                   |
++-----------------+--------------------------------------------------------------+
+| ``p_iso_q1``    | First quartile of isoelectric point of the precursor         |
++-----------------+--------------------------------------------------------------+
+| ``p_iso_q2``    | Second quartile of isoelectric point of the precursor        |
++-----------------+--------------------------------------------------------------+
+| ``p_iso_q3``    | Third quartile of isoelectric point of the precursor         |
++-----------------+--------------------------------------------------------------+
+| ``p_iso_max``   | Maximum isoelectric point of the precursor                   |
++-----------------+--------------------------------------------------------------+
+| ``n_length``    | Length of the N-terminal ion                                 |
++-----------------+--------------------------------------------------------------+
+| ``c_length``    | Length of the C-terminal ion                                 |
++-----------------+--------------------------------------------------------------+
+| ``n_count_A``   | Count of amino acid 'A' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_A``   | Count of amino acid 'A' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_C``   | Count of amino acid 'C' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_C``   | Count of amino acid 'C' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_D``   | Count of amino acid 'D' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_D``   | Count of amino acid 'D' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_E``   | Count of amino acid 'E' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_E``   | Count of amino acid 'E' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_F``   | Count of amino acid 'F' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_F``   | Count of amino acid 'F' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_G``   | Count of amino acid 'G' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_G``   | Count of amino acid 'G' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_H``   | Count of amino acid 'H' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_H``   | Count of amino acid 'H' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_I``   | Count of amino acid 'I' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_I``   | Count of amino acid 'I' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_K``   | Count of amino acid 'K' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_K``   | Count of amino acid 'K' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_M``   | Count of amino acid 'M' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_M``   | Count of amino acid 'M' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_N``   | Count of amino acid 'N' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_N``   | Count of amino acid 'N' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_P``   | Count of amino acid 'P' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_P``   | Count of amino acid 'P' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_Q``   | Count of amino acid 'Q' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_Q``   | Count of amino acid 'Q' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_R``   | Count of amino acid 'R' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_R``   | Count of amino acid 'R' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_S``   | Count of amino acid 'S' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_S``   | Count of amino acid 'S' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_T``   | Count of amino acid 'T' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_T``   | Count of amino acid 'T' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_V``   | Count of amino acid 'V' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_V``   | Count of amino acid 'V' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_W``   | Count of amino acid 'W' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_W``   | Count of amino acid 'W' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``n_count_Y``   | Count of amino acid 'Y' in the N-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``c_count_Y``   | Count of amino acid 'Y' in the C-terminal ion                |
++-----------------+--------------------------------------------------------------+
+| ``p0_basi``     | Basicity of the 0th position of the precursor                |
++-----------------+--------------------------------------------------------------+
+| ``p-1_basi``    | Basicity of the -1th position of the precursor               |
++-----------------+--------------------------------------------------------------+
+| ``pi-1_basi``   | Basicity of the (i-1)th position of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``pi_basi``     | Basicity of the ith position of the precursor                |
++-----------------+--------------------------------------------------------------+
+| ``pi+1_basi``   | Basicity of the (i+1)th position of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``pi+2_basi``   | Basicity of the (i+2)th position of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``n_basi_sum``  | Sum of basicity of the N-terminal ion                        |
++-----------------+--------------------------------------------------------------+
+| ``n_basi_min``  | Minimum basicity of the N-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``n_basi_q1``   | First quartile of basicity of the N-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``n_basi_q2``   | Second quartile of basicity of the N-terminal ion            |
++-----------------+--------------------------------------------------------------+
+| ``n_basi_q3``   | Third quartile of basicity of the N-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``n_basi_max``  | Maximum basicity of the N-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``c_basi_sum``  | Sum of basicity of the C-terminal ion                        |
++-----------------+--------------------------------------------------------------+
+| ``c_basi_min``  | Minimum basicity of the C-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``c_basi_q1``   | First quartile of basicity of the C-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``c_basi_q2``   | Second quartile of basicity of the C-terminal ion            |
++-----------------+--------------------------------------------------------------+
+| ``c_basi_q3``   | Third quartile of basicity of the C-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``c_basi_max``  | Maximum basicity of the C-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``p0_heli``     | Helicity of the 0th position of the precursor                |
++-----------------+--------------------------------------------------------------+
+| ``p-1_heli``    | Helicity of the -1th position of the precursor               |
++-----------------+--------------------------------------------------------------+
+| ``pi-1_heli``   | Helicity of the (i-1)th position of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``pi_heli``     | Helicity of the ith position of the precursor                |
++-----------------+--------------------------------------------------------------+
+| ``pi+1_heli``   | Helicity of the (i+1)th position of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``pi+2_heli``   | Helicity of the (i+2)th position of the precursor            |
++-----------------+--------------------------------------------------------------+
+| ``n_heli_sum``  | Sum of helicity of the N-terminal ion                        |
++-----------------+--------------------------------------------------------------+
+| ``n_heli_min``  | Minimum helicity of the N-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``n_heli_q1``   | First quartile of helicity of the N-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``n_heli_q2``   | Second quartile of helicity of the N-terminal ion            |
++-----------------+--------------------------------------------------------------+
+| ``n_heli_q3``   | Third quartile of helicity of the N-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``n_heli_max``  | Maximum helicity of the N-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``c_heli_sum``  | Sum of helicity of the C-terminal ion                        |
++-----------------+--------------------------------------------------------------+
+| ``c_heli_min``  | Minimum helicity of the C-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``c_heli_q1``   | First quartile of helicity of the C-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``c_heli_q2``   | Second quartile of helicity of the C-terminal ion            |
++-----------------+--------------------------------------------------------------+
+| ``c_heli_q3``   | Third quartile of helicity of the C-terminal ion             |
++-----------------+--------------------------------------------------------------+
+| ``c_heli_max``  | Maximum helicity of the C-terminal ion                       |
++-----------------+--------------------------------------------------------------+
+| ``p0_hydro``    | Hydrophobicity of the 0th position of the precursor          |
++-----------------+--------------------------------------------------------------+
+| ``p-1_hydro``   | Hydrophobicity of the -1th position of the precursor         |
++-----------------+--------------------------------------------------------------+
+| ``pi-1_hydro``  | Hydrophobicity of the (i-1)th position of the precursor      |
++-----------------+--------------------------------------------------------------+
+| ``pi_hydro``    | Hydrophobicity of the ith position of the precursor          |
++-----------------+--------------------------------------------------------------+
+| ``pi+1_hydro``  | Hydrophobicity of the (i+1)th position of the precursor      |
++-----------------+--------------------------------------------------------------+
+| ``pi+2_hydro``  | Hydrophobicity of the (i+2)th position of the precursor      |
++-----------------+--------------------------------------------------------------+
+| ``n_hydro_sum`` | Sum of hydrophobicity of the N-terminal ion                  |
++-----------------+--------------------------------------------------------------+
+| ``n_hydro_min`` | Minimum hydrophobicity of the N-terminal ion                 |
++-----------------+--------------------------------------------------------------+
+| ``n_hydro_q1``  | First quartile of hydrophobicity of the N-terminal ion       |
++-----------------+--------------------------------------------------------------+
+| ``n_hydro_q2``  | Second quartile of hydrophobicity of the N-terminal ion      |
++-----------------+--------------------------------------------------------------+
+| ``n_hydro_q3``  | Third quartile of hydrophobicity of the N-terminal ion       |
++-----------------+--------------------------------------------------------------+
+| ``n_hydro_max`` | Maximum hydrophobicity of the N-terminal ion                 |
++-----------------+--------------------------------------------------------------+
+| ``c_hydro_sum`` | Sum of hydrophobicity of the C-terminal ion                  |
++-----------------+--------------------------------------------------------------+
+| ``c_hydro_min`` | Minimum hydrophobicity of the C-terminal ion                 |
++-----------------+--------------------------------------------------------------+
+| ``c_hydro_q1``  | First quartile of hydrophobicity of the C-terminal ion       |
++-----------------+--------------------------------------------------------------+
+| ``c_hydro_q2``  | Second quartile of hydrophobicity of the C-terminal ion      |
++-----------------+--------------------------------------------------------------+
+| ``c_hydro_q3``  | Third quartile of hydrophobicity of the C-terminal ion       |
++-----------------+--------------------------------------------------------------+
+| ``c_hydro_max`` | Maximum hydrophobicity of the C-terminal ion                 |
++-----------------+--------------------------------------------------------------+
+| ``p0_iso``      | Isoelectric point of the 0th position of the precursor       |
++-----------------+--------------------------------------------------------------+
+| ``p-1_iso``     | Isoelectric point of the -1th position of the precursor      |
++-----------------+--------------------------------------------------------------+
+| ``pi-1_iso``    | Isoelectric point of the (i-1)th position of the precursor   |
++-----------------+--------------------------------------------------------------+
+| ``pi_iso``      | Isoelectric point of the ith position of the precursor       |
++-----------------+--------------------------------------------------------------+
+| ``pi+1_iso``    | Isoelectric point of the (i+1)th position of the precursor   |
++-----------------+--------------------------------------------------------------+
+| ``pi+2_iso``    | Isoelectric point of the (i+2)th position of the precursor   |
++-----------------+--------------------------------------------------------------+
+| ``n_iso_sum``   | Sum of isoelectric points of the N-terminal ion              |
++-----------------+--------------------------------------------------------------+
+| ``n_iso_min``   | Minimum isoelectric point of the N-terminal ion              |
++-----------------+--------------------------------------------------------------+
+| ``n_iso_q1``    | First quartile of isoelectric points of the N-terminal ion   |
++-----------------+--------------------------------------------------------------+
+| ``n_iso_q2``    | Second quartile of isoelectric points of the N-terminal ion  |
++-----------------+--------------------------------------------------------------+
+| ``n_iso_q3``    | Third quartile of isoelectric points of the N-terminal ion   |
++-----------------+--------------------------------------------------------------+
+| ``n_iso_max``   | Maximum isoelectric point of the N-terminal ion              |
++-----------------+--------------------------------------------------------------+
+| ``c_iso_sum``   | Sum of isoelectric points of the C-terminal ion              |
++-----------------+--------------------------------------------------------------+
+| ``c_iso_min``   | Minimum isoelectric point of the C-terminal ion              |
++-----------------+--------------------------------------------------------------+
+| ``c_iso_q1``    | First quartile of isoelectric points of the C-terminal ion   |
++-----------------+--------------------------------------------------------------+
+| ``c_iso_q2``    | Second quartile of isoelectric points of the C-terminal ion  |
++-----------------+--------------------------------------------------------------+
+| ``c_iso_q3``    | Third quartile of isoelectric points of the C-terminal ion   |
++-----------------+--------------------------------------------------------------+
+| ``c_iso_max``   | Maximum isoelectric point of the C-terminal ion              |
++-----------------+--------------------------------------------------------------+
+
+
 .. _MassIVE-KB: https://doi.org/10.1016/j.cels.2018.08.004
 .. _PXD008034: https://doi.org/10.1016/j.jprot.2017.12.006
 .. _NIST CID Human: https://chemdata.nist.gov/
