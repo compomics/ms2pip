@@ -1,188 +1,217 @@
-import argparse
 import logging
-import multiprocessing
 import sys
+from pathlib import Path
+from typing import Optional
 
+import click
 from rich.console import Console
 from rich.logging import RichHandler
+from werkzeug.utils import secure_filename
 
-from ms2pip.config_parser import ConfigParser
-from ms2pip.exceptions import (EmptySpectrumError,
-                               FragmentationModelRequiredError,
-                               InvalidModificationFormattingError,
-                               InvalidPEPRECError, InvalidXGBoostModelError,
-                               NoValidPeptideSequencesError,
-                               UnknownFragmentationMethodError,
-                               UnknownModificationError,
-                               UnknownOutputFormatError)
-from ms2pip.ms2pipC import MODELS, MS2PIP, SUPPORTED_OUT_FORMATS
+import ms2pip.core
+from ms2pip import __version__
+from ms2pip._utils.cli import build_credits, build_prediction_table
+from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
+from ms2pip.exceptions import (
+    InvalidXGBoostModelError,
+    UnknownModelError,
+    UnknownOutputFormatError,
+    UnresolvableModificationError,
+)
+from ms2pip.result import correlations_to_csv, results_to_csv
+from ms2pip.spectrum_output import write_single_spectrum_csv, write_single_spectrum_png
 
+console = Console()
+logger = logging.getLogger(__name__)
 
-def print_logo():
-    logo = r"""
- __  __ ___  __ ___ ___ ___
-|  \/  / __||_ ) _ \_ _| _ \
-| |\/| \__ \/__|  _/| ||  _/
-|_|  |_|___/   |_| |___|_|
-
-by CompOmics
-sven.degroeve@ugent.be
-ralf.gabriels@ugent.be
-
-http://compomics.github.io/projects/ms2pip_c.html
-    """
-    print(logo)
+LOGGING_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
 
 
-def argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pep_file", metavar="<PEPREC file>", help="list of peptides")
-    parser.add_argument(
-        "-c",
-        "--config-file",
-        metavar="CONFIG_FILE",
-        action="store",
-        required=True,
-        dest="config_file",
-        help="Configuration file: text-based (extensions `.txt`, `.config`, or `.ms2pip`) or TOML (extension `.toml`).",
-    )
-    parser.add_argument(
-        "-s",
-        "--spectrum-file",
-        metavar="SPECTRUM_FILE",
-        action="store",
-        dest="spec_file",
-        help="MGF or mzML spectrum file (optional)",
-    )
-    parser.add_argument(
-        "-w",
-        "--vector-file",
-        metavar="FEATURE_VECTOR_OUTPUT",
-        action="store",
-        dest="vector_file",
-        help="write feature vectors to FILE.{pkl,h5} (optional)",
-    )
-    parser.add_argument(
-        "-r",
-        "--retention-time",
-        action="store_true",
-        default=False,
-        dest="add_retention_time",
-        help="add retention time predictions (requires DeepLC python package)",
-    )
-    parser.add_argument(
-        "-x",
-        "--correlations",
-        action="store_true",
-        default=False,
-        dest="correlations",
-        help="calculate correlations (if spectrum file is given)",
-    )
-    parser.add_argument(
-        "-m",
-        "--match-spectra",
-        action="store_true",
-        default=False,
-        dest="match_spectra",
-        help="match peptides to spectra based on predicted spectra (if spectrum file is given)",
-    )
-    parser.add_argument(
-        "-n",
-        "--num-cpu",
-        metavar="NUM_CPU",
-        action="store",
-        dest="num_cpu",
-        type=int,
-        help="number of CPUs to use (default: all available)",
-    )
-    parser.add_argument(
-        "--sqldb-uri",
-        action="store",
-        dest="sqldb_uri",
-        help="use sql database of observed spectra instead of spectrum files",
-    )
-    parser.add_argument(
-        "--model-dir",
-        action="store",
-        dest="model_dir",
-        help="Custom directory for downloaded XGBoost model files, default: `~/.ms2pip`",
-    )
-    args = parser.parse_args()
-
-    if not args.num_cpu:
-        args.num_cpu = multiprocessing.cpu_count()
-
-    return args
+def _infer_output_name(
+    input_filename: str,
+    output_name: Optional[str] = None,
+) -> Path:
+    """Infer output filename from input filename if output_filename was not defined."""
+    if output_name:
+        return Path(output_name)
+    else:
+        return Path(input_filename).with_suffix("")
 
 
-def main():
+@click.group()
+@click.option("--logging-level", "-l", type=click.Choice(LOGGING_LEVELS.keys()), default="INFO")
+@click.version_option(version=__version__)
+def cli(*args, **kwargs):
     logging.basicConfig(
         format="%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        level=logging.DEBUG,
-        handlers=[RichHandler(
-            rich_tracebacks=True, console=Console(), show_level=True, show_path=False
-        )],
+        level=LOGGING_LEVELS[kwargs["logging_level"]],
+        handlers=[
+            RichHandler(rich_tracebacks=True, console=console, show_level=True, show_path=False)
+        ],
     )
-    logger = logging.getLogger(__name__)
+    console.print(build_credits())
 
-    print_logo()
 
-    args = argument_parser()
-    config_parser = ConfigParser(filepath=args.config_file)
+@cli.command(help=ms2pip.core.predict_single.__doc__)
+@click.argument("peptidoform", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--model-dir")
+@click.option("--plot", "-p", is_flag=True)
+def predict_single(*args, **kwargs):
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    plot = kwargs.pop("plot")
+    if not output_name:
+        output_name = "ms2pip_prediction_" + secure_filename(kwargs["peptidoform"]) + ".csv"
 
+    # Predict spectrum
+    result = ms2pip.core.predict_single(*args, **kwargs)
+    predicted_spectrum, _ = result.as_spectra()
+
+    # Write output
+    console.print(build_prediction_table(predicted_spectrum))
+    write_single_spectrum_csv(predicted_spectrum, output_name)
+    if plot:
+        write_single_spectrum_png(predicted_spectrum, output_name)
+
+
+@cli.command(help=ms2pip.core.predict_batch.__doc__)
+@click.argument("psms", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_OUTPUT_FORMATS))
+@click.option("--add-retention-time", "-r", is_flag=True)
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--model-dir")
+@click.option("--processes", "-n", type=int)
+def predict_batch(*args, **kwargs):
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    output_format = kwargs.pop("output_format")
+    output_name = _infer_output_name(kwargs["psms"], output_name)
+
+    # Run
+    predictions = ms2pip.core.predict_batch(*args, **kwargs)
+
+    # Write output
+    output_name_csv = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
+    logger.info(f"Writing output to {output_name_csv}")
+    results_to_csv(predictions, output_name_csv)
+    # TODO: add support for other output formats
+
+
+@cli.command(help=ms2pip.core.predict_library.__doc__)
+def predict_library(*args, **kwargs):
+    ms2pip.core.predict_library(*args, **kwargs)
+
+
+@cli.command(help=ms2pip.core.correlate.__doc__)
+@click.argument("psms", required=True)
+@click.argument("spectrum_file", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--spectrum-id-pattern", "-p")
+@click.option("--compute-correlations", "-x", is_flag=True)
+@click.option("--add-retention-time", "-r", is_flag=True)
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--model-dir")
+@click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option("--processes", "-n", type=int)
+def correlate(*args, **kwargs):
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    output_name = _infer_output_name(kwargs["psms"], output_name)
+
+    # Run
+    results = ms2pip.core.correlate(*args, **kwargs)
+
+    # Write output
+    output_name_int = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
+    logger.info(f"Writing intensities to {output_name_int}")
+    results_to_csv(results, output_name_int)
+    # TODO: add support for other output formats
+
+    # Write correlations
+    if kwargs["compute_correlations"]:
+        output_name_corr = output_name.with_name(output_name.stem + "_correlations")
+        output_name_corr = output_name_corr.with_suffix(".csv")
+        logger.info(f"Writing correlations to {output_name_corr}")
+        correlations_to_csv(results, output_name_corr)
+
+
+@cli.command(help=ms2pip.core.get_training_data.__doc__)
+@click.argument("psms", required=True)
+@click.argument("spectrum_file", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--spectrum-id-pattern", "-p")
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option("--processes", "-n", type=int)
+def get_training_data(*args, **kwargs):
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    output_name = _infer_output_name(kwargs["psms"], output_name).with_suffix(".feather")
+
+    # Run
+    training_data = ms2pip.core.get_training_data(*args, **kwargs)
+
+    # Write output
+    logger.info(f"Writing training data to {output_name}")
+    training_data.to_feather(output_name)
+
+
+@cli.command(help=ms2pip.core.annotate_spectra.__doc__)
+@click.argument("psms", required=True)
+@click.argument("spectrum_file", required=True)
+@click.option("--output-name", "-o", type=str)
+@click.option("--spectrum-id-pattern", "-p")
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option("--processes", "-n", type=int)
+def annotate_spectra(*args, **kwargs):
+    # Parse arguments
+    output_name = kwargs.pop("output_name")
+    output_name = _infer_output_name(kwargs["psms"], output_name)
+
+    # Run
+    results = ms2pip.core.annotate_spectra(*args, **kwargs)
+
+    # Write output
+    output_name_int = output_name.with_name(output_name.stem + "_observations").with_suffix(".csv")
+    logger.info(f"Writing intensities to {output_name_int}")
+    results_to_csv(results, output_name_int)
+
+
+def main():
     try:
-        ms2pip = MS2PIP(
-            args.pep_file,
-            spec_file=args.spec_file,
-            vector_file=args.vector_file,
-            params=config_parser.config,
-            num_cpu=args.num_cpu,
-            add_retention_time=args.add_retention_time,
-            compute_correlations=args.correlations,
-            match_spectra=args.match_spectra,
-            sqldb_uri=args.sqldb_uri,
-            model_dir=args.model_dir,
-        )
-        try:
-            ms2pip.run()
-        finally:
-            ms2pip.cleanup()
-    except InvalidPEPRECError:
-        logger.critical("PEPREC file should start with header column")
-        sys.exit(1)
-    except NoValidPeptideSequencesError:
+        cli()
+    except UnresolvableModificationError as e:
         logger.critical(
-            "No peptides for which to predict intensities. \
-            please provide at least one valid peptide sequence."
+            "Unresolvable modification: `%s`. See "
+            "https://ms2pip.readthedocs.io/en/stable/usage/#amino-acid-modifications "
+            "for more info.",
+            e,
         )
-        sys.exit(1)
-    except UnknownModificationError as e:
-        logger.critical("Unknown modification: %s", e)
-        sys.exit(1)
-    except InvalidModificationFormattingError as e:
-        logger.critical("Invalid formatting of modifications: %s", e)
         sys.exit(1)
     except UnknownOutputFormatError as o:
         logger.critical(
-            f"Unknown output format: `{o}` (supported formats: `{SUPPORTED_OUT_FORMATS}`)"
+            f"Unknown output format: `{o}` (supported formats: `{SUPPORTED_OUTPUT_FORMATS}`)"
         )
         sys.exit(1)
-    except UnknownFragmentationMethodError as f:
-        logger.critical(
-            f"Unknown model: `{f}` (supported models: {MODELS.keys()})"
-        )
-        sys.exit(1)
-    except FragmentationModelRequiredError:
-        logger.critical("Please specify model in config file.")
+    except UnknownModelError as f:
+        logger.critical(f"Unknown model: `{f}` (supported models: {set(MODELS.keys())})")
         sys.exit(1)
     except InvalidXGBoostModelError:
-        logger.critical(
-            f"Could not download XGBoost model properly\nTry manual download"
-        )
+        logger.critical(f"Could not download XGBoost model properly\nTry a manual download.")
         sys.exit(1)
-    except EmptySpectrumError:
-        logger.critical("Provided MGF file cannot contain empty spectra")
+    except Exception:
+        logger.exception("An unexpected error occurred in MS²PIP.")
         sys.exit(1)
 
 

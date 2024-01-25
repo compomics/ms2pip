@@ -1,166 +1,192 @@
-"""Read MS2 spectra."""
+"""MS2 spectrum handling."""
 
-from pathlib import Path
-from typing import Generator
+from __future__ import annotations
+
+import warnings
+from typing import Any, Optional, Union
 
 import numpy as np
-from pyteomics import mgf, mzml
+from psm_utils import Peptidoform
+from pydantic import BaseModel, root_validator, validator
+try:
+    import spectrum_utils.spectrum as sus
+    import spectrum_utils.plot as sup
+except ImportError:
+    sus = None
+    sup = None
 
-from ms2pip.exceptions import (
-    EmptySpectrumError,
-    InvalidSpectrumError,
-    UnsupportedSpectrumFiletypeError,
-)
 
+class Spectrum(BaseModel):
+    """MS2 spectrum."""
 
-class Spectrum:
-    def __init__(
-        self, title, msms, peaks, precursor_charge=None, precursor_mz=None
-    ) -> None:
-        """Minimal information on observed MS2 spectrum."""
-        self.title = str(title)
-        self.msms = np.array(msms, dtype=np.float32)
-        self.peaks = np.array(peaks, dtype=np.float32)
-        self.precursor_charge = int(precursor_charge) if precursor_charge else None
-        self.precursor_mz = float(precursor_mz) if precursor_mz else None
+    mz: np.ndarray
+    intensity: np.ndarray
+    annotations: Optional[np.ndarray] = None
+    identifier: Optional[str] = None
+    peptidoform: Optional[Union[Peptidoform, str]] = None
+    precursor_mz: Optional[float] = None
+    precursor_charge: Optional[int] = None
+    retention_time: Optional[float] = None
+    mass_tolerance: Optional[float] = None
+    mass_tolerance_unit: Optional[str] = None
 
-        self.tic = np.sum(self.peaks)
+    class Config:
+        arbitrary_types_allowed = True
 
-        if len(self.msms) != len(self.peaks):
-            raise InvalidSpectrumError(
-                "Inconsistent number of m/z and intensity values."
-            )
+    def __init__(__pydantic_self__, **data: Any) -> None:
+        """
+        MS2 spectrum.
+
+        Parameters
+        ----------
+        mz
+            Array of m/z values.
+        intensity
+            Array of intensity values.
+        annotations
+            Array of peak annotations.
+        identifier
+            Spectrum identifier.
+        peptidoform
+            Peptidoform.
+        precursor_mz
+            Precursor m/z.
+        precursor_charge
+            Precursor charge.
+        retention_time
+            Retention time.
+        mass_tolerance
+            Mass tolerance for spectrum annotation.
+        mass_tolerance_unit
+            Unit of mass tolerance for spectrum annotation.
+
+        """
+        super().__init__(**data)
 
     def __repr__(self) -> str:
         return "{}.{}({})".format(
             self.__class__.__module__,
             self.__class__.__qualname__,
-            f"title='{self.title}'",
+            f"identifier='{self.identifier}'",
         )
 
-    def validate_spectrum_content(self) -> None:
-        """Raise EmptySpectrumError if no peaks are present."""
-        if (len(self.peaks) == 0) or (len(self.msms) == 0):
-            raise EmptySpectrumError()
+    @root_validator()
+    def check_array_lengths(cls, values):
+        if len(values["mz"]) != len(values["intensity"]):
+            raise ValueError("Array lengths do not match.")
+        if values["annotations"] is not None:
+            if len(values["annotations"]) != len(values["intensity"]):
+                raise ValueError("Array lengths do not match.")
+        return values
+
+    @validator("peptidoform")
+    def check_peptidoform(cls, value, values):
+        if not value:
+            pass
+        elif isinstance(value, str):
+            value = Peptidoform(value)
+        elif isinstance(value, Peptidoform):
+            pass
+        else:
+            raise ValueError("Peptidoform must be a string, a Peptidoform object, or None.")
+        return value
+
+    @property
+    def tic(self):
+        """Total ion current."""
+        return np.sum(self.intensity)
 
     def remove_reporter_ions(self, label_type=None) -> None:
-        """Remove reporter ions."""
+        """Set the intensity of reporter ions to 0."""
+        # TODO: Consider using the exact m/z values instead of a range.
         if label_type == "iTRAQ":
-            for mi, mp in enumerate(self.msms):
-                if (mp >= 113) & (mp <= 118):
-                    self.peaks[mi] = 0
+            for i, mz in enumerate(self.mz):
+                if (mz >= 113) & (mz <= 118):
+                    self.intensity[i] = 0
 
         # TMT6plex: 126.1277, 127.1311, 128.1344, 129.1378, 130.1411, 131.1382
         elif label_type == "TMT":
-            for mi, mp in enumerate(self.msms):
-                if (mp >= 125) & (mp <= 132):
-                    self.peaks[mi] = 0
+            for i, mz in enumerate(self.mz):
+                if (mz >= 125) & (mz <= 132):
+                    self.intensity[i] = 0
 
     def remove_precursor(self, tolerance=0.02) -> None:
-        """Remove precursor peak."""
-        for mi, mp in enumerate(self.msms):
-            if (mp >= self.precursor_mz - tolerance) & (
-                mp <= self.precursor_mz + tolerance
-            ):
-                self.peaks[mi] = 0
+        """Set the intensity of the precursor peak to 0."""
+        if not self.precursor_mz:
+            raise ValueError("Precursor m/z must be set.")
+        for i, mz in enumerate(self.mz):
+            if (mz >= self.precursor_mz - tolerance) & (mz <= self.precursor_mz + tolerance):
+                self.intensity[i] = 0
 
     def tic_norm(self) -> None:
         """Normalize spectrum to total ion current."""
-        self.peaks = self.peaks / self.tic
+        self.intensity = self.intensity / self.tic
 
     def log2_transform(self) -> None:
         """Log2-tranform spectrum."""
-        self.peaks = np.log2(self.peaks + 0.001)
+        self.intensity = np.log2(self.intensity + 0.001)
 
+    def clip_intensity(self, min_intensity=0.0) -> None:
+        """Clip intensity values."""
+        self.intensity = np.clip(self.intensity, min_intensity, None)
 
-def read_mgf(spec_file) -> Generator[Spectrum, None, None]:
-    """
-    Read MGF file.
+    def to_spectrum_utils(self):
+        """
+        Convert to spectrum_utils.spectrum.MsmsSpectrum.
 
-    Parameters
-    ----------
-    spec_file: str
-        Path to MGF file.
+        Notes
+        -----
+        - Requires spectrum_utils to be installed.
+        - If the ``precursor_mz`` or ``precursor_charge`` attributes are not set, the theoretical
+          m/z and precursor charge of the ``peptidoform`` attribute are used, if present.
+          Otherwise, ``ValueError`` is raised.
 
-    """
-    with mgf.read(
-        spec_file,
-        convert_arrays=1,
-        read_charges=False,
-        read_ions=False,
-        dtype=np.float32,
-        use_index=False,
-    ) as mgf_file:
-        for spectrum in mgf_file:
-            spec_id = spectrum["params"]["title"]
-            peaks = spectrum["intensity array"]
-            msms = spectrum["m/z array"]
-            try:
-                precursor_charge = spectrum["params"]["charge"][0]
-            except KeyError:
-                precursor_charge = None
-            try:
-                precursor_mz = spectrum["params"]["pepmass"][0]
-            except KeyError:
-                precursor_mz = None
-            parsed_spectrum = Spectrum(
-                spec_id, msms, peaks, precursor_charge, precursor_mz
+        """
+        if not sus:
+            raise ImportError("Optional dependency spectrum_utils not installed.")
+
+        if self.precursor_charge:
+            precursor_charge = self.precursor_charge
+        else:
+            if not self.peptidoform:
+                raise ValueError("`precursor_charge` or `peptidoform` must be set.")
+            else:
+                precursor_charge = self.peptidoform.precursor_charge
+
+        if self.precursor_mz:
+            precursor_mz = self.precursor_mz
+        else:
+            if not self.peptidoform:
+                raise ValueError("`precursor_mz` or `peptidoform` must be set.")
+            else:
+                warnings.warn("precursor_mz not set, using theoretical precursor m/z.")
+                precursor_mz = self.peptidoform.theoretical_mz
+
+        spectrum = sus.MsmsSpectrum(
+            identifier=self.identifier if self.identifier else "spectrum",
+            precursor_mz=precursor_mz,
+            precursor_charge=precursor_charge,
+            mz=self.mz,
+            intensity=self.intensity,
+            retention_time=self.retention_time,
+        )
+        if self.peptidoform:
+            spectrum.annotate_proforma(
+                str(self.peptidoform), self.mass_tolerance, self.mass_tolerance_unit
             )
-            yield parsed_spectrum
+        return spectrum
 
 
-def read_mzml(spec_file) -> Generator[Spectrum, None, None]:
-    """
-    Read mzML file.
+class ObservedSpectrum(Spectrum):
+    """Observed MS2 spectrum."""
 
-    Parameters
-    ----------
-    spec_file: str
-        Path to mzML file.
-
-    """
-    with mzml.read(
-        spec_file,
-        read_schema=False,
-        iterative=True,
-        use_index=False,
-        dtype=np.float32,
-    ) as mzml_file:
-        for spectrum in mzml_file:
-            if spectrum["ms level"] == 2:
-                spec_id = spectrum["id"]
-                peaks = spectrum["intensity array"]
-                msms = spectrum["m/z array"]
-                precursor = spectrum["precursorList"]["precursor"][0][
-                    "selectedIonList"
-                ]["selectedIon"][0]
-                precursor_mz = precursor["selected ion m/z"]
-                precursor_charge = precursor["charge state"]
-                parsed_spectrum = Spectrum(
-                    spec_id, msms, peaks, precursor_charge, precursor_mz
-                )
-                yield parsed_spectrum
+    pass
 
 
-def read_spectrum_file(spec_file) -> Generator[Spectrum, None, None]:
-    """
-    Read MGF or mzML file; infer type from filename extension.
+class PredictedSpectrum(Spectrum):
+    """Predicted MS2 spectrum."""
 
-    Parameters
-    ----------
-    spec_file: str
-        Path to mzML file.
-    peptide_titles: list[str], optional
-        List with peptide `spec_id` values which correspond to mzML spectrum id
-        values.
+    mass_tolerance: Optional[float] = 0.001
+    mass_tolerance_unit: Optional[str] = "Da"
 
-    """
-    filetype = Path(spec_file).suffix.lower()
-    if filetype == ".mzml":
-        for spectrum in read_mzml(spec_file):
-            yield spectrum
-    elif filetype == ".mgf":
-        for spectrum in read_mgf(spec_file):
-            yield spectrum
-    else:
-        raise UnsupportedSpectrumFiletypeError(filetype)
+    pass

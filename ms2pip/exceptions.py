@@ -2,19 +2,15 @@ class MS2PIPError(Exception):
     pass
 
 
-class InvalidPeptideError(MS2PIPError):
+class InvalidPeptidoformError(MS2PIPError):
     pass
 
 
-class UnknownModificationError(ValueError):
+class InvalidInputError(MS2PIPError):
     pass
 
 
-class InvalidPEPRECError(Exception):
-    pass
-
-
-class NoValidPeptideSequencesError(Exception):
+class UnresolvableModificationError(MS2PIPError):
     pass
 
 
@@ -22,43 +18,25 @@ class UnknownOutputFormatError(ValueError):
     pass
 
 
-class UnknownFragmentationMethodError(ValueError):
+class UnknownModelError(ValueError):
     pass
 
 
-class MissingConfigurationError(Exception):
+class InvalidAminoAcidError(MS2PIPError):
     pass
 
 
-class FragmentationModelRequiredError(Exception):
-    pass
-
-
-class InvalidModificationFormattingError(Exception):
-    pass
-
-
-class InvalidAminoAcidError(Exception):
-    pass
-
-
-class UnsupportedSpectrumFiletypeError(Exception):
-    pass
-
-
-class InvalidSpectrumError(Exception):
-    pass
-
-
-class EmptySpectrumError(InvalidSpectrumError):
+class UnsupportedSpectrumFiletypeError(MS2PIPError):
     pass
 
 
 class NoMatchingSpectraFound(MS2PIPError):
     pass
 
+
 class TitlePatternError(MS2PIPError):
     pass
+
 
 class InvalidXGBoostModelError(MS2PIPError):
     pass
