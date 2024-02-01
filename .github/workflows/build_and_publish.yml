@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/psm-utils
+      url: https://pypi.org/p/ms2pip
     permissions:
       id-token: write
     steps:
