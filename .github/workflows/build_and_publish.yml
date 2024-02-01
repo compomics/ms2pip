@@ -73,8 +73,6 @@ jobs:
         with:
           name: dist
           path: dist
-      - uses: pypa/gh-action-pypi-publish@master
-        with:
-          user: ${{ secrets.PYPI_USERNAME }}
-          password: ${{ secrets.PYPI_PASSWORD }}
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
   
