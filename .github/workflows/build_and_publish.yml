@@ -68,6 +68,11 @@ jobs:
   publish-to-pypi:
     needs: [build-sdist, build-wheels]
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/psm-utils
+    permissions:
+      id-token: write
     steps:
       - uses: actions/download-artifact@v2
         with:
