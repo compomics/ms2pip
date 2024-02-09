@@ -189,7 +189,9 @@ def correlate(
     if compute_correlations:
         logger.info("Computing correlations")
         calculate_correlations(results)
-        logger.info(f"Median correlation: {np.median(list(r.correlation for r in results))}")
+        logger.info(
+            f"Median correlation: {np.nanmedian(np.array([r.correlation for r in results]))}"
+        )
 
     return results
 
