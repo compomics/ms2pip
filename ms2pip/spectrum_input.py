@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Generator
 
 import numpy as np
+try:
+    import timsrust_pyo3 as timsrust
+    _has_timsrust = True
+except ImportError:
+    _has_timsrust = False
 from pyteomics import mgf, mzml
 
 from ms2pip.exceptions import UnsupportedSpectrumFiletypeError
@@ -83,9 +88,33 @@ def read_mzml(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
                 yield spectrum
 
 
+def read_tdf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
+    """
+    Read MS2 DDA spectra from .d folder.
+
+    Parameters
+    ----------
+    spectrum_file
+        Path to .d folder.
+
+    """
+    if not _has_timsrust:
+        raise ImportError("Optional dependency timsrust_pyo3 required for .d spectrum file support.")
+    reader = timsrust.TimsReader(spectrum_file)
+    for spectrum in reader.read_all_spectra():
+        spectrum = ObservedSpectrum(
+            identifier=spectrum.index,
+            mz=np.asarray(spectrum.mz_values),
+            intensity=np.asarray(spectrum.intensities),
+            precursor_mz=spectrum.precursor.mz,
+            precursor_charge=spectrum.precursor.charge
+            )
+        yield spectrum
+
+
 def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
     """
-    Read MS2 spectra from MGF or mzML file; inferring the type from the filename extension.
+    Read MS2 spectra from MGF or mzML file or .d folder; inferring the type from the filename extension.
 
     Parameters
     ----------
@@ -99,6 +128,9 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
             yield spectrum
     elif filetype == ".mgf":
         for spectrum in read_mgf(spectrum_file):
+            yield spectrum
+    elif filetype == ".d":
+        for spectrum in read_tdf(spectrum_file):
             yield spectrum
     else:
         raise UnsupportedSpectrumFiletypeError(filetype)
