@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Generator
 
 import numpy as np
-import timsrust_pyo3 as timsrust
+try:
+    import timsrust_pyo3 as timsrust
+    _has_timsrust = True
+except ImportError:
+    _has_timsrust = False
 from pyteomics import mgf, mzml
 
 from ms2pip.exceptions import UnsupportedSpectrumFiletypeError
@@ -94,6 +98,8 @@ def read_tdf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
         Path to .d folder.
 
     """
+    if not _has_timsrust:
+        raise ImportError("Optional dependency timsrust_pyo3 required for .d spectrum file support.")
     reader = timsrust.TimsReader(spectrum_file)
     for spectrum in reader.read_all_spectra():
         spectrum = ObservedSpectrum(
