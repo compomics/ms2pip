@@ -258,7 +258,7 @@ def annotate_spectra(
     processes: Optional[int] = None,
 ):
     """
-    Extract feature vectors and target intensities from observed spectra for training.\f
+    Annotate observed spectra.\f
 
     Parameters
     ----------
