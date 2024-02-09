@@ -285,11 +285,11 @@ annotations get_t_ms2pip_all(int peplen, unsigned short *modpeptide, int numpeak
     for (i = 1; i < peplen; i++)
     {
         mz += amino_masses[modpeptide[i]];
-        membuffer[pos++] = (mz + H_MASS + H_MASS - CO_MASS) / 2.;  // a
-        membuffer[pos++] = (mz + H_MASS + H_MASS - H2O_MASS) / 2.; // -H2O
-        membuffer[pos++] = (mz + H_MASS + H_MASS - NH3_MASS) / 2.; // -NH3
-        membuffer[pos++] = (mz + H_MASS + H_MASS) / 2.;            // b
-        membuffer[pos++] = (mz + H_MASS + H_MASS + NH3_MASS) / 2.; // c
+        membuffer[pos++] = (mz + H_MASS + H_MASS - CO_MASS) / 2.f;  // a
+        membuffer[pos++] = (mz + H_MASS + H_MASS - H2O_MASS) / 2.f; // -H2O
+        membuffer[pos++] = (mz + H_MASS + H_MASS - NH3_MASS) / 2.f; // -NH3
+        membuffer[pos++] = (mz + H_MASS + H_MASS) / 2.f;            // b
+        membuffer[pos++] = (mz + H_MASS + H_MASS + NH3_MASS) / 2.f; // c
     }
 
     msms_pos = 0;
