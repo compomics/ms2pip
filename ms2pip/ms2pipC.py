@@ -180,7 +180,7 @@ MODELS = {
             "model_20220104_CID_TMT_Y.xgboost": "299539179ca55d4ac82e9aed6a4e0bd134a9a41e",
         },
     },
-    "timsTOF": {
+    "timsTOF2023": {
         "id": 12,
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
@@ -194,8 +194,25 @@ MODELS = {
             "model_20230912_timsTOF_Y.xgboost": "8edd87e0fba5f338d0a0881b5afbcf2f48ec5268",
         },
     },
+    "timsTOF2024": {
+        "id": 13,
+        "ion_types": ["B", "Y"],
+        "peaks_version": "general",
+        "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20240105_timsTOF_B.xgboost",
+            "y": "model_20240105_timsTOF_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20240105_timsTOF_B.xgboost": "d70e145c15cf2bfa30968077a68409699b2fa541",
+            "model_20240105_timsTOF_Y.xgboost": "3f0414ee1ad7cff739e0d6242e25bfc22b6ebfe5",
+        },
+    },
 }
+
+
 MODELS["HCD"] = MODELS["HCD2021"]
+MODELS["timsTOF"] = MODELS["timsTOF2024"]
 
 
 def process_peptides(worker_num, data, afile, modfile, modfile2, PTMmap, model):
@@ -340,7 +357,9 @@ def process_spectra(
         ces = specdict["ce"]
     else:
         specdict = (
-            data[["spec_id", "peptide", "modifications", "charge"]].set_index("spec_id").to_dict()
+            data[["spec_id", "peptide", "modifications", "charge"]]
+            .set_index("spec_id")
+            .to_dict()
         )
     peptides = specdict["peptide"]
     modifications = specdict["modifications"]
@@ -449,9 +468,7 @@ def process_spectra(
             if "ce" in data.columns:
                 dvectors.append(
                     np.array(
-                        ms2pip_pyx.get_vector_ce(
-                            peptide, modpeptide, charge, colen
-                        ),
+                        ms2pip_pyx.get_vector_ce(peptide, modpeptide, charge, colen),
                         dtype=np.uint16,
                     )
                 )  # SD: added collision energy
@@ -825,7 +842,9 @@ class MS2PIP:
                                 index=True,
                                 lineterminator="\n",
                             )
-                        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
+                        except (
+                            TypeError
+                        ):  # Pandas < 1.5 (Required for Python 3.7 support)
                             correlations.to_csv(
                                 corr_filename,
                                 index=True,
@@ -966,9 +985,9 @@ class MS2PIP:
 
             # dtargets is a dict, containing targets for every ion type (keys are int)
             for i, t in dtargets.items():
-                df[
-                    "targets_{}".format(MODELS[self.model]["ion_types"][i])
-                ] = np.concatenate(t, axis=None)
+                df["targets_{}".format(MODELS[self.model]["ion_types"][i])] = (
+                    np.concatenate(t, axis=None)
+                )
             df["psmid"] = psmids
 
             all_results.append(df)
