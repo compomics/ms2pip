@@ -342,6 +342,7 @@ next to the predictions for singly charged b- and y-ions.
 | CIDch2 | v20190107 | [NIST CID Human](https://chemdata.nist.gov/) (340 356) | [NIST CID Yeast](https://chemdata.nist.gov/) (92 609) | 0.904947 (+) and 0.813342 (++) |
 | HCD2021 | v20210416 | [Combined dataset] (520 579) | [PXD008034](https://doi.org/10.1016/j.jprot.2017.12.006) (35 269)  | 0.932361
 | Immuno-HCD | v20210316 | [Combined dataset] (460 191) | [PXD005231 (HLA-I)](https://doi.org/10.1101/098780) (46 753) <br>[PXD020011 (HLA-II)](https://doi.org/10.3389/fimmu.2020.01981 ) (23 941) | 0.963736<br>0.942383
+| CID-TMT | v20220104 | [in-house dataset] (72 138) | [PXD005890](https://doi.org/10.1021/acs.jproteome.7b00091) (69 768) | 0.851085
 | timsTOF2023 | v20230912 | [Combined dataset] (234 973) | PXD043026<br>PXD046535<br>PXD046543 (13 012) | 0.892540 (tryptic)<br>0.871258 (elastase)<br>0.899834 (class I)<br>0.635548 (class II)
 | timsTOF2024 | v20240105 | [Combined dataset]  (480 024) | PXD043026<br>PXD046535<br>PXD046543<br>PXD038782 (25 265)  | 0.883270 (tryptic)<br>0.814374 (elastase)<br>0.887192 (class I)<br>0.847951 (class II)
 
