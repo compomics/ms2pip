@@ -1,7 +1,7 @@
 # isort: skip_file
 """MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."""
 
-__version__ = "4.0.0-dev7"
+__version__ = "4.0.0-dev8"
 
 from warnings import filterwarnings
 

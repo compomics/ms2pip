@@ -50,7 +50,7 @@ dependencies = [
 
 [project.optional-dependencies]
 plotting = ["matplotlib>=3.0", "spectrum-utils>=0.4"]
-tdf = ["timsrust_pyo3@git+https://github.com/jspaezp/timsrust_pyo3#egg=0f40c31"]
+# tdf = ["timsrust_pyo3@git+https://github.com/jspaezp/timsrust_pyo3#egg=0f40c31"]
 dev = ["black", "isort>5", "pytest"]
 docs = [
     "sphinx",
