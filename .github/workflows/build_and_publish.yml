@@ -55,12 +55,15 @@ jobs:
   publish-to-pypi:
     needs: [build-sdist, build-wheels]
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ms2pip
+    permissions:
+      id-token: write
     steps:
       - uses: actions/download-artifact@v2
         with:
           name: dist
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: ${{ secrets.PYPI_USERNAME }}
-          password: ${{ secrets.PYPI_PASSWORD }}
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
