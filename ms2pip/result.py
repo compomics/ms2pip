@@ -112,9 +112,15 @@ class ProcessingResult(BaseModel):
 def calculate_correlations(results: List[ProcessingResult]) -> None:
     """Calculate and add Pearson correlations to list of results."""
     for result in results:
-        pred_int = np.concatenate([i for i in result.predicted_intensity.values()])
-        obs_int = np.concatenate([i for i in result.observed_intensity.values()])
-        result.correlation = np.corrcoef(pred_int, obs_int)[0][1]
+        try:
+            pred = result.predicted_intensity.values()
+            obs = result.observed_intensity.values()
+        except AttributeError:
+            result.correlation = np.nan
+        else:
+            pred_int = np.concatenate([i for i in pred])
+            obs_int = np.concatenate([i for i in obs])
+            result.correlation = np.corrcoef(pred_int, obs_int)[0][1]
 
 
 def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
@@ -157,4 +163,4 @@ def correlations_to_csv(results: List["ProcessingResult"], output_file: str) -> 
         writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for result in results:
-            writer.writerow({"psm_index": result.psm_id, "correlation": result.correlation})
+            writer.writerow({"psm_index": result.psm_index, "correlation": result.correlation})

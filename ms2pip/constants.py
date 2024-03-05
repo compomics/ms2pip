@@ -27,6 +27,14 @@ MODELS = {
         "ion_types": ["B", "Y"],
         "peaks_version": "general",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_HCD_train_B.xgboost",
+            "y": "model_20190107_HCD_train_Y.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_HCD_train_B.xgboost": "2503856c382806672e4b85f6b0ccc1f3093acc1b",
+            "model_20190107_HCD_train_Y.xgboost": "867bbc9940f75845b3f4f845d429b3780c997a02",
+        },
     },
     "TTOF5600": {
         "id": 2,
@@ -76,12 +84,23 @@ MODELS = {
             "model_20190107_iTRAQphospho_train_Y.xgboost": "261b2e1810a299ed7ebf193ce1fb81a608c07d3b",
         },
     },
-    # ETD': {'id': 6, 'ion_types': ['B', 'Y', 'C', 'Z'], 'peaks_version': 'etd', 'features_version': 'normal'},
     "HCDch2": {
         "id": 7,
         "ion_types": ["B", "Y", "B2", "Y2"],
         "peaks_version": "ch2",
         "features_version": "normal",
+        "xgboost_model_files": {
+            "b": "model_20190107_HCD_train_B.xgboost",
+            "y": "model_20190107_HCD_train_Y.xgboost",
+            "b2": "model_20190107_HCD_train_B2.xgboost",
+            "y2": "model_20190107_HCD_train_Y2.xgboost",
+        },
+        "model_hash": {
+            "model_20190107_HCD_train_B.xgboost": "2503856c382806672e4b85f6b0ccc1f3093acc1b",
+            "model_20190107_HCD_train_Y.xgboost": "867bbc9940f75845b3f4f845d429b3780c997a02",
+            "model_20190107_HCD_train_B2.xgboost": "2df86d3576e85bfd25cc149d723f1613baf854d0",
+            "model_20190107_HCD_train_Y2.xgboost": "0a116ad9f14925fc70e3eceed9484b16ca8edddb",
+        },
     },
     "CIDch2": {
         "id": 8,
