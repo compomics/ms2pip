@@ -55,7 +55,7 @@ jobs:
         env:
           # No XGBoost wheels for 32bit Windows
           CIBW_BUILD: "cp3*-manylinux_x86_64 cp3*-win_amd64 cp3*-macosx_x86_64"
-          CIBW_SKIP: "cp36-*"  # EOL
+          CIBW_SKIP: "cp36-* cp39-macosx_x86_64"  # EOL & build issue #216
           CIBW_BEFORE_ALL_MACOS: "brew install libomp"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
           CIBW_TEST_REQUIRES: "pytest"
