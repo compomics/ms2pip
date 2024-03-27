@@ -72,6 +72,7 @@ def predict_single(
 def predict_batch(
     psms: Union[PSMList, str, Path],
     add_retention_time: bool = False,
+    psm_filetype: Optional[str] = None,
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     processes: Optional[int] = None,
@@ -83,6 +84,9 @@ def predict_batch(
     ----------
     psms
         PSMList or path to PSM file that is supported by psm_utils.
+    psm_filetype
+        Filetype of the PSM file. By default, None. Should be one of the supported psm_utils
+        filetypes. See https://psm-utils.readthedocs.io/en/stable/#supported-file-formats.
     add_retention_time
         Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
     model
@@ -98,7 +102,7 @@ def predict_batch(
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
-    psm_list = read_psms(psms)
+    psm_list = read_psms(psms, filetype=psm_filetype)
 
     if add_retention_time:
         logger.info("Adding retention time predictions")
@@ -126,6 +130,7 @@ def predict_library():
 def correlate(
     psms: Union[PSMList, str, Path],
     spectrum_file: Union[str, Path],
+    psm_filetype: Optional[str] = None,
     spectrum_id_pattern: Optional[str] = None,
     compute_correlations: bool = False,
     add_retention_time: bool = False,
@@ -143,6 +148,9 @@ def correlate(
         PSMList or path to PSM file that is supported by psm_utils.
     spectrum_file
         Path to spectrum file with target intensities.
+    psm_filetype
+        Filetype of the PSM file. By default, None. Should be one of the supported psm_utils
+        filetypes. See https://psm-utils.readthedocs.io/en/stable/#supported-file-formats.
     spectrum_id_pattern
         Regular expression pattern to apply to spectrum titles before matching to
         peptide file ``spec_id`` entries.
@@ -166,7 +174,7 @@ def correlate(
         correlations.
 
     """
-    psm_list = read_psms(psms)
+    psm_list = read_psms(psms, filetype=psm_filetype)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     if add_retention_time:
@@ -197,6 +205,7 @@ def correlate(
 def get_training_data(
     psms: Union[PSMList, str, Path],
     spectrum_file: Union[str, Path],
+    psm_filetype: Optional[str] = None,
     spectrum_id_pattern: Optional[str] = None,
     model: Optional[str] = "HCD",
     ms2_tolerance: float = 0.02,
@@ -211,6 +220,9 @@ def get_training_data(
         PSMList or path to PSM file that is supported by psm_utils.
     spectrum_file
         Path to spectrum file with target intensities.
+    psm_filetype
+        Filetype of the PSM file. By default, None. Should be one of the supported psm_utils
+        filetypes. See https://psm-utils.readthedocs.io/en/stable/#supported-file-formats.
     spectrum_id_pattern
         Regular expression pattern to apply to spectrum titles before matching to
         peptide file ``spec_id`` entries.
@@ -228,7 +240,7 @@ def get_training_data(
         :py:class:`pandas.DataFrame` with feature vectors and targets.
 
     """
-    psm_list = read_psms(psms)
+    psm_list = read_psms(psms, filetype=psm_filetype)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     with Encoder.from_psm_list(psm_list) as encoder:
@@ -252,6 +264,7 @@ def get_training_data(
 def annotate_spectra(
     psms: Union[PSMList, str, Path],
     spectrum_file: Union[str, Path],
+    psm_filetype: Optional[str] = None,
     spectrum_id_pattern: Optional[str] = None,
     model: Optional[str] = "HCD",
     ms2_tolerance: float = 0.02,
@@ -266,6 +279,9 @@ def annotate_spectra(
         PSMList or path to PSM file that is supported by psm_utils.
     spectrum_file
         Path to spectrum file with target intensities.
+    psm_filetype
+        Filetype of the PSM file. By default, None. Should be one of the supported psm_utils
+        filetypes. See https://psm-utils.readthedocs.io/en/stable/#supported-file-formats.
     spectrum_id_pattern
         Regular expression pattern to apply to spectrum titles before matching to
         peptide file ``spec_id`` entries.
@@ -283,7 +299,7 @@ def annotate_spectra(
         List of ProcessingResult objects with theoretical m/z and observed intensity values.
 
     """
-    psm_list = read_psms(psms)
+    psm_list = read_psms(psms, filetype=psm_filetype)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     with Encoder.from_psm_list(psm_list) as encoder:
@@ -466,16 +482,17 @@ class _Parallelized:
                 mp_results.append(pool.apply_async(func, args=(psm_list_chunk, *args)))
 
             # Gather results
-            results = [
-                r.get()
-                for r in track(
-                    mp_results,
-                    disable=len(chunks) == 1,
-                    description="Processing chunks...",
-                    transient=True,
-                    show_speed=False,
-                )
-            ]
+            # results = [
+            #     r.get()
+            #     for r in track(
+            #         mp_results,
+            #         disable=len(chunks) == 1,
+            #         description="Processing chunks...",
+            #         transient=True,
+            #         show_speed=False,
+            #     )
+            # ]
+            results = [r.get() for r in mp_results]
 
         # Sort results by input order
         results = list(
@@ -752,7 +769,6 @@ def _process_spectra(
     for psm_index, psm in enumerated_psm_list:
         psms_by_specid[str(psm.spectrum_id)].append((psm_index, psm))
 
-    # Track progress for only one worker (good approximation of all workers' progress)
     for spectrum in read_spectrum_file(spec_file):
         # Match spectrum ID with provided regex, use first match group as new ID
         match = spectrum_id_regex.search(spectrum.identifier)
@@ -784,8 +800,8 @@ def _process_spectra(
 
             targets = ms2pip_pyx.get_targets(
                 enc_peptidoform,
-                spectrum.mz,
-                spectrum.intensity,
+                spectrum.mz.astype(np.float32),
+                spectrum.intensity.astype(np.float32),
                 float(ms2_tolerance),
                 MODELS[model]["peaks_version"],
             )

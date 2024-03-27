@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from psm_utils.io import READERS
 from rich.console import Console
 from rich.logging import RichHandler
 from werkzeug.utils import secure_filename
@@ -31,6 +32,8 @@ LOGGING_LEVELS = {
     "ERROR": logging.ERROR,
     "CRITICAL": logging.CRITICAL,
 }
+
+PSM_FILETYPES = list(READERS.keys())
 
 
 def _infer_output_name(
@@ -115,6 +118,7 @@ def predict_library(*args, **kwargs):
 @cli.command(help=ms2pip.core.correlate.__doc__)
 @click.argument("psms", required=True)
 @click.argument("spectrum_file", required=True)
+@click.option("--psm-filetype", "-t", type=click.Choice(PSM_FILETYPES), default=None)
 @click.option("--output-name", "-o", type=str)
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--compute-correlations", "-x", is_flag=True)
@@ -148,6 +152,7 @@ def correlate(*args, **kwargs):
 @cli.command(help=ms2pip.core.get_training_data.__doc__)
 @click.argument("psms", required=True)
 @click.argument("spectrum_file", required=True)
+@click.option("--psm-filetype", "-t", type=click.Choice(PSM_FILETYPES), default=None)
 @click.option("--output-name", "-o", type=str)
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
@@ -169,6 +174,7 @@ def get_training_data(*args, **kwargs):
 @cli.command(help=ms2pip.core.annotate_spectra.__doc__)
 @click.argument("psms", required=True)
 @click.argument("spectrum_file", required=True)
+@click.option("--psm-filetype", "-t", type=click.Choice(PSM_FILETYPES), default=None)
 @click.option("--output-name", "-o", type=str)
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
@@ -208,7 +214,7 @@ def main():
         logger.critical(f"Unknown model: `{f}` (supported models: {set(MODELS.keys())})")
         sys.exit(1)
     except InvalidXGBoostModelError:
-        logger.critical(f"Could not download XGBoost model properly\nTry a manual download.")
+        logger.critical("Could not correctly download XGBoost model\nTry a manual download.")
         sys.exit(1)
     except Exception:
         logger.exception("An unexpected error occurred in MS²PIP.")

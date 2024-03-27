@@ -12,12 +12,12 @@ from ms2pip import exceptions
 logger = logging.getLogger(__name__)
 
 
-def read_psms(psms: Union[str, Path, PSMList]) -> PSMList:
+def read_psms(psms: Union[str, Path, PSMList], filetype: str) -> PSMList:
     """Read PSMList or PSM file."""
     # Read PSMs
     if isinstance(psms, (str, Path)):
         logger.info("Reading PSMs...")
-        psm_list = psm_utils.io.read_file(psms)
+        psm_list = psm_utils.io.read_file(psms, filetype=filetype)
     elif isinstance(psms, PSMList):
         psm_list = psms
     else:
