@@ -44,8 +44,8 @@ def read_mgf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
                 precursor_mz = None
             spectrum = ObservedSpectrum(
                 identifier=spectrum["params"]["title"],
-                mz=spectrum["m/z array"],
-                intensity=spectrum["intensity array"],
+                mz=spectrum["m/z array"].astype(np.float32),
+                intensity=spectrum["intensity array"].astype(np.float32),
                 precursor_mz=precursor_mz,
                 precursor_charge=precursor_charge,
             )
@@ -80,8 +80,8 @@ def read_mzml(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
                     precursor_charge = None
                 spectrum = ObservedSpectrum(
                     identifier=spectrum["id"],
-                    mz=spectrum["m/z array"],
-                    intensity=spectrum["intensity array"],
+                    mz=spectrum["m/z array"].astype(np.float32),
+                    intensity=spectrum["intensity array"].astype(np.float32),
                     precursor_mz=precursor["selected ion m/z"],
                     precursor_charge=precursor_charge,
                 )
@@ -99,13 +99,16 @@ def read_tdf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
 
     """
     if not _has_timsrust:
-        raise ImportError("Optional dependency timsrust_pyo3 required for .d spectrum file support.")
+        raise ImportError(
+            "Optional dependency timsrust_pyo3 required for .d spectrum file support. Reinstall "
+            "ms2pip with `pip install ms2pip[tdf]` and try again."
+        )
     reader = timsrust.TimsReader(spectrum_file)
     for spectrum in reader.read_all_spectra():
         spectrum = ObservedSpectrum(
             identifier=spectrum.index,
-            mz=np.asarray(spectrum.mz_values),
-            intensity=np.asarray(spectrum.intensities),
+            mz=np.asarray(spectrum.mz_values, dtype=np.float32),
+            intensity=np.asarray(spectrum.intensities, dtype=np.float32),
             precursor_mz=spectrum.precursor.mz,
             precursor_charge=spectrum.precursor.charge
             )
