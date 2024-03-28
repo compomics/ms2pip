@@ -103,7 +103,7 @@ def read_tdf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
             "Optional dependency timsrust_pyo3 required for .d spectrum file support. Reinstall "
             "ms2pip with `pip install ms2pip[tdf]` and try again."
         )
-    reader = timsrust.TimsReader(spectrum_file)
+    reader = timsrust.TimsReader(str(spectrum_file))
     for spectrum in reader.read_all_spectra():
         spectrum = ObservedSpectrum(
             identifier=spectrum.index,
