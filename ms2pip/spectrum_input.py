@@ -46,6 +46,7 @@ def read_mgf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
                 identifier=spectrum["params"]["title"],
                 mz=spectrum["m/z array"].astype(np.float32),
                 intensity=spectrum["intensity array"].astype(np.float32),
+                retention_time=spectrum["params"]["rtinseconds"],
                 precursor_mz=precursor_mz,
                 precursor_charge=precursor_charge,
             )
@@ -100,8 +101,8 @@ def read_tdf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
     """
     if not _has_timsrust:
         raise ImportError(
-            "Optional dependency timsrust_pyo3 required for .d spectrum file support. Reinstall "
-            "ms2pip with `pip install ms2pip[tdf]` and try again."
+            "Optional dependency timsrust_pyo3 required for Bruker raw file support. Install "
+            "with `pip install timsrust_pyo3` and try again."
         )
     reader = timsrust.TimsReader(str(spectrum_file))
     for spectrum in reader.read_all_spectra():
@@ -117,7 +118,7 @@ def read_tdf(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
 
 def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, None]:
     """
-    Read MS2 spectra from MGF or mzML file or .d folder; inferring the type from the filename extension.
+    Read MS2 spectra from a supported file format; inferring the type from the filename extension.
 
     Parameters
     ----------
@@ -132,8 +133,20 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
     elif filetype == ".mgf":
         for spectrum in read_mgf(spectrum_file):
             yield spectrum
-    elif filetype == ".d":
+    elif filetype == ".d" or _is_minitdf(spectrum_file):
         for spectrum in read_tdf(spectrum_file):
             yield spectrum
     else:
         raise UnsupportedSpectrumFiletypeError(filetype)
+
+
+def _is_minitdf(spectrum_file: str) -> bool:
+    """
+    Check if the spectrum file is a Bruker miniTDF folder.
+
+    A Bruker miniTDF folder has no fixed name, but contains files matching the patterns
+    ``*ms2spectrum.bin`` and ``*ms2spectrum.parquet``.
+    """
+    files = set(Path(spectrum_file).glob("*ms2spectrum.bin"))
+    files.update(Path(spectrum_file).glob("*ms2spectrum.parquet"))
+    return len(files) >= 2
