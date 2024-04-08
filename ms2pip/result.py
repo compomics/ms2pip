@@ -157,4 +157,4 @@ def correlations_to_csv(results: List["ProcessingResult"], output_file: str) -> 
         writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for result in results:
-            writer.writerow({"psm_index": result.psm_id, "correlation": result.correlation})
+            writer.writerow({"psm_index": result.psm_index, "correlation": result.correlation})

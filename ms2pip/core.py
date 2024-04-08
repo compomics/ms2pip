@@ -14,7 +14,6 @@ from typing import Callable, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from psm_utils import PSM, Peptidoform, PSMList
-from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
@@ -780,6 +779,9 @@ def _process_spectra(
                 f"`{spectrum.identifier}`. "
                 " Are you sure that the regex contains a capturing group?"
             )
+
+        if spectrum_id not in psms_by_specid:
+            continue
 
         # Spectrum preprocessing:
         # Remove reporter ions and precursor peak, normalize, transform
