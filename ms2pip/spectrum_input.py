@@ -33,7 +33,7 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
     if file_extension not in [".mgf", ".mzml", ".d"] and not _is_minitdf(spectrum_file):
         raise UnsupportedSpectrumFiletypeError(file_extension)
 
-    for spectrum in get_ms2_spectra(spectrum_file):
+    for spectrum in get_ms2_spectra(str(spectrum_file)):
         yield ObservedSpectrum(
             mz=np.array(spectrum.mz, dtype=np.float32),
             intensity=np.array(spectrum.intensity, dtype=np.float32),
