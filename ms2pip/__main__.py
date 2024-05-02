@@ -97,7 +97,7 @@ def predict_single(*args, **kwargs):
 def predict_batch(*args, **kwargs):
     # Parse arguments
     output_name = kwargs.pop("output_name")
-    output_format = kwargs.pop("output_format")
+    output_format = kwargs.pop("output_format")  # noqa F841 TODO
     output_name = _infer_output_name(kwargs["psms"], output_name)
 
     # Run
