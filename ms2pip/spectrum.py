@@ -7,7 +7,7 @@ from typing import Any, Optional, Union
 
 import numpy as np
 from psm_utils import Peptidoform
-from pydantic import BaseModel, root_validator, validator
+from pydantic import model_validator, field_validator, ConfigDict, BaseModel
 try:
     import spectrum_utils.spectrum as sus
     import spectrum_utils.plot as sup
@@ -30,8 +30,7 @@ class Spectrum(BaseModel):
     mass_tolerance: Optional[float] = None
     mass_tolerance_unit: Optional[str] = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(__pydantic_self__, **data: Any) -> None:
         """
@@ -70,26 +69,25 @@ class Spectrum(BaseModel):
             f"identifier='{self.identifier}'",
         )
 
-    @root_validator()
-    def check_array_lengths(cls, values):
-        if len(values["mz"]) != len(values["intensity"]):
+    @model_validator(mode="after")
+    @classmethod
+    def check_array_lengths(cls, data: dict):
+        if len(data["mz"]) != len(data["intensity"]):
             raise ValueError("Array lengths do not match.")
-        if values["annotations"] is not None:
-            if len(values["annotations"]) != len(values["intensity"]):
+        if data["annotations"] is not None:
+            if len(data["annotations"]) != len(data["intensity"]):
                 raise ValueError("Array lengths do not match.")
-        return values
+        return data
 
-    @validator("peptidoform")
-    def check_peptidoform(cls, value, values):
-        if not value:
-            pass
+    @field_validator("peptidoform")
+    @classmethod
+    def check_peptidoform(cls, value):
+        if not value or isinstance(value, Peptidoform):
+            return value
         elif isinstance(value, str):
-            value = Peptidoform(value)
-        elif isinstance(value, Peptidoform):
-            pass
+            return Peptidoform(value)
         else:
             raise ValueError("Peptidoform must be a string, a Peptidoform object, or None.")
-        return value
 
     @property
     def tic(self):

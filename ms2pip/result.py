@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from psm_utils import PSM
-from pydantic import BaseModel
+from pydantic import ConfigDict, BaseModel
 
 try:
     import spectrum_utils.plot as sup
@@ -28,9 +28,7 @@ class ProcessingResult(BaseModel):
     observed_intensity: Optional[Dict[str, np.ndarray]] = None
     correlation: Optional[float] = None
     feature_vectors: Optional[np.ndarray] = None
-
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(__pydantic_self__, **data: Any) -> None:
         """Result of processing a single PSM."""
