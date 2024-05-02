@@ -23,6 +23,7 @@ Modifications:
 - Terminal modifications can have site specificity (e.g. N-term K or N-term P).
 
 """
+
 from __future__ import annotations
 
 __author__ = "Ralf Gabriels"
@@ -55,6 +56,8 @@ from ms2pip.peptides import Modifications as MS2PIPModifications
 from ms2pip.utils import spectrum_output
 
 logger = logging.getLogger(__name__)
+
+raise NotImplementedError("This module is not yet implemented for MS²PIP v4.")
 
 
 class Peptide(BaseModel):
@@ -138,7 +141,7 @@ class Configuration(BaseModel):
     @field_validator("output_filetype")
     @classmethod
     def _validate_output_filetypes(cls, v):
-        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib"] # , "hdf"]
+        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib"]  # , "hdf"]
         v = [filetype.lower() for filetype in v]
         for filetype in v:
             if filetype not in allowed_types:
@@ -399,11 +402,15 @@ class Fasta2SpecLib:
                 "model": config.ms2pip_model,
                 "frag_error": 0.02,
                 "ptm": [
-                    "{},{},opt,N-term".format(mod.name, mod.mass_shift)
-                    if mod.peptide_n_term or mod.protein_n_term
-                    else "{},{},opt,C-term".format(mod.name, mod.mass_shift)
-                    if mod.peptide_c_term or mod.protein_c_term
-                    else "{},{},opt,{}".format(mod.name, mod.mass_shift, mod.amino_acid)
+                    (
+                        "{},{},opt,N-term".format(mod.name, mod.mass_shift)
+                        if mod.peptide_n_term or mod.protein_n_term
+                        else (
+                            "{},{},opt,C-term".format(mod.name, mod.mass_shift)
+                            if mod.peptide_c_term or mod.protein_c_term
+                            else "{},{},opt,{}".format(mod.name, mod.mass_shift, mod.amino_acid)
+                        )
+                    )
                     for mod in config.modifications
                 ],
                 "sptm": [],
