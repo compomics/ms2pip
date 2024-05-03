@@ -9,7 +9,7 @@ import re
 from collections import defaultdict
 from math import ceil
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,7 @@ from ms2pip._utils.encoder import Encoder
 from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
+from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.result import ProcessingResult, calculate_correlations
@@ -121,9 +122,44 @@ def predict_batch(
     return results
 
 
-def predict_library():
-    """Predict spectral library from protein FASTA file."""
-    raise NotImplementedError
+def predict_library(
+    proteome: Union[ProteomeSearchSpace, dict, str, Path],
+    add_retention_time: bool = False,
+    model: Optional[str] = "HCD",
+    model_dir: Optional[Union[str, Path]] = None,
+    processes: Optional[int] = None,
+    batch_size: int = 100000,
+) -> Generator[ProcessingResult, None, None]:
+    """
+    Predict spectral library from protein FASTA file.
+
+    Parameters
+    ----------
+    proteome
+        ProteomeSearchSpace, or a dictionary or path to JSON file with proteome search space
+        paramters.
+    add_retention_time
+        Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    model
+        Model to use for prediction. Default: "HCD".
+    model_dir
+        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+    batch_size
+        Number of peptides to process in each batch.
+    """
+    for batch in _into_batches(
+        ProteomeSearchSpace.from_any(proteome).generate_psms(processes),
+        batch_size=batch_size,
+    ):
+        yield predict_batch(
+            batch,
+            add_retention_time=add_retention_time,
+            model=model,
+            model_dir=model_dir,
+            processes=processes,
+        )
 
 
 def correlate(
@@ -899,3 +935,8 @@ def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.D
     ]
 
     return training_data
+
+
+def _into_batches(items: List[Any], batch_size: int) -> List[List[Any]]:
+    """Divide list of items into batches for batch-based processing."""
+    return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
