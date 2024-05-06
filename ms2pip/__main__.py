@@ -111,8 +111,21 @@ def predict_batch(*args, **kwargs):
 
 
 @cli.command(help=ms2pip.core.predict_library.__doc__)
+@click.argument("proteome", required=True, type=click.Path(exists=True))
+@click.option("--output-name", "-o", type=str)
+@click.option("--processes", "-n", type=int)
 def predict_library(*args, **kwargs):
-    ms2pip.core.predict_library(*args, **kwargs)
+    output_name = kwargs.pop("output_name")
+    output_name = _infer_output_name(kwargs["proteome"], output_name)
+    output_name_csv = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
+
+    predictions = ms2pip.core.predict_library(*args, **kwargs)
+    # Combine predictions into a single list
+    predictions = [pred for sublist in predictions for pred in sublist]
+    logger.info(f'Writing output to {output_name_csv}')
+    results_to_csv(predictions, output_name_csv)
+    logger.info(f'Finished writing output to {output_name_csv}')
+
 
 
 @cli.command(help=ms2pip.core.correlate.__doc__)

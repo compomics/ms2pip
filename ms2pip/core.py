@@ -102,6 +102,8 @@ def predict_batch(
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
+    if isinstance(psms, list):
+        psms = PSMList(psm_list=psms)
     psm_list = read_psms(psms, filetype=psm_filetype)
 
     if add_retention_time:
@@ -137,7 +139,7 @@ def predict_library(
     ----------
     proteome
         ProteomeSearchSpace, or a dictionary or path to JSON file with proteome search space
-        paramters.
+        parameters.
     add_retention_time
         Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
     model
@@ -939,4 +941,6 @@ def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.D
 
 def _into_batches(items: List[Any], batch_size: int) -> List[List[Any]]:
     """Divide list of items into batches for batch-based processing."""
+    if isinstance(items, itertools.chain):
+        items = list(items)
     return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]

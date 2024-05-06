@@ -6,21 +6,24 @@ import multiprocessing
 import multiprocessing.dummy
 from collections import defaultdict
 from functools import cmp_to_key, partial
-from itertools import chain, product
+from itertools import chain, product, combinations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import pyteomics.fasta
-from psm_utils import PSMList
+from psm_utils import PSMList, PSM
 from pydantic import BaseModel, field_validator, model_validator
 from pyteomics.parser import icleave
 from rich.progress import track
+from logging import getLogger
+import numpy as np
 
+logger = getLogger(__name__)
 
 class ModificationConfig(BaseModel):
     """Configuration for a single modification in the search space."""
 
-    label: str
+    name: str
     amino_acid: Optional[str] = None
     peptide_n_term: Optional[bool] = False
     protein_n_term: Optional[bool] = False
@@ -53,15 +56,44 @@ class PeptidoformSearchSpace(BaseModel):
     modification_options: List[Dict[int, ModificationConfig]] = None
     charge_options: List[int] = None
 
-    # TODO
-    def into_psm_list(self) -> PSMList:
-        """Convert PeptidoformSpace to PSMList with given charge and modification."""
+    def into_psm_list(self, min_precursor_mz = 0, max_precursor_mz = np.Inf) -> PSMList:
+        """Convert PeptidoformSearchSpace to PSMList with given charge and modification."""
         if not self.charge_options:
             raise ValueError("Peptide charge options not defined.")
         if not self.modification_options:
             raise ValueError("Peptide modification options not defined.")
 
-        raise NotImplementedError("Method not implemented yet.")
+        psms = []
+        # Maybe should be a global variable? Because now resets for every peptide
+        spectrum_id = 0
+        for modifications, charge in product(self.modification_options, self.charge_options):
+            offset = 0
+            if not modifications:
+                psm = PSM(peptidoform=(self.sequence+'/{}'.format(charge)), spectrum_id=spectrum_id)
+                spectrum_id += 1
+            else:
+                modded_sequence = list(self.sequence)
+                for position, mod in modifications.items():
+
+                    if position != 0 and position != -1:
+                        modded_sequence.insert(position+offset, f"[{mod}]")
+                        offset += 1
+
+                    elif position == 0:
+                        modded_sequence.insert(0, f"[{mod}]-")
+                        offset += 1
+                    elif position == -1:
+                        modded_sequence.append(f"-[{mod}]")
+
+                modded_sequence = "".join(modded_sequence)
+                psm = PSM(peptidoform=(modded_sequence+'/{}'.format(charge)), spectrum_id=spectrum_id)
+                spectrum_id += 1
+            if psm.peptidoform.theoretical_mz >= min_precursor_mz and psm.peptidoform.theoretical_mz <= max_precursor_mz:
+                psms.append(psm)
+        psm_list = PSMList(psm_list = psms)
+        return psm_list
+
+
 
 
 DEFAULT_MODIFICATIONS = [
@@ -87,8 +119,8 @@ class ProteomeSearchSpace(BaseModel):
     fasta_file: Path
     min_length: int = 8
     max_length: int = 30
-    min_precursor_mz: Optional[float] = None
-    max_precursor_mz: Optional[float] = None
+    min_precursor_mz: Optional[float] = 0
+    max_precursor_mz: Optional[float] = np.Inf
     cleavage_rule: str = "trypsin"
     missed_cleavages: int = 2
     semi_specific: bool = False
@@ -141,8 +173,9 @@ class ProteomeSearchSpace(BaseModel):
         if not self._peptidoform_space:
             self.build_search_space(processes)
 
-        # TODO Implement filtering by precursor m/z on PSMs
-        return chain.from_iterable([psm.into_psm_list() for psm in self._peptidoform_space])
+        unfiltered_search_space = chain.from_iterable([psm.into_psm_list(self.min_precursor_mz, self.max_precursor_mz) for psm in self._peptidoform_space])
+
+        return unfiltered_search_space
 
     def build_search_space(self, processes=1):
         """Build peptide search space from FASTA file."""
@@ -153,6 +186,8 @@ class ProteomeSearchSpace(BaseModel):
 
     def digest_fasta(self, processes=1):
         """Digest FASTA file to peptides and populate search space."""
+        # Convert to string to avoid issues with Path objects
+        self.fasta_file = str(self.fasta_file)
         n_proteins = _count_fasta_entries(self.fasta_file)
         if self.add_decoys:
             fasta_db = pyteomics.fasta.decoy_db(
@@ -230,11 +265,6 @@ class ProteomeSearchSpace(BaseModel):
         ):
             peptide.charge_options = self.charges
 
-    # TODO
-    def filter_precursor_mz(self, processes=1):
-        """Filter peptides based on precursor m/z."""
-        raise NotImplementedError()
-
 
 def _digest_single_protein(
     protein: pyteomics.fasta.Protein,
@@ -294,11 +324,11 @@ def _restructure_modifications_by_target(
 ) -> Dict[str, Dict[str, List[ModificationConfig]]]:
     """Restructure variable modifications to options per side chain or terminus."""
     modifications_by_target = {
-        "sidechain": defaultdict(lambda: [None]),
-        "peptide_n_term": defaultdict(lambda: [None]),
-        "peptide_c_term": defaultdict(lambda: [None]),
-        "protein_n_term": defaultdict(lambda: [None]),
-        "protein_c_term": defaultdict(lambda: [None]),
+        "sidechain": defaultdict(lambda: []),
+        "peptide_n_term": defaultdict(lambda: []),
+        "peptide_c_term": defaultdict(lambda: []),
+        "protein_n_term": defaultdict(lambda: []),
+        "protein_c_term": defaultdict(lambda: []),
     }
 
     def add_mod(mod, target, amino_acid):
@@ -352,6 +382,34 @@ def _get_modification_versions(
     [{}, {3: 'Phospho'}, {0: 'Acetyl'}, {0: 'Acetyl', 3: 'Phospho'}]
 
     """
+    def _get_combinations(possibilities_by_site, max_variable_modifications):
+        # Prepare dictionaries for fixed and variable modifications
+        fixed_modifications = {}
+        variable_sites = []
+
+        # Separate fixed and variable modification sites
+        for site, mods in possibilities_by_site.items():
+            for mod in mods:
+                if mod.fixed:
+                    fixed_modifications[site] = mod.name
+                else:
+                    variable_sites.append((site, mod.name))
+
+        # If no fixed modifications, add empty dictionary
+        if not fixed_modifications:
+            fixed_modifications = {}
+
+        # Generate all combinations of variable modifications up to the maximum allowed
+        valid_combinations = []
+        for i in range(max_variable_modifications + 1):
+            for comb in combinations(variable_sites, i):
+                combination_dict = fixed_modifications.copy()
+                for site, mod_name in comb:
+                    combination_dict[site] = mod_name
+                valid_combinations.append(combination_dict)
+
+        return valid_combinations
+
     possibilities_by_site = defaultdict(list)
 
     # Generate dictionary of positions per amino acid
@@ -400,40 +458,12 @@ def _get_modification_versions(
                 for pos in pos_dict[aa]:
                     possibilities_by_site[pos] = [mod]
 
-    # Get all possible combinations of modifications for all sites
-    mod_permutations = product(*possibilities_by_site.values())
-    mod_positions = possibilities_by_site.keys()
-
-    # Filter by max modified sites (avoiding combinatorial explosion)
-    mod_permutations = filter(
-        lambda mods: sum([1 for m in mods if m is not None and not m.fixed])
-        <= max_variable_modifications,
-        mod_permutations,
-    )
-
-    def _compare_minus_one_larger(a, b):
-        """Custom comparison function where `-1` is always larger."""
-        if a[0] == -1:
-            return 1
-        elif b[0] == -1:
-            return -1
-        else:
-            return a[0] - b[0]
-
-    # Get MS²PIP modifications strings for each combination
-    mod_strings = []
-    for p in mod_permutations:
-        if p == [""]:
-            mod_strings.append("-")
-        else:
-            mods = sorted(zip(mod_positions, p), key=cmp_to_key(_compare_minus_one_larger))
-            mod_strings.append("|".join(f"{p}|{m.name}" for p, m in mods if m))
-
-    return mod_strings
-
+        modification_versions = _get_combinations(possibilities_by_site, max_variable_modifications)
+        return modification_versions
 
 def _get_pool(processes: int) -> Union[multiprocessing.Pool, multiprocessing.dummy.Pool]:
     """Get a multiprocessing pool with the given number of processes."""
+    # TODO: fix None default value for processes
     if processes > 1:
         return multiprocessing.Pool(processes)
     else:

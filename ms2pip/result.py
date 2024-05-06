@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 from typing import Any, Dict, List, Optional, Tuple
+from logging import getLogger
 
 import numpy as np
 from psm_utils import PSM
@@ -17,6 +18,7 @@ except ImportError:
 
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
+logger = getLogger(__name__)
 
 class ProcessingResult(BaseModel):
     """Result of processing a single PSM."""
@@ -120,6 +122,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
     with open(output_file, "wt") as f:
         fieldnames = [
             "psm_index",
+            "peptidoform",
             "ion_type",
             "ion_number",
             "mz",
@@ -135,6 +138,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
                         writer.writerow(
                             {
                                 "psm_index": result.psm_index,
+                                "peptidoform": result.psm.peptidoform,
                                 "ion_type": ion_type,
                                 "ion_number": i + 1,
                                 "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
