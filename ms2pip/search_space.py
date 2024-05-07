@@ -5,25 +5,26 @@ from __future__ import annotations
 import multiprocessing
 import multiprocessing.dummy
 from collections import defaultdict
-from functools import cmp_to_key, partial
-from itertools import chain, product, combinations
+from functools import partial
+from itertools import chain, combinations, product
+from logging import getLogger
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
 import pyteomics.fasta
-from psm_utils import PSMList, PSM
+from psm_utils import PSM, Peptidoform, PSMList
 from pydantic import BaseModel, field_validator, model_validator
 from pyteomics.parser import icleave
 from rich.progress import track
-from logging import getLogger
-import numpy as np
 
 logger = getLogger(__name__)
+
 
 class ModificationConfig(BaseModel):
     """Configuration for a single modification in the search space."""
 
-    name: str
+    label: str
     amino_acid: Optional[str] = None
     peptide_n_term: Optional[bool] = False
     protein_n_term: Optional[bool] = False
@@ -45,6 +46,19 @@ class ModificationConfig(BaseModel):
         return self
 
 
+DEFAULT_MODIFICATIONS = [
+    ModificationConfig(
+        label="Oxidation",
+        amino_acid="M",
+    ),
+    ModificationConfig(
+        label="Carbamidomethyl",
+        amino_acid="C",
+        fixed=True,
+    ),
+]
+
+
 class PeptidoformSearchSpace(BaseModel):
     """Peptidoform search space for a given amino acid sequence."""
 
@@ -52,65 +66,51 @@ class PeptidoformSearchSpace(BaseModel):
     proteins: List[str]
     is_n_term: Optional[bool] = None
     is_c_term: Optional[bool] = None
-    # TODO Can be changed to whichever is convenient
-    modification_options: List[Dict[int, ModificationConfig]] = None
-    charge_options: List[int] = None
+    modification_options: List[Dict[int, ModificationConfig]] = []
+    charge_options: List[int] = []
 
-    def into_psm_list(self, min_precursor_mz = 0, max_precursor_mz = np.Inf) -> PSMList:
+    def into_peptidoforms(self, min_precursor_mz=0, max_precursor_mz=np.Inf) -> List[Peptidoform]:
         """Convert PeptidoformSearchSpace to PSMList with given charge and modification."""
         if not self.charge_options:
             raise ValueError("Peptide charge options not defined.")
         if not self.modification_options:
             raise ValueError("Peptide modification options not defined.")
 
-        psms = []
-        # Maybe should be a global variable? Because now resets for every peptide
-        spectrum_id = 0
+        peptidoforms = []
         for modifications, charge in product(self.modification_options, self.charge_options):
-            offset = 0
-            if not modifications:
-                psm = PSM(peptidoform=(self.sequence+'/{}'.format(charge)), spectrum_id=spectrum_id)
-                spectrum_id += 1
+            peptidoform = self._construct_peptidoform(self.sequence, modifications, charge)
+            if (
+                peptidoform.theoretical_mz >= min_precursor_mz
+                and peptidoform.theoretical_mz <= max_precursor_mz
+            ):
+                peptidoforms.append(peptidoform)
+        return peptidoforms
+
+    @staticmethod
+    def _construct_peptidoform(
+        sequence: str, modifications: Dict[int, ModificationConfig], charge: int
+    ) -> Peptidoform:
+        if not modifications:
+            return Peptidoform(f"{sequence}/{charge}")
+
+        modded_sequence = list(sequence)
+        for position, mod in modifications.items():
+            if isinstance(position, int):
+                aa = modded_sequence[position]
+                if aa != mod.amino_acid:
+                    raise ValueError(
+                        f"Modification {mod.label} at position {position} does not match amino "
+                        f"acid {aa}."
+                    )
+                modded_sequence[position] = f"{aa}[{mod.label}]"
+            elif position == "N":
+                modded_sequence.insert(0, f"[{mod.label}]-")
+            elif position == "C":
+                modded_sequence.append(f"-[{mod.label}]")
             else:
-                modded_sequence = list(self.sequence)
-                for position, mod in modifications.items():
+                raise ValueError(f"Invalid position {position} for modification {mod.label}.")
 
-                    if position != 0 and position != -1:
-                        modded_sequence.insert(position+offset, f"[{mod}]")
-                        offset += 1
-
-                    elif position == 0:
-                        modded_sequence.insert(0, f"[{mod}]-")
-                        offset += 1
-                    elif position == -1:
-                        modded_sequence.append(f"-[{mod}]")
-
-                modded_sequence = "".join(modded_sequence)
-                psm = PSM(peptidoform=(modded_sequence+'/{}'.format(charge)), spectrum_id=spectrum_id)
-                spectrum_id += 1
-            if psm.peptidoform.theoretical_mz >= min_precursor_mz and psm.peptidoform.theoretical_mz <= max_precursor_mz:
-                psms.append(psm)
-        psm_list = PSMList(psm_list = psms)
-        return psm_list
-
-
-
-
-DEFAULT_MODIFICATIONS = [
-    ModificationConfig(
-        name="Oxidation",
-        unimod_accession=35,
-        mass_shift=15.994915,
-        amino_acid="M",
-    ),
-    ModificationConfig(
-        name="Carbamidomethyl",
-        mass_shift=57.021464,
-        unimod_accession=4,
-        amino_acid="C",
-        fixed=True,
-    ),
-]
+        return Peptidoform(f"{''.join(modded_sequence)}/{charge}")
 
 
 class ProteomeSearchSpace(BaseModel):
@@ -128,6 +128,10 @@ class ProteomeSearchSpace(BaseModel):
     modifications: List[ModificationConfig] = DEFAULT_MODIFICATIONS
     max_variable_modifications: int = 3
     charges: List[int] = [2, 3]
+
+    def __init__(self, **data: Any):
+        super().__init__(**data)
+        self._peptidoform_spaces: List[PeptidoformSearchSpace] = []
 
     @field_validator("modifications")
     @classmethod
@@ -164,27 +168,37 @@ class ProteomeSearchSpace(BaseModel):
         else:
             raise ValueError("Search space must be a dict, str, Path, or ProteomeSearchSpace.")
 
-    def __init__(self, **data: Any):
-        super().__init__(**data)
-        self._peptidoform_space: List[PeptidoformSearchSpace] = []
-
-    def generate_psms(self, processes=1) -> PSMList:
-        """Generate PSMs from search space."""
-        if not self._peptidoform_space:
-            self.build_search_space(processes)
-
-        unfiltered_search_space = chain.from_iterable([psm.into_psm_list(self.min_precursor_mz, self.max_precursor_mz) for psm in self._peptidoform_space])
-
-        return unfiltered_search_space
-
-    def build_search_space(self, processes=1):
+    def build(self, processes: int = 1):
         """Build peptide search space from FASTA file."""
-        self.digest_fasta(processes)
-        self.remove_redundancy()
-        self.add_modifications(processes)
-        self.add_charges()
+        processes = processes if processes else multiprocessing.cpu_count()
+        self._digest_fasta(processes)
+        self._remove_redundancy()
+        self._add_modifications(processes)
+        self._add_charges()
 
-    def digest_fasta(self, processes=1):
+    def into_psm_list(self, processes=1) -> PSMList:
+        """Generate PSMs from search space."""
+        # Build search space if not already built
+        if not self._peptidoform_spaces:
+            self.build(processes)
+
+        # Convert to Peptidoforms, with explicit charges and modifications, and filter on precursor m/z
+        peptidoforms: List[Peptidoform, List[str]] = [
+            (peptidoform, pep_space.proteins)
+            for pep_space in self._peptidoform_spaces
+            for peptidoform in pep_space.into_peptidoforms()
+            if self.min_precursor_mz <= peptidoform.theoretical_mz <= self.max_precursor_mz
+        ]
+
+        # Convert to PSMs
+        return PSMList(
+            psm_list=[
+                PSM(peptidoform=pep, spectrum_id=str(i), protein_list=prot)
+                for i, (pep, prot) in enumerate(peptidoforms)
+            ]
+        )
+
+    def _digest_fasta(self, processes: int = 1):
         """Digest FASTA file to peptides and populate search space."""
         # Convert to string to avoid issues with Path objects
         self.fasta_file = str(self.fasta_file)
@@ -214,17 +228,17 @@ class ProteomeSearchSpace(BaseModel):
                 pool.imap(partial_digest_protein, fasta_db),
                 total=n_proteins,
                 description="Digesting proteins...",
-                transient=True,
+                transient=False,
             )
-            self._peptidoform_space = list(chain.from_iterable(results))
+            self._peptidoform_spaces = list(chain.from_iterable(results))
 
-    def remove_redundancy(self):
+    def _remove_redundancy(self):
         """Remove redundancy in peptides and combine protein lists."""
         peptide_dict = dict()
         for peptide in track(
-            self._peptidoform_space,
+            self._peptidoform_spaces,
             description="Removing peptide redundancy...",
-            transient=True,
+            transient=False,
         ):
             if peptide.sequence in peptide_dict:
                 peptide_dict[peptide.sequence].proteins.extend(peptide.proteins)
@@ -232,36 +246,36 @@ class ProteomeSearchSpace(BaseModel):
                 peptide_dict[peptide.sequence] = peptide
 
         # Overwrite with non-redundant peptides
-        self._peptidoform_space = list(peptide_dict.values())
+        self._peptidoform_spaces = list(peptide_dict.values())
 
-    def add_modifications(self, processes=1):
+    def _add_modifications(self, processes: int = 1):
         """Add modifications to peptides in search space."""
         modifications_by_target = _restructure_modifications_by_target(self.modifications)
         modification_options = []
         with _get_pool(processes) as pool:
             partial_get_modification_versions = partial(
-                _get_modification_versions,
+                _get_peptidoform_modification_versions,
                 modifications=self.modifications,
                 modifications_by_target=modifications_by_target,
                 max_variable_modifications=self.max_variable_modifications,
             )
             modification_options = pool.imap(
-                partial_get_modification_versions, self._peptidoform_space
+                partial_get_modification_versions, self._peptidoform_spaces
             )
             for pep, mod_opt in track(
-                zip(self._peptidoform_space, modification_options),
+                zip(self._peptidoform_spaces, modification_options),
                 description="Adding modifications...",
-                total=len(self._peptidoform_space),
-                transient=True,
+                total=len(self._peptidoform_spaces),
+                transient=False,
             ):
                 pep.modification_options = mod_opt
 
-    def add_charges(self):
+    def _add_charges(self):
         """Add charge permutations to peptides in search space."""
         for peptide in track(
-            self._peptidoform_space,
+            self._peptidoform_spaces,
             description="Adding charge permutations...",
-            transient=True,
+            transient=False,
         ):
             peptide.charge_options = self.charges
 
@@ -354,85 +368,35 @@ def _restructure_modifications_by_target(
     return {k: dict(v) for k, v in modifications_by_target.items()}
 
 
-# TODO: Refactor for v4.0.0
-def _get_modification_versions(
+def _get_modification_possibilities_by_site(
     peptide: PeptidoformSearchSpace,
-    modifications: List[ModificationConfig],
     modifications_by_target: Dict[str, Dict[str, List[ModificationConfig]]],
-    max_variable_modifications: int = 3,
-) -> Dict[Union[str, int], List[str]]:
-    """
-    Get all potential combinations of modifications for a peptide sequence.
-
-    Examples
-    --------
-    >>> peptide = PeptidoformSpace(sequence="PEPTIDE", proteins=["PROTEIN"])
-    >>> modifications = [
-    ...     ModificationConfig(label="Phospho", amino_acid="T", fixed=False),
-    ...     ModificationConfig(label="Acetyl", peptide_n_term=True, fixed=False),
-    ... ]
-    >>> modifications_by_target = {
-    ...     "sidechain": {"S": [modifications[0]]},
-    ...     "peptide_n_term": {"any": [modifications[1]]},
-    ...     "peptide_c_term": {"any": []},
-    ...     "protein_n_term": {"any": []},
-    ...     "protein_c_term": {"any": []},
-    ... }
-    >>> _get_modification_versions(peptide, modifications, modifications_by_target)
-    [{}, {3: 'Phospho'}, {0: 'Acetyl'}, {0: 'Acetyl', 3: 'Phospho'}]
-
-    """
-    def _get_combinations(possibilities_by_site, max_variable_modifications):
-        # Prepare dictionaries for fixed and variable modifications
-        fixed_modifications = {}
-        variable_sites = []
-
-        # Separate fixed and variable modification sites
-        for site, mods in possibilities_by_site.items():
-            for mod in mods:
-                if mod.fixed:
-                    fixed_modifications[site] = mod.name
-                else:
-                    variable_sites.append((site, mod.name))
-
-        # If no fixed modifications, add empty dictionary
-        if not fixed_modifications:
-            fixed_modifications = {}
-
-        # Generate all combinations of variable modifications up to the maximum allowed
-        valid_combinations = []
-        for i in range(max_variable_modifications + 1):
-            for comb in combinations(variable_sites, i):
-                combination_dict = fixed_modifications.copy()
-                for site, mod_name in comb:
-                    combination_dict[site] = mod_name
-                valid_combinations.append(combination_dict)
-
-        return valid_combinations
-
+    modifications: List[ModificationConfig],
+) -> Dict[Union[str, int], List[ModificationConfig]]:
+    """Get all possible modifications for each site in a peptide sequence."""
     possibilities_by_site = defaultdict(list)
 
     # Generate dictionary of positions per amino acid
-    pos_dict = defaultdict(list)
+    position_dict = defaultdict(list)
     for pos, aa in enumerate(peptide.sequence):
-        pos_dict[aa].append(pos + 1)
+        position_dict[aa].append(pos)
     # Map modifications to positions
-    for aa in set(pos_dict).intersection(set(modifications_by_target["sidechain"])):
+    for aa in set(position_dict).intersection(set(modifications_by_target["sidechain"])):
         possibilities_by_site.update(
-            {pos: modifications_by_target["sidechain"][aa] for pos in pos_dict[aa]}
+            {pos: modifications_by_target["sidechain"][aa] for pos in position_dict[aa]}
         )
 
     # Assign possible modifications per terminus
-    for terminus, position, specificity in [
-        ("peptide_n_term", 0, None),
-        ("peptide_c_term", -1, None),
-        ("protein_n_term", 0, "is_n_term"),
-        ("protein_c_term", -1, "is_c_term"),
+    for terminus, position, site_name, specificity in [
+        ("peptide_n_term", 0, "N", None),
+        ("peptide_c_term", -1, "C", None),
+        ("protein_n_term", 0, "N", "is_n_term"),
+        ("protein_c_term", -1, "C", "is_c_term"),
     ]:
         if specificity is None or getattr(peptide, specificity):
             for site, mods in modifications_by_target[terminus].items():
                 if site == "any" or peptide.sequence[position] == site:
-                    possibilities_by_site[position].extend(mods)
+                    possibilities_by_site[site_name].extend(mods)
 
     # Override with fixed modifications
     for mod in modifications:
@@ -441,25 +405,78 @@ def _get_modification_versions(
         if not mod.fixed:
             continue
         # Assign if specific aa matches or if no aa is specified for each terminus
-        for terminus, position, specificity in [
-            ("peptide_n_term", 0, None),
-            ("peptide_c_term", -1, None),
-            ("protein_n_term", 0, "is_n_term"),
-            ("protein_c_term", -1, "is_c_term"),
+        for terminus, position, site_name, specificity in [
+            ("peptide_n_term", 0, "N", None),
+            ("peptide_c_term", -1, "C", None),
+            ("protein_n_term", 0, "N", "is_n_term"),
+            ("protein_c_term", -1, "C", "is_c_term"),
         ]:
             if getattr(mod, terminus):  # Mod has this terminus
                 if specificity is None or getattr(peptide, specificity):  # Specificity matches
-                    if not aa or (aa and peptide.sequence[position] == aa):  # Aa matches
-                        possibilities_by_site[position] = [mod]  # Override with fixed mod
+                    if not aa or (aa and peptide.sequence[position] == aa):  # AA matches
+                        possibilities_by_site[site_name] = [mod]  # Override with fixed mod
                 break  # Allow `else: if amino_acid` if no terminus matches
         # Assign if fixed modification is not terminal and specific aa matches
         else:
             if aa:
-                for pos in pos_dict[aa]:
+                for pos in position_dict[aa]:
                     possibilities_by_site[pos] = [mod]
 
-        modification_versions = _get_combinations(possibilities_by_site, max_variable_modifications)
-        return modification_versions
+    return possibilities_by_site
+
+
+def _get_peptidoform_modification_versions(
+    peptide: PeptidoformSearchSpace,
+    modifications: List[ModificationConfig],
+    modifications_by_target: Dict[str, Dict[str, List[ModificationConfig]]],
+    max_variable_modifications: int = 3,
+) -> List[Dict[Union[str, int], List[ModificationConfig]]]:
+    """
+    Get all potential combinations of modifications for a peptide sequence.
+
+    Examples
+    --------
+    >>> peptide = PeptidoformSpace(sequence="PEPTIDE", proteins=["PROTEIN"])
+    >>> phospho = ModificationConfig(label="Phospho", amino_acid="T", fixed=False)
+    >>> acetyl = ModificationConfig(label="Acetyl", peptide_n_term=True, fixed=False)
+    >>> modifications = [phospho, acetyl]
+    >>> modifications_by_target = {
+    ...     "sidechain": {"S": [modifications[0]]},
+    ...     "peptide_n_term": {"any": [modifications[1]]},
+    ...     "peptide_c_term": {"any": []},
+    ...     "protein_n_term": {"any": []},
+    ...     "protein_c_term": {"any": []},
+    ... }
+    >>> _get_modification_versions(peptide, modifications, modifications_by_target)
+    [{}, {3: phospho}, {0: acetyl}, {0: acetyl, 3: phospho}]
+
+    """
+    # Get all possible modifications for each site in the peptide sequence
+    possibilities_by_site = _get_modification_possibilities_by_site(
+        peptide, modifications_by_target, modifications
+    )
+
+    # Separate fixed and variable modification sites
+    fixed_modifications = {}
+    variable_sites = []
+    for site, mods in possibilities_by_site.items():
+        for mod in mods:
+            if mod.fixed:
+                fixed_modifications[site] = mod
+            else:
+                variable_sites.append((site, mod))
+
+    # Generate all combinations of variable modifications up to the maximum allowed
+    modification_versions = []
+    for i in range(max_variable_modifications + 1):
+        for comb in combinations(variable_sites, i):
+            combination_dict = fixed_modifications.copy()
+            for site, mod in comb:
+                combination_dict[site] = mod
+            modification_versions.append(combination_dict)
+
+    return modification_versions
+
 
 def _get_pool(processes: int) -> Union[multiprocessing.Pool, multiprocessing.dummy.Pool]:
     """Get a multiprocessing pool with the given number of processes."""

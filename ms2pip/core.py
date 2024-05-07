@@ -22,10 +22,10 @@ from ms2pip._utils.encoder import Encoder
 from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
-from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
 from ms2pip.result import ProcessingResult, calculate_correlations
+from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip.spectrum_input import read_spectrum_file
 
 logger = logging.getLogger(__name__)
@@ -125,34 +125,52 @@ def predict_batch(
 
 
 def predict_library(
-    proteome: Union[ProteomeSearchSpace, dict, str, Path],
+    fasta_file: Optional[Union[str, Path]] = None,
+    search_space_config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
     add_retention_time: bool = False,
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
-    processes: Optional[int] = None,
     batch_size: int = 100000,
+    processes: Optional[int] = None,
 ) -> Generator[ProcessingResult, None, None]:
     """
-    Predict spectral library from protein FASTA file.
+    Predict spectral library from protein FASTA file.\f
 
     Parameters
     ----------
-    proteome
+    fasta_file
+        Path to FASTA file with protein sequences. Required if `search-space-config` is not
+        provided.
+    search_space_config
         ProteomeSearchSpace, or a dictionary or path to JSON file with proteome search space
-        parameters.
+        parameters. Required if `fasta_file` is not provided.
     add_retention_time
         Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
     model
         Model to use for prediction. Default: "HCD".
     model_dir
         Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
-    processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
     batch_size
         Number of peptides to process in each batch.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
     """
+    if fasta_file and search_space_config:
+        # Use provided proteome, but overwrite fasta_file
+        search_space_config = ProteomeSearchSpace.from_any(search_space_config)
+        search_space_config.fasta_file = fasta_file
+    elif fasta_file and not search_space_config:
+        # Default proteome search space with provided fasta_file
+        search_space_config = ProteomeSearchSpace(fasta_file=fasta_file)
+    elif not fasta_file and search_space_config:
+        # Use provided proteome
+        search_space_config = ProteomeSearchSpace.from_any(search_space_config)
+    else:
+        raise ValueError("Either `fasta_file` or `proteome` must be provided.")
+
     for batch in _into_batches(
-        ProteomeSearchSpace.from_any(proteome).generate_psms(processes),
+        ProteomeSearchSpace.from_any(search_space_config).into_psm_list(processes),
         batch_size=batch_size,
     ):
         yield predict_batch(
