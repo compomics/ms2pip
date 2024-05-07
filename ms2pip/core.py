@@ -126,7 +126,7 @@ def predict_batch(
 
 def predict_library(
     fasta_file: Optional[Union[str, Path]] = None,
-    search_space_config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
+    config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
     add_retention_time: bool = False,
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
@@ -141,7 +141,7 @@ def predict_library(
     fasta_file
         Path to FASTA file with protein sequences. Required if `search-space-config` is not
         provided.
-    search_space_config
+    config
         ProteomeSearchSpace, or a dictionary or path to JSON file with proteome search space
         parameters. Required if `fasta_file` is not provided.
     add_retention_time
@@ -156,21 +156,21 @@ def predict_library(
         Number of parallel processes for multiprocessing steps. By default, all available.
 
     """
-    if fasta_file and search_space_config:
+    if fasta_file and config:
         # Use provided proteome, but overwrite fasta_file
-        search_space_config = ProteomeSearchSpace.from_any(search_space_config)
-        search_space_config.fasta_file = fasta_file
-    elif fasta_file and not search_space_config:
+        config = ProteomeSearchSpace.from_any(config)
+        config.fasta_file = fasta_file
+    elif fasta_file and not config:
         # Default proteome search space with provided fasta_file
-        search_space_config = ProteomeSearchSpace(fasta_file=fasta_file)
-    elif not fasta_file and search_space_config:
+        config = ProteomeSearchSpace(fasta_file=fasta_file)
+    elif not fasta_file and config:
         # Use provided proteome
-        search_space_config = ProteomeSearchSpace.from_any(search_space_config)
+        config = ProteomeSearchSpace.from_any(config)
     else:
-        raise ValueError("Either `fasta_file` or `proteome` must be provided.")
+        raise ValueError("Either `fasta_file` or `config` must be provided.")
 
     for batch in _into_batches(
-        ProteomeSearchSpace.from_any(search_space_config).into_psm_list(processes),
+        ProteomeSearchSpace.from_any(config).into_psm_list(processes),
         batch_size=batch_size,
     ):
         yield predict_batch(

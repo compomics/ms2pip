@@ -112,9 +112,7 @@ def predict_batch(*args, **kwargs):
 
 @cli.command(help=ms2pip.core.predict_library.__doc__)
 @click.argument("fasta-file", required=False, type=click.Path(exists=True, dir_okay=False))
-@click.argument(
-    "search-space-config", required=False, type=click.Path(exists=True, dir_okay=False)
-)
+@click.option("--config", "-c", type=click.Path(exists=True, dir_okay=False))
 @click.option("--output-name", "-o", type=str)
 @click.option("--add-retention-time", "-r", is_flag=True)
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
@@ -123,11 +121,13 @@ def predict_batch(*args, **kwargs):
 @click.option("--processes", "-n", type=int)
 def predict_library(*args, **kwargs):
     # Parse arguments
-    if not kwargs["fasta_file"] and not kwargs["search_space_config"]:
-        raise click.UsageError("Either `fasta_file` or `search-space-config` must be provided.")
+    if not kwargs["fasta_file"] and not kwargs["config"]:
+        raise click.UsageError("Either `fasta_file` or `config` must be provided.")
 
     output_name = kwargs.pop("output_name")
-    output_name = _infer_output_name(kwargs["fasta_file"] or kwargs["search_space_config"], output_name)
+    output_name = _infer_output_name(
+        kwargs["fasta_file"] or kwargs["config"], output_name
+    )
     output_name_csv = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
 
     result_batches = ms2pip.core.predict_library(*args, **kwargs)

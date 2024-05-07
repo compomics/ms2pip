@@ -1,11 +1,8 @@
-from ms2pip.search_space import (
-    ModificationConfig,
-    PeptidoformSearchSpace,
+from ms2pip.search_space import (ModificationConfig, ProteomeSearchSpace,
+                                 _get_peptidoform_modification_versions,
     ProteomeSearchSpace,
     _get_peptidoform_modification_versions,
-    _restructure_modifications_by_target,
-)
-
+    _PeptidoformSearchSpace,
 OXIDATION = ModificationConfig(
     label="Oxidation",
     amino_acid="M",
@@ -131,7 +128,7 @@ def test_get_peptidoform_modification_versions():
     ]
 
     for case in test_cases:
-        peptide = PeptidoformSearchSpace(sequence=case["sequence"], proteins=[], is_n_term=True)
+        peptide = _PeptidoformSearchSpace(sequence=case["sequence"], proteins=[], is_n_term=True)
         modifications_by_target = _restructure_modifications_by_target(case["modifications"])
         test_out = _get_peptidoform_modification_versions(
             peptide,
@@ -164,63 +161,63 @@ class TestProteomeSearchSpace:
         }
 
         test_output = [
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="MYSSCSLLQR",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=True,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="MYSSCSLLQRLVWFPFLALVATQLLFIR",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=True,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="LVWFPFLALVATQLLFIR",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="NVSSLNLTNEYLHHK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="NVSSLNLTNEYLHHKCLVSEGK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="NVSSLNLTNEYLHHKCLVSEGKYKPGSK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="CLVSEGKYKPGSK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="CLVSEGKYKPGSKYEYI",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=True,
             ),
-            PeptidoformSearchSpace(
+            _PeptidoformSearchSpace(
                 sequence="YKPGSKYEYI",
                 proteins=["P12345"],
                 modification_options=[],
