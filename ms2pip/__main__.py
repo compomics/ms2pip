@@ -20,7 +20,7 @@ from ms2pip.exceptions import (
     UnresolvableModificationError,
 )
 from ms2pip.result import correlations_to_csv, results_to_csv
-from ms2pip.spectrum_output import write_single_spectrum_csv, write_single_spectrum_png
+from ms2pip.spectrum_output import write_single_spectrum_csv, write_single_spectrum_png, SpectrumOutput
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -138,6 +138,10 @@ def predict_library(*args, **kwargs):
     logger.info(f"Writing output to {output_name_csv}")
     results_to_csv(results, output_name_csv)
     logger.info(f"Finished writing output to {output_name_csv}")
+    #TODO: add support for other output formats
+    # Initial implementation of writing to MSP format
+    so = SpectrumOutput(results)
+    so.write_msp()
 
 
 @cli.command(help=ms2pip.core.correlate.__doc__)

@@ -62,6 +62,7 @@ class SpectrumOutput:
         write_mode="wt+",
         return_stringbuffer=False,
         is_log_space=True,
+        normalization=None,
     ):
         """
         Write MS2PIP predictions to various output formats.
@@ -82,6 +83,9 @@ class SpectrumOutput:
         is_log_space: bool, optional
             Set to true if predicted intensities in `all_preds` are in log-space. In that
             case, intensities will first be transformed to "normal"-space.
+        normalization: str, optional
+            Normalization method to use. Options are "basepeak_10000", "basepeak_1", and
+            "tic" (default: None)
 
         Example
         -------
@@ -98,11 +102,14 @@ class SpectrumOutput:
         self.write_mode = write_mode
         self.return_stringbuffer = return_stringbuffer
         self.is_log_space = is_log_space
+        self.normalization = normalization
+        self.preds_dict = None
+        # self.peprec_dict = None #TODO: Check if needed
 
         self.diff_modification_mapping = {}
+        self.has_rt = hasattr(self.results[0], "predicted_rt") # Assuming all results have the same attributes
+        self.has_protein_list = hasattr(self.results[0].psm, "protein_list") # Assuming all results have the same attributes
 
-        self.has_rt = "rt" in self.peprec.columns
-        self.has_protein_list = "protein_list" in self.peprec.columns
 
         if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
             raise InvalidWriteModeError(self.write_mode)
@@ -110,83 +117,112 @@ class SpectrumOutput:
         if "a" in self.write_mode and self.return_stringbuffer:
             raise InvalidWriteModeError(self.write_mode)
 
-    # def _generate_peprec_dict(self, rt_to_seconds=True):
-    #     """
-    #     Create easy to access dict from all_preds and peprec dataframes
-    #     """
-    #     peprec_tmp = self.peprec.copy()
+    def _generate_preds_dict(self):
+        """
+        Create easy to access dict from ProcessingResult objects
+        """
+        self.preds_dict = {}
 
-    #     if self.has_rt and rt_to_seconds:
-    #         peprec_tmp["rt"] = peprec_tmp["rt"] * 60
+        for result in self.results:
+            spec_id = result.psm_index
+            if spec_id in self.preds_dict.keys():
+                for ion_type in result.theoretical_mz.keys():
+                    if ion_type in self.preds_dict[spec_id]["peaks"]:
+                        for i in range(len(result.theoretical_mz[ion_type])):
+                            self.preds_dict[spec_id]["peaks"][ion_type].append(
+                                (
+                                    result.theoretical_mz[ion_type][i],
+                                    result.predicted_intensity[ion_type][i],
+                                )
+                            )
+                    else:
+                        self.preds_dict[spec_id]["peaks"][ion_type] = [
+                            (
+                                result.theoretical_mz[ion_type][i],
+                                result.predicted_intensity[ion_type][i],
+                            )
+                        ]
+            else:
+                self.preds_dict[spec_id] = {
+                    "peptidoform": result.psm.peptidoform,
+                    "charge": result.psm.peptidoform.precursor_charge,
+                    "peaks": {
+                        ion_type: [
+                            (
+                                result.theoretical_mz[ion_type][i],
+                                result.predicted_intensity[ion_type][i],
+                            )
+                            for i in range(len(result.theoretical_mz[ion_type]))
+                        ]
+                        for ion_type in result.theoretical_mz.keys()
+                    },
+                    "proteins": result.psm.protein_list
+                }
 
-    #     peprec_tmp.index = peprec_tmp["spec_id"]
-    #     peprec_tmp.drop("spec_id", axis=1, inplace=True)
+    #TODO: Implement normalization
+    def _normalize_spectra(self, method="basepeak_10000"):
+        """
+        Normalize spectra
+        """
+        if self.is_log_space:
+            for result in self.results:
+                result.predicted_intensity = {
+                    ion_type: [
+                    max(((2 ** intensity) - 0.001), 0) for intensity in intensities
+                    ]
+                    for ion_type, intensities in result.predicted_intensity.items()
+                }
+            self.is_log_space = False
 
-    #     self.peprec_dict = peprec_tmp.to_dict(orient="index")
+        if method == "basepeak_10000":
+            if self.normalization == "basepeak_10000":
+                pass
+            elif self.normalization == "basepeak_1":
+                for result in self.results:
+                    result.predicted_intensity = {
+                        ion_type: [
+                        intensity * 10000 for intensity in intensities
+                        ]
+                        for ion_type, intensities in result.predicted_intensity.items()
+                    }
+            else:
+                for result in self.results:
+                    for ion_type, intensities in result.predicted_intensity.items():
+                        result.predicted_intensity[ion_type] = [
+                            (intensity / max(intensities)) * 10000 for intensity in intensities
+                        ]
+            self.normalization = "basepeak_10000" #needed?
 
-    # def _generate_preds_dict(self):
-    #     """
-    #     Create easy to access dict from peprec dataframes
-    #     """
-    #     self.preds_dict = {}
-    #     preds_list = self.all_preds[
-    #         ["spec_id", "charge", "ion", "ionnumber", "mz", "prediction"]
-    #     ].values.tolist()
+        elif method == "basepeak_1":
+            if self.normalization == "basepeak_1":
+                pass
+            elif self.normalization == "basepeak_10000":
+                for result in self.results:
+                    result.predicted_intensity = {
+                        ion_type: [
+                        intensity / 10000 for intensity in intensities
+                        ]
+                        for ion_type, intensities in result.predicted_intensity.items()
+                    }
+            else:
+                for result in self.results:
+                    for ion_type, intensities in result.predicted_intensity.items():
+                        result.predicted_intensity[ion_type] = [
+                            intensity / max(intensities) for intensity in intensities
+                        ]
+            self.normalization = "base_peak_1" #needed?
 
-    #     for row in preds_list:
-    #         spec_id = row[0]
-    #         if spec_id in self.preds_dict.keys():
-    #             if row[2] in self.preds_dict[spec_id]["peaks"]:
-    #                 self.preds_dict[spec_id]["peaks"][row[2]].append(tuple(row[3:]))
-    #             else:
-    #                 self.preds_dict[spec_id]["peaks"][row[2]] = [tuple(row[3:])]
-    #         else:
-    #             self.preds_dict[spec_id] = {
-    #                 "charge": row[1],
-    #                 "peaks": {row[2]: [tuple(row[3:])]},
-    #             }
+        elif method == "tic":
+            if self.normalization != "tic":
+                for result in self.results:
+                    for ion_type, intensities in result.predicted_intensity.items():
+                        result.predicted_intensity[ion_type] = [
+                            intensity / sum(intensities) for intensity in intensities
+                        ]
+            self.normalization = "tic" #needed?
 
-    # def _normalize_spectra(self, method="basepeak_10000"):
-    #     """
-    #     Normalize spectra
-    #     """
-    #     if self.is_log_space:
-    #         self.all_preds["prediction"] = ((2 ** self.all_preds["prediction"]) - 0.001).clip(
-    #             lower=0
-    #         )
-    #         self.is_log_space = False
-
-    #     if method == "basepeak_10000":
-    #         if self.normalization == "basepeak_10000":
-    #             pass
-    #         elif self.normalization == "basepeak_1":
-    #             self.all_preds["prediction"] *= 10000
-    #         else:
-    #             self.all_preds["prediction"] = self.all_preds.groupby(
-    #                 ["spec_id"], group_keys=False
-    #             )["prediction"].apply(lambda x: (x / x.max()) * 10000)
-    #         self.normalization = "basepeak_10000"
-
-    #     elif method == "basepeak_1":
-    #         if self.normalization == "basepeak_1":
-    #             pass
-    #         elif self.normalization == "basepeak_10000":
-    #             self.all_preds["prediction"] /= 10000
-    #         else:
-    #             self.all_preds["prediction"] = self.all_preds.groupby(
-    #                 ["spec_id"], group_keys=False
-    #             )["prediction"].apply(lambda x: (x / x.max()))
-    #         self.normalization = "basepeak_1"
-
-    #     elif method == "tic":
-    #         if self.normalization != "tic":
-    #             self.all_preds["prediction"] = self.all_preds.groupby(
-    #                 ["spec_id"], group_keys=False
-    #             )["prediction"].apply(lambda x: x / x.sum())
-    #         self.normalization = "tic"
-
-    #     else:
-    #         raise NotImplementedError
+        else:
+            raise NotImplementedError
 
     def _get_msp_peak_annotation(
         self,
@@ -201,44 +237,51 @@ class SpectrumOutput:
         """
         all_peaks = []
         for ion_type, peaks in peak_dict.items():
-            for peak in peaks:
-                if not include_zero and peak[2] == 0:
+
+            for peak_number, peak in enumerate(peaks):
+                if not include_zero and peak[1] == 0:
                     continue
                 if include_annotations:
                     all_peaks.append(
                         (
-                            peak[1],
-                            f'{peak[1]:.6f}{sep}{intensity_type(peak[2])}{sep}"{ion_type.lower()}{peak[0]}/0.0"',
+                            peak[0],
+                            f'{peak[0]:.6f}{sep}{intensity_type(peak[1])}{sep}"{ion_type.lower()}{peak_number+1}/0.0"',
                         )
                     )
                 else:
-                    all_peaks.append((peak[1], f"{peak[1]:.6f}{sep}{peak[2]}"))
+                    all_peaks.append((peak[0], f"{peak[0]:.6f}{sep}{peak[1]}"))
 
         all_peaks = sorted(all_peaks, key=itemgetter(0))
         peak_string = "\n".join([peak[1] for peak in all_peaks])
 
         return peak_string
 
-    def _get_msp_modifications(self, sequence, modifications):
+    def _get_msp_modifications(self, parsed_sequence, pep_properties):
         """
-        Format modifications in MSP-style, e.g. "1/0,E,Glu->pyro-Glu"
+        Format modifications in MSP-style, e.g. "1/0,E,Glu->pyro-Glu" where 1 is the number of modifications,
+        0 the position, E the amino acid, and Glu->pyro-Glu the modification.
         """
-
-        if isinstance(modifications, str):
-            if not modifications or modifications == "-":
-                msp_modifications = "0"
+        mods = []
+        counter = 0
+        for index, (aa, mod) in enumerate(parsed_sequence):
+            if not mod:
+                continue
             else:
-                mods = modifications.split("|")
-                mods = [(int(mods[i]), mods[i + 1]) for i in range(0, len(mods), 2)]
-                mods = [(x, y) if x == 0 else (x - 1, y) for (x, y) in mods]
-                mods = sorted(mods)
-                mods = [(str(x), sequence[x], y) for (x, y) in mods]
-                msp_modifications = "/".join([",".join(list(x)) for x in mods])
-                msp_modifications = f"{len(mods)}/{msp_modifications}"
-        else:
-            msp_modifications = "0"
+                counter += 1
+                mods.append("{},{},{}".format(index+1, aa, mod[0].name)) #Assuming only one mod per amino acid, which I guess is okay?
+        n_term_mod = pep_properties['n_term']
+        c_term_mod = pep_properties['c_term']
+        if n_term_mod:
+            counter += 1
+            mods.append("0,{},{}".format(parsed_sequence[0][0], n_term_mod))
+        if c_term_mod:
+            counter += 1
+            mods.append("-1,{},{}".format(parsed_sequence[-1][0], c_term_mod))
 
-        return msp_modifications
+        if counter == 0:
+            return "0"
+        else:
+            return f"{counter}/{'/'.join(sorted(mods))}"
 
     def _parse_protein_string(self, protein_list):
         """
@@ -317,12 +360,15 @@ class SpectrumOutput:
         Construct MSP string and write to file_object.
         """
 
-        for spec_id in sorted(self.peprec_dict.keys()):
-            seq = self.peprec_dict[spec_id]["peptide"]
-            mods = self.peprec_dict[spec_id]["modifications"]
-            charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-            msp_modifications = self._get_msp_modifications(seq, mods)
+        for spec_id in sorted(self.preds_dict.keys()):
+            seq = self.preds_dict[spec_id]["peptidoform"].sequence
+            pep_parsed_seq = self.preds_dict[spec_id]["peptidoform"].parsed_sequence
+            pep_properties = self.preds_dict[spec_id]["peptidoform"].properties
+
+            charge = self.preds_dict[spec_id]["charge"]
+            prec_mz = self.preds_dict[spec_id]["peptidoform"].theoretical_mz
+            prec_mass = self.preds_dict[spec_id]["peptidoform"].theoretical_mass
+            msp_modifications = self._get_msp_modifications(pep_parsed_seq, pep_properties)
             num_peaks = sum(
                 [len(peaklist) for _, peaklist in self.preds_dict[spec_id]["peaks"].items()]
             )
@@ -330,12 +376,12 @@ class SpectrumOutput:
             comment_line = f" Mods={msp_modifications} Parent={prec_mz}"
 
             if self.has_protein_list:
-                protein_list = self.peprec_dict[spec_id]["protein_list"]
+                protein_list = self.preds_dict[spec_id]["proteins"]
                 protein_string = self._parse_protein_string(protein_list)
                 comment_line += f' Protein="{protein_string}"'
 
             if self.has_rt:
-                rt = self.peprec_dict[spec_id]["rt"]
+                rt = self.preds_dict[spec_id]['predicted_rt']
                 comment_line += f" RetentionTime={rt}"
 
             comment_line += f' MS2PIP_ID="{spec_id}"'
@@ -555,10 +601,8 @@ class SpectrumOutput:
     ):
         """
         General write function to call core write functions.
-
         Note: Does not work for write_bibliospec and write_dlib functions.
         """
-
         # Normalize if necessary and make dicts
         if not self.normalization == normalization_method:
             self._normalize_spectra(method=normalization_method)
@@ -566,8 +610,8 @@ class SpectrumOutput:
                 self._generate_preds_dict()
         elif requires_dicts and not self.preds_dict:
             self._generate_preds_dict()
-        if requires_dicts and not self.peprec_dict:
-            self._generate_peprec_dict()
+        # if requires_dicts and not self.peprec_dict:
+        #     self._generate_peprec_dict()
 
         if (
             requires_diff_modifications
