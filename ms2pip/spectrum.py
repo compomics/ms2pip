@@ -72,10 +72,10 @@ class Spectrum(BaseModel):
     @model_validator(mode="after")
     @classmethod
     def check_array_lengths(cls, data: dict):
-        if len(data["mz"]) != len(data["intensity"]):
+        if len(data.mz) != len(data.intensity):
             raise ValueError("Array lengths do not match.")
-        if data["annotations"] is not None:
-            if len(data["annotations"]) != len(data["intensity"]):
+        if data.annotations is not None:
+            if len(data.annotations) != len(data.intensity):
                 raise ValueError("Array lengths do not match.")
         return data
 
