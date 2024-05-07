@@ -12,19 +12,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: "true"
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade build flake8
-      - name: Check for syntax errors
-        run: |
-          flake8 ./ms2pip --count --select=E9,F63,F7,F82 --show-source --statistics
+          python -m pip install --upgrade pip
+          pip install build
+
       - name: Build sdist
         run: python -m build --sdist --outdir dist
-      - uses: actions/upload-artifact@v3
+
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/*.tar.gz
@@ -34,20 +36,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]  # macos-13 for intel, macos-14 for apple silicon
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: "true"
-      - uses: actions/setup-python@v4
+
+      - uses: actions/setup-python@v5
         name: Set up Python
         with:
           python-version: "3.11"
+
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel>=2
+
       - name: Build wheels
         run: python -m cibuildwheel --output-dir dist
-      - uses: actions/upload-artifact@v3
+
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/ms2pip-*.whl
@@ -55,12 +61,16 @@ jobs:
   publish-to-pypi:
     needs: [build-sdist, build-wheels]
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ms2pip
+    permissions:
+      id-token: write
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: ${{ secrets.PYPI_USERNAME }}
-          password: ${{ secrets.PYPI_PASSWORD }}
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

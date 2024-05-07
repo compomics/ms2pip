@@ -53,3 +53,11 @@ Clone this repository and use pip to install an editable version:
 .. code-block:: bash
 
    pip install --editable .
+
+
+Optionally, add the ``[dev,docs]`` extras to install the development and
+documentation dependencies:
+
+.. code-block:: bash
+
+   pip install --editable .[dev,docs]

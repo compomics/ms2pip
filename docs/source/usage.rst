@@ -55,6 +55,11 @@ This mode was first developed in collaboration with the ProGenTomics group for t
 
 To train a new prediction model, see :ref:`Training new MS²PIP models`.
 
+``annotate-spectra``
+---------------------
+
+[todo]
+
 
 Input
 =====

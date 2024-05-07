@@ -23,6 +23,7 @@ Modifications:
 - Terminal modifications can have site specificity (e.g. N-term K or N-term P).
 
 """
+
 from __future__ import annotations
 
 __author__ = "Ralf Gabriels"
@@ -40,10 +41,10 @@ from collections import defaultdict
 from functools import cmp_to_key, partial
 from itertools import chain, product
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, model_validator
 from pyteomics.fasta import FASTA, Protein, decoy_db
 from pyteomics.parser import icleave
 from rich.logging import RichHandler
@@ -55,6 +56,8 @@ from ms2pip.peptides import Modifications as MS2PIPModifications
 from ms2pip.utils import spectrum_output
 
 logger = logging.getLogger(__name__)
+
+raise NotImplementedError("This module is not yet implemented for MS²PIP v4.")
 
 
 class Peptide(BaseModel):
@@ -81,8 +84,8 @@ class ModificationConfig(BaseModel):
     protein_c_term: Optional[bool] = False
     fixed: Optional[bool] = False
 
-    @validator("protein_c_term", always=True)  # Validate on last target in model
-    def modification_must_have_target(cls, v, values):
+    @model_validator(mode="after")
+    def modification_must_have_target(self):
         target_fields = [
             "amino_acid",
             "peptide_n_term",
@@ -90,11 +93,9 @@ class ModificationConfig(BaseModel):
             "peptide_c_term",
             "protein_c_term",
         ]
-        if not any(t in values and values[t] for t in target_fields):
-            raise ValueError(
-                "Modifications must have at least one target (amino acid or N/C-term)."
-            )
-        return v
+        if not any(getattr(self, t) for t in target_fields):
+            raise ValueError("Modifications must have a target (amino acid or N/C-term).")
+        return self
 
 
 DEFAULT_MODIFICATIONS = [
@@ -137,9 +138,10 @@ class Configuration(BaseModel):
     batch_size: int = 10000
     num_cpu: Optional[int] = None
 
-    @validator("output_filetype")
+    @field_validator("output_filetype")
+    @classmethod
     def _validate_output_filetypes(cls, v):
-        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib"]# , "hdf"]
+        allowed_types = ["msp", "mgf", "bibliospec", "spectronaut", "dlib"]  # , "hdf"]
         v = [filetype.lower() for filetype in v]
         for filetype in v:
             if filetype not in allowed_types:
@@ -149,7 +151,8 @@ class Configuration(BaseModel):
                 )
         return v
 
-    @validator("modifications")
+    @field_validator("modifications")
+    @classmethod
     def _validate_modifications(cls, v):
         if all(isinstance(m, ModificationConfig) for m in v):
             return v
@@ -160,7 +163,8 @@ class Configuration(BaseModel):
                 "Modifications should be a list of dicts or ModificationConfig objects."
             )
 
-    @validator("ms2pip_model")
+    @field_validator("ms2pip_model")
+    @classmethod
     def _validate_ms2pip_model(cls, v):
         if v not in MODELS.keys():
             raise ValueError(
@@ -168,7 +172,8 @@ class Configuration(BaseModel):
             )
         return v
 
-    @validator("num_cpu")
+    @field_validator("num_cpu")
+    @classmethod
     def _validate_num_cpu(cls, v):
         available_cpus = multiprocessing.cpu_count()
         if not v or not 0 < v < available_cpus:
@@ -210,7 +215,7 @@ class Fasta2SpecLib:
             if isinstance(config, dict):
                 config["fasta_filename"] = fasta_filename
                 config["output_filename"] = output_filename
-                config = Configuration.parse_obj(config)
+                config = Configuration.model_validate(config)
             elif isinstance(config, Configuration):
                 config.fasta_filename = fasta_filename
                 config.output_filename = output_filename
@@ -321,7 +326,7 @@ class Fasta2SpecLib:
         """Divide peptides into batches for batch-based processing."""
         return [peptides[i : i + batch_size] for i in range(0, len(peptides), batch_size)]
 
-    def process_batch(self, batch_id, batch_peptides):
+    def process_batch(self, batch_id: int, batch_peptides: List[Peptide]):
         """Predict and write library for a batch of peptides."""
         # Generate MS²PIP input
         logger.info("Generating MS²PIP input...")
@@ -382,7 +387,7 @@ class Fasta2SpecLib:
             logger.debug("Initializing DeepLC predictor")
             if not config.deeplc:
                 config.deeplc = {"calibration_file": None}
-            if not "n_jobs" in config.deeplc:
+            if "n_jobs" not in config.deeplc:
                 config.deeplc["n_jobs"] = config.num_cpu
             rt_predictor = RetentionTime(config=config.dict())
         else:
@@ -397,11 +402,15 @@ class Fasta2SpecLib:
                 "model": config.ms2pip_model,
                 "frag_error": 0.02,
                 "ptm": [
-                    "{},{},opt,N-term".format(mod.name, mod.mass_shift)
-                    if mod.peptide_n_term or mod.protein_n_term
-                    else "{},{},opt,C-term".format(mod.name, mod.mass_shift)
-                    if mod.peptide_c_term or mod.protein_c_term
-                    else "{},{},opt,{}".format(mod.name, mod.mass_shift, mod.amino_acid)
+                    (
+                        "{},{},opt,N-term".format(mod.name, mod.mass_shift)
+                        if mod.peptide_n_term or mod.protein_n_term
+                        else (
+                            "{},{},opt,C-term".format(mod.name, mod.mass_shift)
+                            if mod.peptide_c_term or mod.protein_c_term
+                            else "{},{},opt,{}".format(mod.name, mod.mass_shift, mod.amino_acid)
+                        )
+                    )
                     for mod in config.modifications
                 ],
                 "sptm": [],

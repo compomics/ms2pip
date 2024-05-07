@@ -3,8 +3,13 @@ import numpy as np
 
 def ms2pip_pearson(true, pred):
     """Calculate Pearson correlation, including tic-normalization and log-transformation."""
-    tic_norm = lambda x: x / np.sum(x)
-    log_transform = lambda x: np.log2(x + 0.001)
+
+    def tic_norm(x):
+        return x / np.sum(x)
+
+    def log_transform(x):
+        return np.log2(x + 0.001)
+
     corr = np.corrcoef(log_transform(tic_norm(true)), log_transform(tic_norm(pred)))[0][1]
     return corr
 

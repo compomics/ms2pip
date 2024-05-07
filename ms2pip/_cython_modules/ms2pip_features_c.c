@@ -70,14 +70,14 @@ unsigned int* get_v_ms2pip(int peplen, unsigned short* peptide, unsigned short* 
 		for (j=0; j<num_shared; j++) {
 			v[fnum++] = shared_features[j];
 		}
-		v[fnum++] = i+1;
-		v[fnum++] = peplen-i;
+		v[fnum++] = i+1; // length of N-term ion
+		v[fnum++] = peplen-i;  // length of C-term ion
 		count_n[peptide_buf[i+1]]++;
 		count_c[peptide_buf[peplen-i]]--;
 
 		for (j=0; j < 19; j++) {
-			v[fnum++] = count_n[j];
-			v[fnum++] = count_c[j];
+			v[fnum++] = count_n[j];  // amino acid count in N-term ion
+			v[fnum++] = count_c[j];  // amino acid count in C-term ion
 		}
 
 		for (j=0; j < num_props; j++) {

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from psm_utils import PSM
-from pydantic import BaseModel
+from pydantic import ConfigDict, BaseModel
 
 try:
     import spectrum_utils.plot as sup
@@ -28,9 +28,7 @@ class ProcessingResult(BaseModel):
     observed_intensity: Optional[Dict[str, np.ndarray]] = None
     correlation: Optional[float] = None
     feature_vectors: Optional[np.ndarray] = None
-
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(__pydantic_self__, **data: Any) -> None:
         """Result of processing a single PSM."""
@@ -142,7 +140,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
                                 "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
                                 "predicted": "{:.6g}".format(
                                     result.predicted_intensity[ion_type][i]
-                                ),
+                                ) if result.predicted_intensity else None,
                                 "observed": "{:.6g}".format(result.observed_intensity[ion_type][i])
                                 if result.observed_intensity
                                 else None,
@@ -157,4 +155,4 @@ def correlations_to_csv(results: List["ProcessingResult"], output_file: str) -> 
         writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for result in results:
-            writer.writerow({"psm_index": result.psm_id, "correlation": result.correlation})
+            writer.writerow({"psm_index": result.psm_index, "correlation": result.correlation})
