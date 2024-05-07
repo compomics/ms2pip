@@ -138,7 +138,7 @@ def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
                         writer.writerow(
                             {
                                 "psm_index": result.psm_index,
-                                "peptidoform": result.psm.peptidoform,
+                                "peptidoform": result.psm.peptidoform, #TODO Remove this, was for checking correctness
                                 "ion_type": ion_type,
                                 "ion_number": i + 1,
                                 "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),

@@ -69,7 +69,7 @@ class PeptidoformSearchSpace(BaseModel):
         for modifications, charge in product(self.modification_options, self.charge_options):
             offset = 0
             if not modifications:
-                psm = PSM(peptidoform=(self.sequence+'/{}'.format(charge)), spectrum_id=spectrum_id)
+                psm = PSM(peptidoform=(self.sequence+'/{}'.format(charge)), spectrum_id=spectrum_id, protein_list=self.proteins)
                 spectrum_id += 1
             else:
                 modded_sequence = list(self.sequence)
@@ -86,7 +86,7 @@ class PeptidoformSearchSpace(BaseModel):
                         modded_sequence.append(f"-[{mod}]")
 
                 modded_sequence = "".join(modded_sequence)
-                psm = PSM(peptidoform=(modded_sequence+'/{}'.format(charge)), spectrum_id=spectrum_id)
+                psm = PSM(peptidoform=(modded_sequence+'/{}'.format(charge)), spectrum_id=spectrum_id, protein_list=self.proteins)
                 spectrum_id += 1
             if psm.peptidoform.theoretical_mz >= min_precursor_mz and psm.peptidoform.theoretical_mz <= max_precursor_mz:
                 psms.append(psm)
