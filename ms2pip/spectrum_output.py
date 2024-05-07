@@ -62,7 +62,7 @@ class SpectrumOutput:
         write_mode="wt+",
         return_stringbuffer=False,
         is_log_space=True,
-        normalization="basepeak_10000",
+        normalization=None,
     ):
         """
         Write MS2PIP predictions to various output formats.
@@ -85,7 +85,7 @@ class SpectrumOutput:
             case, intensities will first be transformed to "normal"-space.
         normalization: str, optional
             Normalization method to use. Options are "basepeak_10000", "basepeak_1", and
-            "tic" (default: "basepeak_10000")
+            "tic" (default: None)
 
         Example
         -------

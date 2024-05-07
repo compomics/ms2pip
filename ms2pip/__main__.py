@@ -127,7 +127,7 @@ def predict_library(*args, **kwargs):
     logger.info(f'Finished writing output to {output_name_csv}')
     #TODO: add support for other output formats
     # Initial implementation of writing to MSP format
-    so = SpectrumOutput(predictions, normalization="basepeak_10000")
+    so = SpectrumOutput(predictions)
     so.write_msp()
 
 
