@@ -2,26 +2,26 @@ from ms2pip import search_space
 
 OXIDATION = search_space.ModificationConfig(
     label="Oxidation",
-    amino_acids="M",
+    amino_acid="M",
 )
 CARBAMIDOMETHYL = search_space.ModificationConfig(
     label="Carbamidomethyl",
-    amino_acids="C",
+    amino_acid="C",
     fixed=True,
 )
 PYROGLU = search_space.ModificationConfig(
     label="Glu->pyro-Glu",
-    amino_acids="E",
+    amino_acid="E",
     peptide_n_term=True,
 )
 ACETYL = search_space.ModificationConfig(
     label="Acetyl",
-    amino_acids=None,
+    amino_acid=None,
     protein_n_term=True,
 )
 PHOSPHO = search_space.ModificationConfig(
     label="Phospho",
-    amino_acids="T",
+    amino_acid="T",
     fixed=False,
 )
 
