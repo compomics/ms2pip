@@ -14,6 +14,7 @@ from typing import Any, Callable, Generator, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from psm_utils import PSM, Peptidoform, PSMList
+from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
@@ -170,10 +171,15 @@ def predict_library(
     else:
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
-    for batch in _into_batches(
-        ProteomeSearchSpace.from_any(config).into_psm_list(processes),
-        batch_size=batch_size,
+    for batch in track(
+        _into_batches(
+            ProteomeSearchSpace.from_any(config).into_psm_list(processes),
+            batch_size=batch_size,
+        ),
+        description="Predicting batches...",
+        transient=True,
     ):
+        logging.disable(logging.WARNING)
         yield predict_batch(
             batch,
             add_retention_time=add_retention_time,
@@ -181,6 +187,7 @@ def predict_library(
             model_dir=model_dir,
             processes=processes,
         )
+        logging.disable(logging.NOTSET)
 
 
 def correlate(

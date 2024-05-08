@@ -35,10 +35,6 @@ Examples
 >>> search_space = ProteomeSearchSpace.from_any("tests/data/test_search_space.json")
 >>> psm_list = search_space.into_psm_list()
 
-
-
-
-
 """
 
 from __future__ import annotations
@@ -283,9 +279,9 @@ class ProteomeSearchSpace(BaseModel):
                 decoy_only=False,
                 keep_nterm=True,
             )
+            n_proteins *= 2
         else:
             fasta_db = pyteomics.fasta.FASTA(self.fasta_file)
-            n_proteins *= 2
 
         # Read proteins and digest to peptides
         with _get_pool(processes) as pool:
@@ -301,7 +297,7 @@ class ProteomeSearchSpace(BaseModel):
                 pool.imap(partial_digest_protein, fasta_db),
                 total=n_proteins,
                 description="Digesting proteins...",
-                transient=False,
+                transient=True,
             )
             self._peptidoform_spaces = list(chain.from_iterable(results))
 
@@ -311,7 +307,7 @@ class ProteomeSearchSpace(BaseModel):
         for peptide in track(
             self._peptidoform_spaces,
             description="Removing peptide redundancy...",
-            transient=False,
+            transient=True,
         ):
             if peptide.sequence in peptide_dict:
                 peptide_dict[peptide.sequence].proteins.extend(peptide.proteins)
@@ -339,7 +335,7 @@ class ProteomeSearchSpace(BaseModel):
                 zip(self._peptidoform_spaces, modification_options),
                 description="Adding modifications...",
                 total=len(self._peptidoform_spaces),
-                transient=False,
+                transient=True,
             ):
                 pep.modification_options = mod_opt
 
@@ -348,7 +344,7 @@ class ProteomeSearchSpace(BaseModel):
         for peptide in track(
             self._peptidoform_spaces,
             description="Adding charge permutations...",
-            transient=False,
+            transient=True,
         ):
             peptide.charge_options = self.charges
 

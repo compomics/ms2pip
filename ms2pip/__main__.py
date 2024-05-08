@@ -108,6 +108,7 @@ def predict_batch(*args, **kwargs):
 @click.argument("fasta-file", required=False, type=click.Path(exists=True, dir_okay=False))
 @click.option("--config", "-c", type=click.Path(exists=True, dir_okay=False))
 @click.option("--output-name", "-o", type=str)
+@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_FORMATS), default="tsv")
 @click.option("--add-retention-time", "-r", is_flag=True)
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--model-dir")
@@ -117,25 +118,14 @@ def predict_library(*args, **kwargs):
     # Parse arguments
     if not kwargs["fasta_file"] and not kwargs["config"]:
         raise click.UsageError("Either `fasta_file` or `config` must be provided.")
-
-    output_name = kwargs.pop("output_name")
+    output_format = kwargs.pop("output_format")
     output_name = _infer_output_name(
-        kwargs["fasta_file"] or kwargs["config"], output_name
+        kwargs["fasta_file"] or kwargs["config"], kwargs.pop("output_name")
     )
-    output_name_csv = output_name.with_name(output_name.stem + "_predictions").with_suffix(".csv")
 
-    result_batches = ms2pip.core.predict_library(*args, **kwargs)
-
-    # Combine predictions into a single list
-    # TODO Implement writing batch per batch
-    results = [pred for sublist in result_batches for pred in sublist]
-    logger.info(f"Writing output to {output_name_csv}")
-    results_to_csv(results, output_name_csv)
-    logger.info(f"Finished writing output to {output_name_csv}")
-    #TODO: add support for other output formats
-    # Initial implementation of writing to MSP format
-    so = SpectrumOutput(results)
-    so.write_msp()
+    # Run and write output for each batch
+    for i, result_batch in enumerate(ms2pip.core.predict_library(*args, **kwargs)):
+        write_spectra(output_name, result_batch, output_format, write_mode="w" if i == 0 else "a")
 
 
 @cli.command(help=ms2pip.core.correlate.__doc__)
