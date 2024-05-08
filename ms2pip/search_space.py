@@ -46,7 +46,7 @@ from functools import partial
 from itertools import chain, combinations, product
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 
 import numpy as np
 import pyteomics.fasta
@@ -196,6 +196,11 @@ class ProteomeSearchSpace(BaseModel):
             self.cleavage_rule = r"(?<=[A-Z])"
         return self
 
+    def __len__(self):
+        if not self._peptidoform_spaces:
+            raise ValueError("Search space must be built before length can be determined.")
+        return sum(len(pep_space) for pep_space in self._peptidoform_spaces)
+
     @classmethod
     def from_any(cls, _input: Union[dict, str, Path, ProteomeSearchSpace]) -> ProteomeSearchSpace:
         """
@@ -234,7 +239,7 @@ class ProteomeSearchSpace(BaseModel):
         self._add_modifications(processes)
         self._add_charges()
 
-    def into_psm_list(self, processes=1) -> PSMList:
+    def __iter__(self) -> Generator[PSM, None, None]:
         """
         Generate PSMs from search space.
 
@@ -249,21 +254,25 @@ class ProteomeSearchSpace(BaseModel):
         """
         # Build search space if not already built
         if not self._peptidoform_spaces:
-            self.build(processes)
+            raise ValueError("Search space must be built before PSMs can be generated.")
 
-        # Convert to Peptidoforms, with explicit charges and modifications, and filter on precursor m/z
-        peptidoforms: List[Peptidoform, List[str]] = [
-            (peptidoform, pep_space.proteins)
-            for pep_space in self._peptidoform_spaces
-            for peptidoform in pep_space.into_peptidoforms()
-            if self.min_precursor_mz <= peptidoform.theoretical_mz <= self.max_precursor_mz
-        ]
+        spectrum_id = 0
+        for pep_space in self._peptidoform_spaces:
+            for pep in pep_space:
+                yield PSM(
+                    peptidoform=pep,
+                    spectrum_id=spectrum_id,
+                    protein_list=pep_space.proteins,
+                )
+                spectrum_id += 1
 
-        # Convert to PSMs
+    def filter_psms_by_mz(self, psms: PSMList) -> PSMList:
+        """Filter PSMs by precursor m/z range."""
         return PSMList(
             psm_list=[
-                PSM(peptidoform=pep, spectrum_id=str(i), protein_list=prot)
-                for i, (pep, prot) in enumerate(peptidoforms)
+                psm
+                for psm in psms
+                if self.min_precursor_mz <= psm.peptidoform.theoretical_mz <= self.max_precursor_mz
             ]
         )
 
@@ -381,29 +390,25 @@ class _PeptidoformSearchSpace(BaseModel):
         """
         super().__init__(**data)
 
-    def into_peptidoforms(self, min_precursor_mz=0, max_precursor_mz=np.Inf) -> List[Peptidoform]:
-        """Convert to list of :py:class:`~Peptidoform` with given charges and modifications."""
+    def __len__(self):
+        return len(self.modification_options) * len(self.charge_options)
+
+    def __iter__(self) -> Generator[str, None, None]:
+        """Yield peptidoform strings with given charges and modifications."""
         if not self.charge_options:
             raise ValueError("Peptide charge options not defined.")
         if not self.modification_options:
             raise ValueError("Peptide modification options not defined.")
 
-        peptidoforms = []
         for modifications, charge in product(self.modification_options, self.charge_options):
-            peptidoform = self._construct_peptidoform(self.sequence, modifications, charge)
-            if (
-                peptidoform.theoretical_mz >= min_precursor_mz
-                and peptidoform.theoretical_mz <= max_precursor_mz
-            ):
-                peptidoforms.append(peptidoform)
-        return peptidoforms
+            yield self._construct_peptidoform_string(self.sequence, modifications, charge)
 
     @staticmethod
-    def _construct_peptidoform(
+    def _construct_peptidoform_string(
         sequence: str, modifications: Dict[int, ModificationConfig], charge: int
-    ) -> Peptidoform:
+    ) -> str:
         if not modifications:
-            return Peptidoform(f"{sequence}/{charge}")
+            return f"{sequence}/{charge}"
 
         modded_sequence = list(sequence)
         for position, mod in modifications.items():
@@ -422,7 +427,7 @@ class _PeptidoformSearchSpace(BaseModel):
             else:
                 raise ValueError(f"Invalid position {position} for modification {mod.label}.")
 
-        return Peptidoform(f"{''.join(modded_sequence)}/{charge}")
+        return f"{''.join(modded_sequence)}/{charge}"
 
 
 def _digest_single_protein(

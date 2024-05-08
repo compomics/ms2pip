@@ -108,7 +108,7 @@ def predict_batch(*args, **kwargs):
 @click.argument("fasta-file", required=False, type=click.Path(exists=True, dir_okay=False))
 @click.option("--config", "-c", type=click.Path(exists=True, dir_okay=False))
 @click.option("--output-name", "-o", type=str)
-@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_FORMATS), default="tsv")
+@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_FORMATS), default="msp")
 @click.option("--add-retention-time", "-r", is_flag=True)
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--model-dir")

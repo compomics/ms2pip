@@ -9,7 +9,7 @@ import re
 from collections import defaultdict
 from math import ceil
 from pathlib import Path
-from typing import Any, Callable, Generator, List, Optional, Tuple, Union
+from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -171,17 +171,17 @@ def predict_library(
     else:
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
+    search_space = ProteomeSearchSpace.from_any(config)
+    search_space.build()
+
     for batch in track(
-        _into_batches(
-            ProteomeSearchSpace.from_any(config).into_psm_list(processes),
-            batch_size=batch_size,
-        ),
-        description="Predicting batches...",
-        transient=True,
+        _into_batches(search_space, batch_size=batch_size),
+        description="Predicting spectra...",
+        total = ceil(len(search_space) / batch_size),
     ):
-        logging.disable(logging.WARNING)
+        logging.disable(logging.CRITICAL)
         yield predict_batch(
-            batch,
+            search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
             add_retention_time=add_retention_time,
             model=model,
             model_dir=model_dir,
@@ -972,8 +972,13 @@ def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.D
     return training_data
 
 
-def _into_batches(items: List[Any], batch_size: int) -> List[List[Any]]:
-    """Divide list of items into batches for batch-based processing."""
-    if isinstance(items, itertools.chain):
-        items = list(items)
-    return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
+def _into_batches(iterable: Iterable[Any], batch_size: int) -> Generator[List[Any], None, None]:
+    """Accumulate iterator elements into batches of a given size."""
+    batch = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
