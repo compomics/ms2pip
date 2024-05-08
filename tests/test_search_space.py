@@ -1,33 +1,27 @@
-from ms2pip.search_space import (
-    ModificationConfig,
-    ProteomeSearchSpace,
-    _get_peptidoform_modification_versions,
-    _restructure_modifications_by_target,
-    _PeptidoformSearchSpace,
-)
+from ms2pip import search_space
 
-OXIDATION = ModificationConfig(
+OXIDATION = search_space.ModificationConfig(
     label="Oxidation",
-    amino_acid="M",
+    amino_acids="M",
 )
-CARBAMIDOMETHYL = ModificationConfig(
+CARBAMIDOMETHYL = search_space.ModificationConfig(
     label="Carbamidomethyl",
-    amino_acid="C",
+    amino_acids="C",
     fixed=True,
 )
-PYROGLU = ModificationConfig(
+PYROGLU = search_space.ModificationConfig(
     label="Glu->pyro-Glu",
-    amino_acid="E",
+    amino_acids="E",
     peptide_n_term=True,
 )
-ACETYL = ModificationConfig(
+ACETYL = search_space.ModificationConfig(
     label="Acetyl",
-    amino_acid=None,
+    amino_acids=None,
     protein_n_term=True,
 )
-PHOSPHO = ModificationConfig(
+PHOSPHO = search_space.ModificationConfig(
     label="Phospho",
-    amino_acid="T",
+    amino_acids="T",
     fixed=False,
 )
 
@@ -59,7 +53,7 @@ def test_restructure_modifications_by_target():
     ]
 
     for case in test_cases:
-        test_out = _restructure_modifications_by_target(case["modifications"])
+        test_out = search_space._restructure_modifications_by_target(case["modifications"])
         assert test_out == case["expected"]
 
 
@@ -131,9 +125,13 @@ def test_get_peptidoform_modification_versions():
     ]
 
     for case in test_cases:
-        peptide = _PeptidoformSearchSpace(sequence=case["sequence"], proteins=[], is_n_term=True)
-        modifications_by_target = _restructure_modifications_by_target(case["modifications"])
-        test_out = _get_peptidoform_modification_versions(
+        peptide = search_space._PeptidoformSearchSpace(
+            sequence=case["sequence"], proteins=[], is_n_term=True
+        )
+        modifications_by_target = search_space._restructure_modifications_by_target(
+            case["modifications"]
+        )
+        test_out = search_space._get_peptidoform_modification_versions(
             peptide,
             case["modifications"],
             modifications_by_target,
@@ -144,7 +142,9 @@ def test_get_peptidoform_modification_versions():
 
 
 def test_get_modifications_by_target():
-    modifications_by_target = _restructure_modifications_by_target(MODIFICATION_CONFIG)
+    modifications_by_target = search_space._restructure_modifications_by_target(
+        MODIFICATION_CONFIG
+    )
     assert modifications_by_target["sidechain"] == {"M": MODIFICATION_CONFIG[0:1]}
     assert modifications_by_target["peptide_n_term"] == {"E": MODIFICATION_CONFIG[2:3]}
     assert modifications_by_target["peptide_c_term"] == {}
@@ -164,63 +164,63 @@ class TestProteomeSearchSpace:
         }
 
         test_output = [
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="MYSSCSLLQR",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=True,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="MYSSCSLLQRLVWFPFLALVATQLLFIR",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=True,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="LVWFPFLALVATQLLFIR",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="NVSSLNLTNEYLHHK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="NVSSLNLTNEYLHHKCLVSEGK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="NVSSLNLTNEYLHHKCLVSEGKYKPGSK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="CLVSEGKYKPGSK",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=False,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="CLVSEGKYKPGSKYEYI",
                 proteins=["P12345"],
                 modification_options=[],
                 is_n_term=False,
                 is_c_term=True,
             ),
-            _PeptidoformSearchSpace(
+            search_space._PeptidoformSearchSpace(
                 sequence="YKPGSKYEYI",
                 proteins=["P12345"],
                 modification_options=[],
@@ -229,6 +229,6 @@ class TestProteomeSearchSpace:
             ),
         ]
 
-        sp = ProteomeSearchSpace(**test_input)
+        sp = search_space.ProteomeSearchSpace(**test_input)
         sp._digest_fasta()
         assert test_output == sp._peptidoform_spaces

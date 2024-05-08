@@ -50,7 +50,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import numpy as np
 import pyteomics.fasta
-from psm_utils import PSM, Peptidoform, PSMList
+from psm_utils import PSM, PSMList
 from pydantic import BaseModel, field_validator, model_validator
 from pyteomics.parser import icleave
 from rich.progress import track
