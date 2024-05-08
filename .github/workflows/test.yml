@@ -35,7 +35,7 @@ jobs:
 
       - name: Build and install ms2pip
         run: |
-          pip install .[test]
+          pip install .[dev]
 
       - name: Test with pytest
         run: |
