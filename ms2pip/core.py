@@ -545,6 +545,10 @@ class _Parallelized:
             If only peak annotations should be extracted from the spectrum file
 
         """
+        # Validate runs and collections
+        if not len(psm_list.collections) == 1 or not len(psm_list.runs) == 1:
+            raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
+
         args = (
             spectrum_file,
             vector_file,
@@ -673,7 +677,10 @@ def _process_peptidoform(
             MODELS[model]["peaks_version"],
             30.0,  # TODO: Remove CE feature
         )
-        predictions = {i: np.array(p, dtype=np.float32) for i, p in zip(ion_types, predictions)}
+        predictions = {
+            i: np.array(p, dtype=np.float32).clip(min=np.log2(0.001))  # Clip negative intensities
+            for i, p in zip(ion_types, predictions)
+        }
         feature_vectors = None
 
     return ProcessingResult(

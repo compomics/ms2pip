@@ -53,6 +53,7 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, processes=1
     for ion_type, xgb_model in xgboost_models.items():
         # Get predictions from XGBoost model
         preds = xgb_model.predict(features)
+        preds = preds.clip(min=np.log2(0.001)) # Clip negative intensities
         xgb_model.__del__()
 
         # Reshape into arrays for each peptide
