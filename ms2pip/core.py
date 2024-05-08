@@ -9,11 +9,12 @@ import re
 from collections import defaultdict
 from math import ceil
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from psm_utils import PSM, Peptidoform, PSMList
+from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip import spectrum_output
@@ -25,6 +26,7 @@ from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
+from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip.spectrum_input import read_spectrum_file
 from ms2pip.spectrum_output import SUPPORTED_FORMATS
 
@@ -102,6 +104,8 @@ def predict_batch(
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
+    if isinstance(psms, list):
+        psms = PSMList(psm_list=psms)
     psm_list = read_psms(psms, filetype=psm_filetype)
 
     if add_retention_time:
@@ -122,9 +126,68 @@ def predict_batch(
     return results
 
 
-def predict_library():
-    """Predict spectral library from protein FASTA file."""
-    raise NotImplementedError
+def predict_library(
+    fasta_file: Optional[Union[str, Path]] = None,
+    config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
+    add_retention_time: bool = False,
+    model: Optional[str] = "HCD",
+    model_dir: Optional[Union[str, Path]] = None,
+    batch_size: int = 100000,
+    processes: Optional[int] = None,
+) -> Generator[ProcessingResult, None, None]:
+    """
+    Predict spectral library from protein FASTA file.\f
+
+    Parameters
+    ----------
+    fasta_file
+        Path to FASTA file with protein sequences. Required if `search-space-config` is not
+        provided.
+    config
+        ProteomeSearchSpace, or a dictionary or path to JSON file with proteome search space
+        parameters. Required if `fasta_file` is not provided.
+    add_retention_time
+        Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    model
+        Model to use for prediction. Default: "HCD".
+    model_dir
+        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
+    batch_size
+        Number of peptides to process in each batch.
+    processes
+        Number of parallel processes for multiprocessing steps. By default, all available.
+
+    """
+    if fasta_file and config:
+        # Use provided proteome, but overwrite fasta_file
+        config = ProteomeSearchSpace.from_any(config)
+        config.fasta_file = fasta_file
+    elif fasta_file and not config:
+        # Default proteome search space with provided fasta_file
+        config = ProteomeSearchSpace(fasta_file=fasta_file)
+    elif not fasta_file and config:
+        # Use provided proteome
+        config = ProteomeSearchSpace.from_any(config)
+    else:
+        raise ValueError("Either `fasta_file` or `config` must be provided.")
+
+    search_space = ProteomeSearchSpace.from_any(config)
+    search_space.build()
+
+    for batch in track(
+        _into_batches(search_space, batch_size=batch_size),
+        description="Predicting spectra...",
+        total = ceil(len(search_space) / batch_size),
+    ):
+        logging.disable(logging.CRITICAL)
+        yield predict_batch(
+            search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
+            add_retention_time=add_retention_time,
+            model=model,
+            model_dir=model_dir,
+            processes=processes,
+        )
+        logging.disable(logging.NOTSET)
 
 
 def correlate(
@@ -907,3 +970,15 @@ def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.D
     ]
 
     return training_data
+
+
+def _into_batches(iterable: Iterable[Any], batch_size: int) -> Generator[List[Any], None, None]:
+    """Accumulate iterator elements into batches of a given size."""
+    batch = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch

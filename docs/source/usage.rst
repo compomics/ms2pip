@@ -33,12 +33,22 @@ results in:
 ``predict-batch``
 -----------------
 
-[todo]
+Provide a list of peptidoforms (see :ref:`Peptides / PSMs`) to predict multiple spectra at once.
+For instance,
+
+.. code-block:: sh
+
+    ms2pip predict-batch peptides.tsv --model TMT
+
+results in a file ``test_predictions.csv`` with the predicted spectra.
+
 
 ``predict-library``
 -------------------
 
-[todo]
+Predict spectra for a full peptide search space generated from a protein FASTA file. Various
+peptide search space parameters can be configured to control the peptidoforms that are generated.
+See :ref:`ms2pip.search_space` for more information.
 
 This mode was first developed in collaboration with the ProGenTomics group for the
 `MS²PIP for DIA <https://github.com/brvpuyve/MS2PIP-for-DIA>`_ project.

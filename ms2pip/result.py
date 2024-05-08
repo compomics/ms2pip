@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from typing import Any, Dict, List, Optional, Tuple
+from logging import getLogger
 
 import numpy as np
 from psm_utils import PSM
@@ -18,6 +19,7 @@ except ImportError:
 
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
+logger = getLogger(__name__)
 
 class ProcessingResult(BaseModel):
     """Result of processing a single PSM."""

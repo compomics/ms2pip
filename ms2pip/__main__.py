@@ -105,8 +105,27 @@ def predict_batch(*args, **kwargs):
 
 
 @cli.command(help=ms2pip.core.predict_library.__doc__)
+@click.argument("fasta-file", required=False, type=click.Path(exists=True, dir_okay=False))
+@click.option("--config", "-c", type=click.Path(exists=True, dir_okay=False))
+@click.option("--output-name", "-o", type=str)
+@click.option("--output-format", "-f", type=click.Choice(SUPPORTED_FORMATS), default="msp")
+@click.option("--add-retention-time", "-r", is_flag=True)
+@click.option("--model", type=click.Choice(MODELS), default="HCD")
+@click.option("--model-dir")
+@click.option("--batch-size", type=int, default=100000)
+@click.option("--processes", "-n", type=int)
 def predict_library(*args, **kwargs):
-    ms2pip.core.predict_library(*args, **kwargs)
+    # Parse arguments
+    if not kwargs["fasta_file"] and not kwargs["config"]:
+        raise click.UsageError("Either `fasta_file` or `config` must be provided.")
+    output_format = kwargs.pop("output_format")
+    output_name = _infer_output_name(
+        kwargs["fasta_file"] or kwargs["config"], kwargs.pop("output_name")
+    )
+
+    # Run and write output for each batch
+    for i, result_batch in enumerate(ms2pip.core.predict_library(*args, **kwargs)):
+        write_spectra(output_name, result_batch, output_format, write_mode="w" if i == 0 else "a")
 
 
 @cli.command(help=ms2pip.core.correlate.__doc__)
