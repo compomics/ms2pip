@@ -7,7 +7,7 @@
    :includehidden:
    :maxdepth: 2
 
-   Readme <self>
+   Home <self>
    installation
    usage
    prediction-models

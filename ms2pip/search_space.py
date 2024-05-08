@@ -6,7 +6,35 @@ This module defines the search space for in silico spectral library generation a
 as :py:class:`~ModificationConfig` objects.
 
 The peptide search space can be built from a protein FASTA file and a set of parameters, which can
-then be converted to a py:class:`psm_utils.PSMList` object for use in :py:mod:`ms2pip`.
+then be converted to a :py:class:`psm_utils.PSMList` object for use in :py:mod:`ms2pip`. All
+parameters are listed below at :py:class:`~ProteomeSearchSpace` and can be passed as a
+dictionary, a JSON file, or as a :py:class:`~ProteomeSearchSpace` object. For example:
+
+.. code-block:: json
+
+   {
+     "fasta_file": "test.fasta",
+     "min_length": 8,
+     "max_length": 3,
+     "cleavage_rule": "trypsin",
+     "missed_cleavages": 2,
+     "semi_specific": false,
+     "add_decoys": true,
+     "modifications": [
+       {
+         "label": "UNIMOD:Oxidation",
+         "amino_acid": "M"
+       },
+       {
+         "label": "UNIMOD:Carbamidomethyl",
+         "amino_acid": "C",
+         "fixed": true
+       }
+     ],
+     "max_variable_modifications": 3,
+     "charges": [2, 3]
+   }
+
 
 For an unspecific protein digestion, the cleavage rule can be set to ``unspecific``. This will
 result in a cleavage rule that allows cleavage after any amino acid with an unlimited number of

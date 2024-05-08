@@ -48,7 +48,7 @@ results in a file ``test_predictions.csv`` with the predicted spectra.
 
 Predict spectra for a full peptide search space generated from a protein FASTA file. Various
 peptide search space parameters can be configured to control the peptidoforms that are generated.
-See :ref:`ms2pip.search_space` for more information.
+See :py:mod:`ms2pip.search_space` for more information.
 
 This mode was first developed in collaboration with the ProGenTomics group for the
 `MS²PIP for DIA <https://github.com/brvpuyve/MS2PIP-for-DIA>`_ project.
@@ -56,19 +56,23 @@ This mode was first developed in collaboration with the ProGenTomics group for t
 ``correlate``
 -------------
 
-[todo]
+Predict spectrum intensities for a list of peptides and correlate them with observed intensities
+from a spectrum file. This mode is useful for evaluating MS²PIP models or for (re)scoring
+peptide-spectrum matches.
+
 
 ``get-training-data``
 ---------------------
 
-[todo]
+Given a list of peptides and corresponding spectra, generate training data for MS²PIP. This
+includes observed intensities for the supported ion types and the feature vectors for each ion.
+For more info, see :ref:`Training new MS²PIP models`.
 
-To train a new prediction model, see :ref:`Training new MS²PIP models`.
 
 ``annotate-spectra``
 ---------------------
 
-[todo]
+Given a list of peptides annotate the peaks in the corresponding spectra.
 
 
 Input
