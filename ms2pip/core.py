@@ -26,7 +26,7 @@ from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.spectrum_input import read_spectrum_file
-from ms2pip.spectrum_output import SUPPORTED_FORMATS, write_spectra
+from ms2pip.spectrum_output import SUPPORTED_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -425,7 +425,7 @@ class _Parallelized:
             self.output_formats = ["csv"]
         else:
             for output_format in output_formats:
-                if output_format not in SUPPORTED_OUTPUT_FORMATS:
+                if output_format not in SUPPORTED_FORMATS:
                     raise exceptions.UnknownOutputFormatError(output_format)
             self.output_formats = output_formats
 
