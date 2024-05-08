@@ -1,6 +1,8 @@
 """Database configuration for EncyclopeDIA DLIB SQLite format."""
 
 import zlib
+from pathlib import Path
+from typing import Union
 
 import numpy
 import sqlalchemy
@@ -91,7 +93,7 @@ Metadata = Table(
 )
 
 
-def open_sqlite(filename):
+def open_sqlite(filename: Union[str, Path]) -> sqlalchemy.engine.Connection:
     engine = sqlalchemy.create_engine(f"sqlite:///{filename}")
     metadata.bind = engine
     return engine.connect()
