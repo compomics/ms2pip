@@ -1,8 +1,11 @@
-from ms2pip.search_space import (ModificationConfig, ProteomeSearchSpace,
-                                 _get_peptidoform_modification_versions,
+from ms2pip.search_space import (
+    ModificationConfig,
     ProteomeSearchSpace,
     _get_peptidoform_modification_versions,
+    _restructure_modifications_by_target,
     _PeptidoformSearchSpace,
+)
+
 OXIDATION = ModificationConfig(
     label="Oxidation",
     amino_acid="M",
