@@ -1,8 +1,5 @@
 """Constants and fixed configurations for MS²PIP."""
 
-# Supported output formats
-SUPPORTED_OUTPUT_FORMATS = ["csv", "mgf", "msp", "bibliospec", "spectronaut", "dlib"]
-
 # Models and their properties
 # id is passed to get_predictions to select model
 # ion_types is required to write the ion types in the headers of the result files

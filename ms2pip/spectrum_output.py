@@ -1,763 +1,728 @@
 """
-Write spectrum files from MS2PIP predictions.
+Write spectrum files from MS²PIP prediction results.
+
+
+Examples
+--------
+
+The simplest way to write MS²PIP predictions to a file is to use the :py:func:`write_spectra`
+function:
+
+>>> from ms2pip import predict_single, write_spectra
+>>> results = [predict_single("ACDE/2")]
+>>> write_spectra("/path/to/output/filename", results, "mgf")
+
+Specific writer classes can also be used directly. Writer classes should be used in a context
+manager to ensure the file is properly closed after writing. The following example writes MS²PIP
+predictions to a TSV file:
+
+>>> from ms2pip import predict_single
+>>> results = [predict_single("ACDE/2")]
+>>> with TSV("output.tsv") as writer:
+...     writer.write(results)
+
+Results can be written to the same file sequentially:
+
+>>> results_2 = [predict_single("PEPTIDEK/2")]
+>>> with TSV("output.tsv", write_mode="a") as writer:
+...     writer.write(results)
+...     writer.write(results_2)
+
+Results can be written to an existing file using the append mode:
+
+>>> with TSV("output.tsv", write_mode="a") as writer:
+...     writer.write(results_2)
+
+
 """
+
 from __future__ import annotations
 
 import csv
 import itertools
 import logging
-import os
-from ast import literal_eval
-from functools import wraps
+import re
+import warnings
+from abc import ABC, abstractmethod
+from collections import defaultdict
 from io import StringIO
-from operator import itemgetter
 from pathlib import Path
 from time import localtime, strftime
-from typing import Any, Dict, List
+from typing import Any, Dict, Generator, List, Optional, Union
 
+import numpy as np
+from psm_utils import PSM, Peptidoform
+from pyteomics import proforma
+from sqlalchemy import engine, select
 
+from ms2pip._utils import dlib
 from ms2pip.result import ProcessingResult
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
-class InvalidWriteModeError(ValueError):
-    pass
+def write_spectra(
+    filename: Union[str, Path],
+    processing_results: List[ProcessingResult],
+    file_format: str = "tsv",
+    write_mode: str = "w",
+):
+    """
+    Write MS2PIP processing results to a supported spectrum file format.
+
+    Parameters
+    ----------
+    filename
+        Output filename without file extension.
+    processing_results
+        List of :py:class:`ms2pip.result.ProcessingResult` objects.
+    file_format
+        File format to write. See :py:attr:`FILE_FORMATS` for available formats.
+    write_mode
+        Write mode for file. Default is ``w`` (write). Use ``a`` (append) to add to existing file.
+
+    """
+    with SUPPORTED_FORMATS[file_format](filename, write_mode) as writer:
+        LOGGER.info(f"Writing to {writer.filename}")
+        writer.write(processing_results)
 
 
-# Writer decorator
-def writer(**kwargs):
-    def deco(write_function):
-        @wraps(write_function)
-        def wrapper(self):
-            return self._write_general(write_function, **kwargs)
+class _Writer(ABC):
+    """Abstract base class for writing spectrum files."""
 
-        return wrapper
+    suffix = ""
 
-    return deco
-
-
-def output_format(output_format):
-    class OutputFormat:
-        def __init__(self, fn):
-            self.fn = fn
-            self.output_format = output_format
-
-        def __set_name__(self, owner, name):
-            owner.OUTPUT_FORMATS[self.output_format] = self.fn
-            setattr(owner, name, self.fn)
-
-    return OutputFormat
-
-
-class SpectrumOutput:
-    """Write MS2PIP predictions to various output formats."""
-
-    OUTPUT_FORMATS = {}
-
-    def __init__(
-        self,
-        results: List["ProcessingResult"],
-        output_filename="ms2pip_predictions",
-        write_mode="wt+",
-        return_stringbuffer=False,
-        is_log_space=True,
-        normalization=None,
-    ):
-        """
-        Write MS2PIP predictions to various output formats.
-
-        Parameters
-        ----------
-        results:
-            List of ProcessingResult objects
-        output_filename: str, optional
-            path and name for output files, will be suffexed with `_predictions` and the
-            relevant file extension (default: ms2pip_predictions)
-        write_mode: str, optional
-            write mode to use: "wt+" to append to start a new file, "at" to append to an
-            existing file (default: "wt+")
-        return_stringbuffer: bool, optional
-            If True, files are written to a StringIO object, which the write function
-            returns. If False, files are written to a file on disk.
-        is_log_space: bool, optional
-            Set to true if predicted intensities in `all_preds` are in log-space. In that
-            case, intensities will first be transformed to "normal"-space.
-        normalization: str, optional
-            Normalization method to use. Options are "basepeak_10000", "basepeak_1", and
-            "tic" (default: None)
-
-        Example
-        -------
-        >>> so = ms2pip.spectrum_tools.spectrum_output.SpectrumOutput(
-                results
-            )
-        >>> so.write_msp()
-        >>> so.write_spectronaut()
-
-        """
-
-        self.results = results
-        self.output_filename = output_filename
+    def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
+        self.filename = Path(filename).with_suffix(self.suffix)
         self.write_mode = write_mode
-        self.return_stringbuffer = return_stringbuffer
-        self.is_log_space = is_log_space
-        self.normalization = normalization
-        self.preds_dict = None
-        # self.peprec_dict = None #TODO: Check if needed
 
-        self.diff_modification_mapping = {}
-        self.has_rt = hasattr(self.results[0], "predicted_rt") # Assuming all results have the same attributes
-        self.has_protein_list = hasattr(self.results[0].psm, "protein_list") # Assuming all results have the same attributes
+        self._open_file = None
 
+    def __enter__(self):
+        """Open file in context manager."""
+        self.open()
+        return self
 
-        if self.write_mode not in ["wt+", "wt", "at", "w", "a"]:
-            raise InvalidWriteModeError(self.write_mode)
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Close file in context manager."""
+        self.close()
 
-        if "a" in self.write_mode and self.return_stringbuffer:
-            raise InvalidWriteModeError(self.write_mode)
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.filename, self.write_mode})"
 
-    def _generate_preds_dict(self):
-        """
-        Create easy to access dict from ProcessingResult objects
-        """
-        self.preds_dict = {}
+    def open(self):
+        """Open file."""
+        if self._open_file:
+            self.close()
+        self._open_file = open(self.filename, self.write_mode)
 
-        for result in self.results:
-            spec_id = result.psm_index
-            if spec_id in self.preds_dict.keys():
-                for ion_type in result.theoretical_mz.keys():
-                    if ion_type in self.preds_dict[spec_id]["peaks"]:
-                        for i in range(len(result.theoretical_mz[ion_type])):
-                            self.preds_dict[spec_id]["peaks"][ion_type].append(
-                                (
-                                    result.theoretical_mz[ion_type][i],
-                                    result.predicted_intensity[ion_type][i],
-                                )
-                            )
-                    else:
-                        self.preds_dict[spec_id]["peaks"][ion_type] = [
-                            (
-                                result.theoretical_mz[ion_type][i],
-                                result.predicted_intensity[ion_type][i],
-                            )
-                        ]
-            else:
-                self.preds_dict[spec_id] = {
-                    "peptidoform": result.psm.peptidoform,
-                    "charge": result.psm.peptidoform.precursor_charge,
-                    "peaks": {
-                        ion_type: [
-                            (
-                                result.theoretical_mz[ion_type][i],
-                                result.predicted_intensity[ion_type][i],
-                            )
-                            for i in range(len(result.theoretical_mz[ion_type]))
-                        ]
-                        for ion_type in result.theoretical_mz.keys()
-                    },
-                    "proteins": result.psm.protein_list
-                }
+    def close(self):
+        """Close file."""
+        if self._open_file:
+            self._open_file.close()
+            self._open_file = None
 
-    #TODO: Implement normalization
-    def _normalize_spectra(self, method="basepeak_10000"):
-        """
-        Normalize spectra
-        """
-        if self.is_log_space:
-            for result in self.results:
-                result.predicted_intensity = {
-                    ion_type: [
-                    max(((2 ** intensity) - 0.001), 0) for intensity in intensities
-                    ]
-                    for ion_type, intensities in result.predicted_intensity.items()
-                }
-            self.is_log_space = False
-
-        if method == "basepeak_10000":
-            if self.normalization == "basepeak_10000":
-                pass
-            elif self.normalization == "basepeak_1":
-                for result in self.results:
-                    result.predicted_intensity = {
-                        ion_type: [
-                        intensity * 10000 for intensity in intensities
-                        ]
-                        for ion_type, intensities in result.predicted_intensity.items()
-                    }
-            else:
-                for result in self.results:
-                    for ion_type, intensities in result.predicted_intensity.items():
-                        result.predicted_intensity[ion_type] = [
-                            (intensity / max(intensities)) * 10000 for intensity in intensities
-                        ]
-            self.normalization = "basepeak_10000" #needed?
-
-        elif method == "basepeak_1":
-            if self.normalization == "basepeak_1":
-                pass
-            elif self.normalization == "basepeak_10000":
-                for result in self.results:
-                    result.predicted_intensity = {
-                        ion_type: [
-                        intensity / 10000 for intensity in intensities
-                        ]
-                        for ion_type, intensities in result.predicted_intensity.items()
-                    }
-            else:
-                for result in self.results:
-                    for ion_type, intensities in result.predicted_intensity.items():
-                        result.predicted_intensity[ion_type] = [
-                            intensity / max(intensities) for intensity in intensities
-                        ]
-            self.normalization = "base_peak_1" #needed?
-
-        elif method == "tic":
-            if self.normalization != "tic":
-                for result in self.results:
-                    for ion_type, intensities in result.predicted_intensity.items():
-                        result.predicted_intensity[ion_type] = [
-                            intensity / sum(intensities) for intensity in intensities
-                        ]
-            self.normalization = "tic" #needed?
-
+    @property
+    def _file_object(self):
+        """Get open file object."""
+        if self._open_file:
+            return self._open_file
         else:
-            raise NotImplementedError
+            warnings.warn(
+                "Opening file outside of context manager. Manually close file after use."
+            )
+            self.open()
+            return self._open_file
 
-    def _get_msp_peak_annotation(
-        self,
-        peak_dict,
-        sep="\t",
-        include_zero=False,
-        include_annotations=True,
-        intensity_type=float,
-    ):
-        """
-        Get MGF/MSP-like peaklist string
-        """
-        all_peaks = []
-        for ion_type, peaks in peak_dict.items():
+    def write(self, processing_results: List[ProcessingResult]):
+        """Write multiple processing results to file."""
+        for result in processing_results:
+            self._write_result(result)
 
-            for peak_number, peak in enumerate(peaks):
-                if not include_zero and peak[1] == 0:
-                    continue
-                if include_annotations:
-                    all_peaks.append(
-                        (
-                            peak[0],
-                            f'{peak[0]:.6f}{sep}{intensity_type(peak[1])}{sep}"{ion_type.lower()}{peak_number+1}/0.0"',
-                        )
-                    )
-                else:
-                    all_peaks.append((peak[0], f"{peak[0]:.6f}{sep}{peak[1]}"))
+    @abstractmethod
+    def _write_result(self, result: ProcessingResult):
+        """Write single processing result to file."""
+        ...
 
-        all_peaks = sorted(all_peaks, key=itemgetter(0))
-        peak_string = "\n".join([peak[1] for peak in all_peaks])
 
-        return peak_string
+class TSV(_Writer):
+    """Write TSV files from MS2PIP processing results."""
 
-    def _get_msp_modifications(self, parsed_sequence, pep_properties):
-        """
-        Format modifications in MSP-style, e.g. "1/0,E,Glu->pyro-Glu" where 1 is the number of modifications,
-        0 the position, E the amino acid, and Glu->pyro-Glu the modification.
-        """
-        mods = []
-        counter = 0
-        for index, (aa, mod) in enumerate(parsed_sequence):
-            if not mod:
-                continue
-            else:
-                counter += 1
-                mods.append("{},{},{}".format(index+1, aa, mod[0].name)) #Assuming only one mod per amino acid, which I guess is okay?
-        n_term_mod = pep_properties['n_term']
-        c_term_mod = pep_properties['c_term']
-        if n_term_mod:
-            counter += 1
-            mods.append("0,{},{}".format(parsed_sequence[0][0], n_term_mod))
-        if c_term_mod:
-            counter += 1
-            mods.append("-1,{},{}".format(parsed_sequence[-1][0], c_term_mod))
+    suffix = ".tsv"
+    field_names = [
+        "psm_index",
+        "ion_type",
+        "ion_number",
+        "mz",
+        "predicted",
+        "observed",
+        "rt",
+    ]
 
-        if counter == 0:
-            return "0"
-        else:
-            return f"{counter}/{'/'.join(sorted(mods))}"
+    def write(self, processing_results: List[ProcessingResult]):
+        """Write multiple processing results to file."""
+        writer = csv.DictWriter(
+            self._file_object, fieldnames=self.field_names, delimiter="\t", lineterminator="\n"
+        )
+        if self.write_mode == "w":
+            writer.writeheader()
+        for result in processing_results:
+            self._write_result(result, writer)
 
-    def _parse_protein_string(self, protein_list):
-        """
-        Parse protein string from list, list string literal, or string.
-        """
-        if isinstance(protein_list, list):
-            protein_string = "/".join(protein_list)
-        elif isinstance(protein_list, str):
-            try:
-                protein_string = "/".join(literal_eval(protein_list))
-            except ValueError:
-                protein_string = protein_list
-        else:
-            protein_string = ""
-        return protein_string
+    def _write_result(self, result: ProcessingResult, writer: csv.DictWriter):
+        """Write single processing result to file."""
+        # Only write results with predictions or observations
+        if not result.theoretical_mz:
+            return
 
-    def _get_last_ssl_scannr(self):
-        """
-        Return scan number of last line in a Bibliospec SSL file.
-        """
-        ssl_filename = "{}_predictions.ssl".format(self.output_filename)
-        with open(ssl_filename, "rt") as ssl:
-            for line in ssl:
-                last_line = line
-            last_scannr = int(last_line.split("\t")[1])
-        return last_scannr
+        for ion_type in result.theoretical_mz:
+            for i in range(len(result.theoretical_mz[ion_type])):
+                writer.writerow(self._write_row(result, ion_type, i))
 
-    def _generate_diff_modification_mapping(self, precision):
-        """
-        Make modification name -> ssl modification name mapping.
-        """
-        self.diff_modification_mapping[precision] = {
-            ptm.split(",")[0]: "{0:+.{1}f}".format(float(ptm.split(",")[1]), precision)
-            for ptm in self.params["ptm"]
+    @staticmethod
+    def _write_row(result: ProcessingResult, ion_type: str, ion_index: int):
+        """Write single row for TSV file."""
+        return {
+            "psm_index": result.psm_index,
+            "ion_type": ion_type,
+            "ion_number": ion_index + 1,
+            "mz": "{:.8f}".format(result.theoretical_mz[ion_type][ion_index]),
+            "predicted": "{:.8f}".format(result.predicted_intensity[ion_type][ion_index])
+            if result.predicted_intensity
+            else None,
+            "observed": "{:.8f}".format(result.observed_intensity[ion_type][ion_index])
+            if result.observed_intensity
+            else None,
+            "rt": result.psm.retention_time if result.psm.retention_time else None,
         }
 
-    def _get_diff_modified_sequence(self, sequence, modifications, precision=1):
-        """
-        Build BiblioSpec SSL modified sequence string.
-        """
-        pep = list(sequence)
-        mapping = self.diff_modification_mapping[precision]
 
-        for loc, name in zip(modifications.split("|")[::2], modifications.split("|")[1::2]):
-            # C-term mod
-            if loc == "-1":
-                pep[-1] = pep[-1] + "[{}]".format(mapping[name])
-            # N-term mod
-            elif loc == "0":
-                pep[0] = pep[0] + "[{}]".format(mapping[name])
-            # Normal mod
-            else:
-                pep[int(loc) - 1] = pep[int(loc) - 1] + "[{}]".format(mapping[name])
-        return "".join(pep)
+class MSP(_Writer):
+    """Write MSP files from MS2PIP processing results."""
 
-    def write_results(self, output_formats: List[str]) -> Dict[str, Any]:
-        """
-        Write MS2PIP predictions in output formats defined by output_formats.
-        """
-        results = {}
-        for output_format in output_formats:
-            output_format = output_format.lower()
-            writer = self.OUTPUT_FORMATS[output_format]
-            results[output_format] = writer(self)
-        return results
+    suffix = ".msp"
 
-    @output_format("msp")
-    @writer(
-        file_suffix="_predictions.msp",
-        normalization_method="basepeak_10000",
-        requires_dicts=True,
-        requires_diff_modifications=False,
-    )
-    def write_msp(self, file_object):
-        """
-        Construct MSP string and write to file_object.
-        """
+    def write(self, results: List[ProcessingResult]):
+        """Write multiple processing results to file."""
+        for result in results:
+            self._write_result(result)
 
-        for spec_id in sorted(self.preds_dict.keys()):
-            seq = self.preds_dict[spec_id]["peptidoform"].sequence
-            pep_parsed_seq = self.preds_dict[spec_id]["peptidoform"].parsed_sequence
-            pep_properties = self.preds_dict[spec_id]["peptidoform"].properties
+    def _write_result(self, result: ProcessingResult):
+        """Write single processing result to file."""
+        predicted_spectrum = result.as_spectra()[0]
+        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4
+        peaks = zip(predicted_spectrum.mz, intensity_normalized, predicted_spectrum.annotations)
 
-            charge = self.preds_dict[spec_id]["charge"]
-            prec_mz = self.preds_dict[spec_id]["peptidoform"].theoretical_mz
-            prec_mass = self.preds_dict[spec_id]["peptidoform"].theoretical_mass
-            msp_modifications = self._get_msp_modifications(pep_parsed_seq, pep_properties)
-            num_peaks = sum(
-                [len(peaklist) for _, peaklist in self.preds_dict[spec_id]["peaks"].items()]
-            )
+        # Header
+        lines = [
+            f"Name: {result.psm.peptidoform.sequence}/{result.psm.get_precursor_charge()}",
+            f"MW: {result.psm.peptidoform.theoretical_mass}",
+            self._format_comment_line(result.psm),
+            f"Num peaks: {len(predicted_spectrum.mz)}",
+        ]
 
-            comment_line = f" Mods={msp_modifications} Parent={prec_mz}"
+        # Peaks
+        lines.extend(
+            f"{mz:.8f}\t{intensity:.8f}\t{annotation}/0.0" for mz, intensity, annotation in peaks
+        )
 
-            if self.has_protein_list:
-                protein_list = self.preds_dict[spec_id]["proteins"]
-                protein_string = self._parse_protein_string(protein_list)
-                comment_line += f' Protein="{protein_string}"'
+        # Write to file
+        self._file_object.writelines(line + "\n" for line in lines)
+        self._file_object.write("\n")
 
-            if self.has_rt:
-                rt = self.preds_dict[spec_id]['predicted_rt']
-                comment_line += f" RetentionTime={rt}"
+    @staticmethod
+    def _format_modifications(peptidoform: Peptidoform):
+        """Format modifications in MSP-style string, e.g. ``Mods=1/0,E,Glu->pyro-Glu``."""
 
-            comment_line += f' MS2PIP_ID="{spec_id}"'
+        def _format_single_modification(
+            amino_acid: str,
+            position: int,
+            modifications: Optional[List[proforma.ModificationBase]],
+        ) -> Union[str, None]:
+            """Get modification label from :py:class:`proforma.ModificationBase` list."""
+            if not modifications:
+                return None
+            if len(modifications) > 1:
+                raise ValueError("Multiple modifications per amino acid not supported.")
+            modification = modifications[0]
+            return f"{position},{amino_acid},{modification.name}"
 
-            out = [
-                f"Name: {seq}/{charge}",
-                f"MW: {prec_mass}",
-                f"Comment:{comment_line}",
-                f"Num peaks: {num_peaks}",
-                self._get_msp_peak_annotation(
-                    self.preds_dict[spec_id]["peaks"],
-                    sep="\t",
-                    include_annotations=True,
-                    intensity_type=int,
-                ),
-            ]
+        sequence_mods = [
+            _format_single_modification(aa, pos + 1, mods)
+            for pos, (aa, mods) in enumerate(peptidoform.parsed_sequence)
+        ]
+        n_term = _format_single_modification(
+            peptidoform.sequence[0], 0, peptidoform.properties["n_term"]
+        )
+        c_term = _format_single_modification(
+            peptidoform.sequence[-1], -1, peptidoform.properties["c_term"]
+        )
 
-            file_object.writelines([line + "\n" for line in out] + ["\n"])
+        mods = [mod for mod in [n_term] + sequence_mods + [c_term] if mod is not None]
 
-    @output_format("mgf")
-    @writer(
-        file_suffix="_predictions.mgf",
-        normalization_method="basepeak_10000",
-        requires_dicts=True,
-        requires_diff_modifications=False,
-    )
-    def write_mgf(self, file_object):
-        """
-        Construct MGF string and write to file_object
-        """
-        for spec_id in sorted(self.peprec_dict.keys()):
-            seq = self.peprec_dict[spec_id]["peptide"]
-            mods = self.peprec_dict[spec_id]["modifications"]
-            charge = self.peprec_dict[spec_id]["charge"]
-            _, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-            msp_modifications = self._get_msp_modifications(seq, mods)
-
-            if self.has_protein_list:
-                protein_list = self.peprec_dict[spec_id]["protein_list"]
-                protein_string = self._parse_protein_string(protein_list)
-            else:
-                protein_string = ""
-
-            out = [
-                "BEGIN IONS",
-                f"TITLE={spec_id} {seq}/{charge} {msp_modifications} {protein_string}",
-                f"PEPMASS={prec_mz}",
-                f"CHARGE={charge}+",
-            ]
-
-            if self.has_rt:
-                rt = self.peprec_dict[spec_id]["rt"]
-                out.append(f"RTINSECONDS={rt}")
-
-            out.append(
-                self._get_msp_peak_annotation(
-                    self.preds_dict[spec_id]["peaks"],
-                    sep=" ",
-                    include_annotations=False,
-                )
-            )
-            out.append("END IONS\n")
-            file_object.writelines([line + "\n" for line in out])
-
-    @output_format("spectronaut")
-    @writer(
-        file_suffix="_predictions_spectronaut.csv",
-        normalization_method="tic",
-        requires_dicts=False,
-        requires_diff_modifications=True,
-    )
-    def write_spectronaut(self, file_obj):
-        """
-        Construct spectronaut DataFrame and write to file_object.
-        """
-        if "w" in self.write_mode:
-            header = True
-        elif "a" in self.write_mode:
-            header = False
+        if not mods:
+            return "Mods=0"
         else:
-            raise InvalidWriteModeError(self.write_mode)
+            return f"Mods={len(mods)}/{'/'.join(mods)}"
 
-        spectronaut_peprec = self.peprec.copy()
+    @staticmethod
+    def _format_parent_mass(peptidoform: Peptidoform) -> str:
+        """Format parent mass as string."""
+        return f"Parent={peptidoform.theoretical_mz}"
 
-        # ModifiedPeptide and PrecursorMz columns
-        spectronaut_peprec["ModifiedPeptide"] = spectronaut_peprec.apply(
-            lambda row: self._get_diff_modified_sequence(row["peptide"], row["modifications"]),
-            axis=1,
-        )
-        spectronaut_peprec["PrecursorMz"] = spectronaut_peprec.apply(
-            lambda row: self.mods.calc_precursor_mz(
-                row["peptide"], row["modifications"], row["charge"]
-            )[1],
-            axis=1,
-        )
-        spectronaut_peprec["ModifiedPeptide"] = "_" + spectronaut_peprec["ModifiedPeptide"] + "_"
-
-        # Additional columns
-        spectronaut_peprec["FragmentLossType"] = "noloss"
-
-        # Retention time
-        if "rt" in spectronaut_peprec.columns:
-            rt_cols = ["iRT"]
-            spectronaut_peprec["iRT"] = spectronaut_peprec["rt"]
+    @staticmethod
+    def _format_protein_string(psm: PSM) -> Union[str, None]:
+        """Format protein list as string."""
+        if psm.protein_list:
+            return f"Protein={','.join(psm.protein_list)}"
         else:
-            rt_cols = []
+            return None
 
-        # ProteinId
-        if self.has_protein_list:
-            spectronaut_peprec["ProteinId"] = spectronaut_peprec["protein_list"].apply(
-                self._parse_protein_string
+    @staticmethod
+    def _format_retention_time(psm: PSM) -> Union[str, None]:
+        """Format retention time as string."""
+        if psm.retention_time:
+            return f"RetentionTime={psm.retention_time}"
+        else:
+            return None
+
+    @staticmethod
+    def _format_identifier(psm: PSM) -> str:
+        """Format MS2PIP ID as string."""
+        return f"SpectrumIdentifier={psm.spectrum_id}"
+
+    @staticmethod
+    def _format_comment_line(psm: PSM) -> str:
+        """Format comment line for MSP file."""
+        comments = " ".join(
+            filter(
+                None,
+                [
+                    MSP._format_modifications(psm.peptidoform),
+                    MSP._format_parent_mass(psm.peptidoform),
+                    MSP._format_protein_string(psm),
+                    MSP._format_retention_time(psm),
+                    MSP._format_identifier(psm),
+                ],
             )
+        )
+        return f"Comment: {comments}"
+
+
+class MGF(_Writer):
+    """Write MGF files from MS2PIP processing results."""
+
+    suffix = ".mgf"
+
+    def write(self, results: List[ProcessingResult]):
+        """Write multiple processing results to file."""
+        for result in results:
+            self._write_result(result)
+
+    def _write_result(self, result: ProcessingResult):
+        """Write single processing result to file."""
+        predicted_spectrum = result.as_spectra()[0]
+        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4
+        peaks = zip(predicted_spectrum.mz, intensity_normalized)
+
+        # Header
+        lines = [
+            "BEGIN IONS",
+            f"TITLE={result.psm.peptidoform}",
+            f"PEPMASS={result.psm.peptidoform.theoretical_mz}",
+            f"CHARGE={result.psm.get_precursor_charge()}+",
+            f"SCANS={result.psm.spectrum_id}",
+            f"RTINSECONDS={result.psm.retention_time}" if result.psm.retention_time else None,
+        ]
+
+        # Peaks
+        lines.extend(f"{mz:.8f} {intensity:.8f}" for mz, intensity in peaks)
+
+        # Write to file
+        self._file_object.writelines(line + "\n" for line in lines if line)
+        self._file_object.write("END IONS\n\n")
+
+
+class Spectronaut(_Writer):
+    """Write Spectronaut files from MS2PIP processing results."""
+
+    suffix = ".spectronaut.tsv"
+    field_names = [
+        "ModifiedPeptide",
+        "StrippedPeptide",
+        "PrecursorCharge",
+        "PrecursorMz",
+        "IonMobility",
+        "iRT",
+        "ProteinId",
+        "RelativeFragmentIntensity",
+        "FragmentMz",
+        "FragmentType",
+        "FragmentNumber",
+        "FragmentCharge",
+        "FragmentLossType",
+    ]
+
+    def write(self, processing_results: List[ProcessingResult]):
+        """Write multiple processing results to file."""
+        writer = csv.DictWriter(
+            self._file_object, fieldnames=self.field_names, delimiter="\t", lineterminator="\n"
+        )
+        if self.write_mode == "w":
+            writer.writeheader()
+        for result in processing_results:
+            self._write_result(result, writer)
+
+    def _write_result(self, result: ProcessingResult, writer: csv.DictWriter):
+        """Write single processing result to file."""
+        # Only write results with predictions
+        if result.predicted_intensity is None:
+            return
+        psm_info = self._process_psm(result.psm)
+        for fragment_info in self._yield_fragment_info(result):
+            writer.writerow({**psm_info, **fragment_info})
+
+    @staticmethod
+    def _process_psm(psm: PSM) -> Dict[str, Any]:
+        """Process PSM to Spectronaut format."""
+        return {
+            "ModifiedPeptide": _peptidoform_str_without_charge(psm.peptidoform),
+            "StrippedPeptide": psm.peptidoform.sequence,
+            "PrecursorCharge": psm.get_precursor_charge(),
+            "PrecursorMz": f"{psm.peptidoform.theoretical_mz:.8f}",
+            "IonMobility": f"{psm.ion_mobility:.8f}" if psm.ion_mobility else None,
+            "iRT": f"{psm.retention_time:.8f}" if psm.retention_time else None,
+            "ProteinId": "".join(psm.protein_list) if psm.protein_list else None,
+        }
+
+    @staticmethod
+    def _yield_fragment_info(result: ProcessingResult) -> Generator[Dict[str, Any], None, None]:
+        """Yield fragment information for a processing result."""
+        # Normalize intensities
+        intensities = {
+            ion_type: _unlogarithmize(intensities)
+            for ion_type, intensities in result.predicted_intensity.items()
+        }
+        max_intensity = max(itertools.chain(*intensities.values()))
+        intensities = {
+            ion_type: _basepeak_normalize(intensities[ion_type], basepeak=max_intensity)
+            for ion_type in intensities
+        }
+        for ion_type in result.predicted_intensity:
+            fragment_type = ion_type[0].lower()
+            fragment_charge = ion_type[1:] if len(ion_type) > 1 else "1"
+            for ion_index, (intensity, mz) in enumerate(
+                zip(intensities[ion_type], result.theoretical_mz[ion_type])
+            ):
+                yield {
+                    "RelativeFragmentIntensity": f"{intensity:.8f}",
+                    "FragmentMz": f"{mz:.8f}",
+                    "FragmentType": fragment_type,
+                    "FragmentNumber": ion_index + 1,
+                    "FragmentCharge": fragment_charge,
+                    "FragmentLossType": "noloss",
+                }
+
+
+class Bibliospec(_Writer):
+    """
+    Write Bibliospec SSL and MS2 files from MS2PIP processing results.
+
+    Bibliospec SSL and MS2 files are also compatible with Skyline.
+
+    """
+
+    ssl_suffix = ".ssl"
+    ms2_suffix = ".ms2"
+    ssl_field_names = [
+        "file",
+        "scan",
+        "charge",
+        "sequence",
+        "score-type",
+        "score",
+        "retention-time",
+    ]
+
+    def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
+        super().__init__(filename, write_mode)
+        self.ssl_file = self.filename.with_suffix(self.ssl_suffix)
+        self.ms2_file = self.filename.with_suffix(self.ms2_suffix)
+
+        self._open_ssl_file = None
+        self._open_ms2_file = None
+
+    def open(self):
+        """Open files."""
+        self._open_ssl_file = open(self.ssl_file, self.write_mode)
+        self._open_ms2_file = open(self.ms2_file, self.write_mode)
+
+    def close(self):
+        """Close files."""
+        if self._open_ssl_file:
+            self._open_ssl_file.close()
+            self._open_ssl_file = None
+        if self._open_ms2_file:
+            self._open_ms2_file.close()
+            self._open_ms2_file = None
+
+    @property
+    def _ssl_file_object(self):
+        """Get open SSL file object."""
+        if self._open_ssl_file:
+            return self._open_ssl_file
         else:
-            spectronaut_peprec["ProteinId"] = spectronaut_peprec["spec_id"]
+            warnings.warn(
+                "Opening file outside of context manager. Manually close file after use."
+            )
+            self.open()
+            return self._open_ssl_file
 
-        # Rename columns and merge with predictions
-        spectronaut_peprec = spectronaut_peprec.rename(
-            columns={"charge": "PrecursorCharge", "peptide": "StrippedPeptide"}
-        )
-        peptide_cols = (
-            [
-                "ModifiedPeptide",
-                "StrippedPeptide",
-                "PrecursorCharge",
-                "PrecursorMz",
-                "ProteinId",
-            ]
-            + rt_cols
-            + ["FragmentLossType"]
-        )
-        spectronaut_df = spectronaut_peprec[peptide_cols + ["spec_id"]]
-        spectronaut_df = self.all_preds.merge(spectronaut_df, on="spec_id")
+    @property
+    def _ms2_file_object(self):
+        """Get open MS2 file object."""
+        if self._open_ms2_file:
+            return self._open_ms2_file
+        else:
+            warnings.warn(
+                "Opening file outside of context manager. Manually close file after use."
+            )
+            self.open()
+            return self._open_ms2_file
 
-        # Fragment columns
-        spectronaut_df["FragmentCharge"] = (
-            spectronaut_df["ion"].str.contains("2").map({True: 2, False: 1})
+    def write(self, processing_results: List[ProcessingResult]):
+        """Write multiple processing results to file."""
+        # Create CSV writer
+        ssl_dict_writer = csv.DictWriter(
+            self._ssl_file_object,
+            fieldnames=self.ssl_field_names,
+            delimiter="\t",
+            lineterminator="\n",
         )
-        spectronaut_df["FragmentType"] = spectronaut_df["ion"].str[0].str.lower()
 
-        # Rename and sort columns
-        spectronaut_df = spectronaut_df.rename(
-            columns={
-                "mz": "FragmentMz",
-                "prediction": "RelativeIntensity",
-                "ionnumber": "FragmentNumber",
+        # Write headers
+        if self.write_mode == "w":
+            ssl_dict_writer.writeheader()
+            self._write_ms2_header()
+            start_scan_number = 0
+        elif self.write_mode == "a":
+            start_scan_number = self._get_last_ssl_scan_number(self.ssl_file) + 1
+        else:
+            raise ValueError(f"Unsupported write mode: {self.write_mode}")
+
+        # Write results
+        for i, result in enumerate(processing_results):
+            scan_number = start_scan_number + i
+            modified_sequence = self._format_modified_sequence(result.psm.peptidoform)
+            self._write_result(result, modified_sequence, scan_number, ssl_dict_writer)
+
+    def _write_ms2_header(self):
+        """Write header to MS2 file."""
+        self._ms2_file_object.write(
+            f"H\tCreationDate\t{strftime('%Y-%m-%d %H:%M:%S', localtime())}\n"
+        )
+        self._ms2_file_object.write("H\tExtractor\tMS2PIP predictions\n")
+
+    def _write_result(
+        self,
+        result: ProcessingResult,
+        modified_sequence: str,
+        scan_number: int,
+        writer: csv.DictWriter,
+    ):
+        """Write single processing result to files."""
+        self._write_result_to_ssl(result, modified_sequence, scan_number, writer)
+        self._write_result_to_ms2(result, modified_sequence, scan_number)
+
+    def _write_result_to_ssl(
+        self,
+        result: ProcessingResult,
+        modified_sequence: str,
+        scan_number: int,
+        writer: csv.DictWriter,
+    ):
+        """Write single processing result to the SSL file."""
+        writer.writerow(
+            {
+                "file": self.ms2_file.name if isinstance(self.ms2_file, Path) else "file.ms2",
+                "scan": scan_number,
+                "charge": result.psm.get_precursor_charge(),
+                "sequence": modified_sequence,
+                "score-type": None,
+                "score": None,
+                "retention-time": result.psm.retention_time if result.psm.retention_time else None,
             }
         )
-        fragment_cols = [
-            "FragmentCharge",
-            "FragmentMz",
-            "RelativeIntensity",
-            "FragmentType",
-            "FragmentNumber",
-        ]
-        spectronaut_df = spectronaut_df[peptide_cols + fragment_cols]
-        try:
-            spectronaut_df.to_csv(
-                file_obj, index=False, header=header, sep=";", lineterminator="\n"
-            )
-        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-            spectronaut_df.to_csv(
-                file_obj, index=False, header=header, sep=";", line_terminator="\n"
-            )
 
-        return file_obj
-
-    def _write_bibliospec_core(self, file_obj_ssl, file_obj_ms2, start_scannr=0):
-        """Construct Bibliospec SSL/MS2 strings and write to file_objects."""
-
-        for i, spec_id in enumerate(sorted(self.preds_dict.keys())):
-            scannr = i + start_scannr
-            seq = self.peprec_dict[spec_id]["peptide"]
-            mods = self.peprec_dict[spec_id]["modifications"]
-            charge = self.peprec_dict[spec_id]["charge"]
-            prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-            ms2_filename = os.path.basename(self.output_filename) + "_predictions.ms2"
-
-            peaks = self._get_msp_peak_annotation(
-                self.preds_dict[spec_id]["peaks"],
-                sep="\t",
-                include_annotations=False,
-            )
-
-            if isinstance(mods, str) and mods != "-" and mods != "":
-                mod_seq = self._get_diff_modified_sequence(seq, mods)
-            else:
-                mod_seq = seq
-
-            rt = self.peprec_dict[spec_id]["rt"] if self.has_rt else ""
-
-            # TODO: implement csv instead of manual writing
-            file_obj_ssl.write(
-                "\t".join([ms2_filename, str(scannr), str(charge), mod_seq, "", "", str(rt)])
-                + "\n"
-            )
-            file_obj_ms2.write(
-                "\n".join(
-                    [
-                        f"S\t{scannr}\t{prec_mz}",
-                        f"Z\t{charge}\t{prec_mass}",
-                        f"D\tseq\t{seq}",
-                        f"D\tmodified seq\t{mod_seq}",
-                        peaks,
-                    ]
-                )
-                + "\n"
-            )
-
-    def _write_general(
-        self,
-        write_function,
-        file_suffix,
-        normalization_method,
-        requires_dicts,
-        requires_diff_modifications,
-        diff_modification_precision=1,
+    def _write_result_to_ms2(
+        self, result: ProcessingResult, modified_sequence: str, scan_number: int
     ):
-        """
-        General write function to call core write functions.
-        Note: Does not work for write_bibliospec and write_dlib functions.
-        """
-        # Normalize if necessary and make dicts
-        if not self.normalization == normalization_method:
-            self._normalize_spectra(method=normalization_method)
-            if requires_dicts:
-                self._generate_preds_dict()
-        elif requires_dicts and not self.preds_dict:
-            self._generate_preds_dict()
-        # if requires_dicts and not self.peprec_dict:
-        #     self._generate_peprec_dict()
+        """Write single processing result to the MS2 file."""
+        predicted_spectrum = result.as_spectra()[0]
+        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4
+        peaks = zip(predicted_spectrum.mz, intensity_normalized)
 
-        if (
-            requires_diff_modifications
-            and diff_modification_precision not in self.diff_modification_mapping
-        ):
-            self._generate_diff_modification_mapping(diff_modification_precision)
+        # Header
+        lines = [
+            f"S\t{scan_number}\t{result.psm.peptidoform.theoretical_mz}",
+            f"Z\t{result.psm.get_precursor_charge()}\t{result.psm.peptidoform.theoretical_mass}",
+            f"D\tseq\t{result.psm.peptidoform.sequence}",
+            f"D\tmodified seq\t{modified_sequence}",
+        ]
 
-        # Write to file or stringbuffer
-        if self.return_stringbuffer:
-            file_object = StringIO()
-            logger.info("Writing results to StringIO using %s", write_function.__name__)
-        else:
-            f_name = self.output_filename + file_suffix
-            file_object = open(f_name, self.write_mode)
-            logger.info("Writing results to %s", f_name)
+        # Peaks
+        lines.extend(f"{mz:.8f}\t{intensity:.8f}" for mz, intensity in peaks)
 
-        write_function(self, file_object)
+        # Write to file
+        self._ms2_file_object.writelines(line + "\n" for line in lines)
+        self._ms2_file_object.write("\n")
 
-        return file_object
-
-    @output_format("bibliospec")
-    def write_bibliospec(self):
-        """Write MS2PIP predictions to BiblioSpec/Skyline SSL and MS2 spectral library files."""
-        precision = 1
-        if precision not in self.diff_modification_mapping:
-            self._generate_diff_modification_mapping(precision)
-
-        # Normalize if necessary and make dicts
-        if not self.normalization == "basepeak_10000":
-            self._normalize_spectra(method="basepeak_10000")
-            self._generate_preds_dict()
-        elif not self.preds_dict:
-            self._generate_preds_dict()
-        if not self.peprec_dict:
-            self._generate_peprec_dict()
-
-        if self.return_stringbuffer:
-            file_obj_ssl = StringIO()
-            file_obj_ms2 = StringIO()
-        else:
-            file_obj_ssl = open("{}_predictions.ssl".format(self.output_filename), self.write_mode)
-            file_obj_ms2 = open("{}_predictions.ms2".format(self.output_filename), self.write_mode)
-
-        # If a new file is written, write headers
-        if "w" in self.write_mode:
-            start_scannr = 0
-            ssl_header = [
-                "file",
-                "scan",
-                "charge",
-                "sequence",
-                "score-type",
-                "score",
-                "retention-time",
-                "\n",
+    @staticmethod
+    def _format_modified_sequence(peptidoform: Peptidoform) -> str:
+        """Format modified sequence as string for Spectronaut."""
+        modification_dict = defaultdict(list)
+        for term, position in [("n_term", 0), ("c_term", len(peptidoform) - 1)]:
+            if peptidoform.properties[term]:
+                modification_dict[position].extend(peptidoform.properties[term])
+        for position, (_, mods) in enumerate(peptidoform.parsed_sequence):
+            if mods:
+                modification_dict[position].extend(mods)
+        return "".join(
+            [
+                f"{aa}{''.join([f'[{mod.mass:+.1f}]' for mod in modification_dict[position]])}"
+                for position, aa in enumerate(peptidoform.sequence)
             ]
-            file_obj_ssl.write("\t".join(ssl_header))
-            file_obj_ms2.write(
-                "H\tCreationDate\t{}\n".format(strftime("%Y-%m-%d %H:%M:%S", localtime()))
-            )
-            file_obj_ms2.write("H\tExtractor\tMS2PIP predictions\n")
+        )
+
+    @staticmethod
+    def _get_last_ssl_scan_number(ssl_file: Union[str, Path, StringIO]):
+        """Read scan number of last line in a Bibliospec SSL file."""
+        if isinstance(ssl_file, StringIO):
+            ssl_file.seek(0)
+            for line in ssl_file:
+                last_line = line
+        elif isinstance(ssl_file, (str, Path)):
+            with open(ssl_file, "rt") as ssl:
+                for line in ssl:
+                    last_line = line
         else:
-            # Get last scan number of ssl file, to continue indexing from there
-            # because Bibliospec speclib scan numbers can only be integers
-            start_scannr = self._get_last_ssl_scannr() + 1
+            raise TypeError("Unsupported type for `ssl_file`.")
+        return int(last_line.split("\t")[1])
 
-        self._write_bibliospec_core(file_obj_ssl, file_obj_ms2, start_scannr=start_scannr)
 
-        return file_obj_ssl, file_obj_ms2
+class DLIB(_Writer):
+    """
+    Write DLIB files from MS2PIP processing results.
 
-    def _write_dlib_metadata(self, connection):
-        from sqlalchemy import select
+    See `EncyclopeDIA File Formats <https://bitbucket.org/searleb/encyclopedia/wiki/EncyclopeDIA%20File%20Formats>`_
+    for documentation on the DLIB format.
 
-        from ms2pip._utils.dlib import DLIB_VERSION, Metadata
+    """
 
+    suffix = ".dlib"
+
+    def open(self):
+        """Open file."""
+        if self.write_mode == "w":
+            self._open_file = self.filename.unlink(missing_ok=True)
+        self._open_file = dlib.open_sqlite(self.filename)
+
+    def write(self, processing_results: List[ProcessingResult]):
+        """Write MS2PIP predictions to a DLIB SQLite file."""
+        connection = self._file_object
+        dlib.metadata.create_all()
+        self._write_metadata(connection)
+        self._write_entries(processing_results, connection, self.filename)
+        self._write_peptide_to_protein(processing_results, connection)
+
+    def _write_result(self, result: ProcessingResult): ...
+
+    @staticmethod
+    def _format_modified_sequence(peptidoform: Peptidoform) -> str:
+        """Format modified sequence as string for DLIB."""
+        # Sum all sequential mass shifts for each position
+        masses = [
+            sum(mod.mass for mod in mods) if mods else 0 for _, mods in peptidoform.parsed_sequence
+        ]
+
+        # Add N- and C-terminal modifications
+        for term, position in [("n_term", 0), ("c_term", len(peptidoform) - 1)]:
+            if peptidoform.properties[term]:
+                masses[position] += sum(mod.mass for mod in peptidoform.properties[term])
+
+        # Format modified sequence
+        return "".join(
+            [
+                f"{aa}[{mass:+.6f}]" if mass else aa
+                for aa, mass in zip(peptidoform.sequence, masses)
+            ]
+        )
+
+    @staticmethod
+    def _write_metadata(connection: engine.Connection):
+        """Write metadata to DLIB SQLite file."""
         with connection.begin():
             version = connection.execute(
-                select([Metadata.c.Value]).where(Metadata.c.Key == "version")
+                select([dlib.Metadata.c.Value]).where(dlib.Metadata.c.Key == "version")
             ).scalar()
             if version is None:
                 connection.execute(
-                    Metadata.insert().values(
+                    dlib.Metadata.insert().values(
                         Key="version",
-                        Value=DLIB_VERSION,
+                        Value=dlib.DLIB_VERSION,
                     )
                 )
 
-    def _write_dlib_entries(self, connection, precision):
-        from ms2pip._utils.dlib import Entry
-
-        peptide_to_proteins = set()
-
+    @staticmethod
+    def _write_entries(
+        processing_results: List[ProcessingResult],
+        connection: engine.Connection,
+        output_filename: str,
+    ):
+        """Write spectra to DLIB SQLite file."""
         with connection.begin():
-            for spec_id, peprec in self.peprec_dict.items():
-                seq = peprec["peptide"]
-                mods = peprec["modifications"]
-                charge = peprec["charge"]
+            for result in processing_results:
+                if not result.psm.retention_time:
+                    raise ValueError("Retention time required to write DLIB file.")
 
-                prec_mass, prec_mz = self.mods.calc_precursor_mz(seq, mods, charge)
-                mod_seq = self._get_diff_modified_sequence(seq, mods, precision=precision)
-
-                all_peaks = sorted(
-                    itertools.chain.from_iterable(self.preds_dict[spec_id]["peaks"].values()),
-                    key=itemgetter(1),
-                )
-                mzs = [peak[1] for peak in all_peaks]
-                intensities = [peak[2] for peak in all_peaks]
+                spectrum = result.as_spectra()[0]
+                intensity_normalized = _basepeak_normalize(spectrum.intensity) * 1e4
+                n_peaks = len(spectrum.mz)
 
                 connection.execute(
-                    Entry.insert().values(
-                        PrecursorMz=prec_mz,
-                        PrecursorCharge=charge,
-                        PeptideModSeq=mod_seq,
-                        PeptideSeq=seq,
+                    dlib.Entry.insert().values(
+                        PrecursorMz=result.psm.peptidoform.theoretical_mz,
+                        PrecursorCharge=result.psm.get_precursor_charge(),
+                        PeptideModSeq=DLIB._format_modified_sequence(result.psm.peptidoform),
+                        PeptideSeq=result.psm.peptidoform.sequence,
                         Copies=1,
-                        RTInSeconds=peprec["rt"],
+                        RTInSeconds=result.psm.retention_time,
                         Score=0,
-                        MassEncodedLength=len(mzs),
-                        MassArray=mzs,
-                        IntensityEncodedLength=len(intensities),
-                        IntensityArray=intensities,
-                        SourceFile=self.output_filename,
+                        MassEncodedLength=n_peaks,
+                        MassArray=spectrum.mz.tolist(),
+                        IntensityEncodedLength=n_peaks,
+                        IntensityArray=intensity_normalized.tolist(),
+                        SourceFile=str(output_filename),
                     )
                 )
 
-                if self.has_protein_list:
-                    protein_list = peprec["protein_list"]
-                    if isinstance(protein_list, str):
-                        protein_list = literal_eval(protein_list)
-
-                    for protein in protein_list:
-                        peptide_to_proteins.add((seq, protein))
-
-        return peptide_to_proteins
-
-    def _write_dlib_peptide_to_protein(self, connection, peptide_to_proteins):
-        from ms2pip._utils.dlib import PeptideToProtein
-
-        if not self.has_protein_list:
-            return
+    @staticmethod
+    def _write_peptide_to_protein(results: List[ProcessingResult], connection: engine.Connection):
+        """Write peptide-to-protein mappings to DLIB SQLite file."""
+        peptide_to_proteins = {
+            (result.psm.peptidoform.sequence, protein)
+            for result in results
+            if result.psm.protein_list
+            for protein in result.psm.protein_list
+        }
 
         with connection.begin():
             sql_peptide_to_proteins = set()
             proteins = {protein for _, protein in peptide_to_proteins}
             for peptide_to_protein in connection.execute(
-                PeptideToProtein.select().where(PeptideToProtein.c.ProteinAccession.in_(proteins))
+                dlib.PeptideToProtein.select().where(
+                    dlib.PeptideToProtein.c.ProteinAccession.in_(proteins)
+                )
             ):
                 sql_peptide_to_proteins.add(
                     (
@@ -769,98 +734,34 @@ class SpectrumOutput:
             peptide_to_proteins.difference_update(sql_peptide_to_proteins)
             for seq, protein in peptide_to_proteins:
                 connection.execute(
-                    PeptideToProtein.insert().values(
+                    dlib.PeptideToProtein.insert().values(
                         PeptideSeq=seq, isDecoy=False, ProteinAccession=protein
                     )
                 )
 
-    @output_format("dlib")
-    def write_dlib(self):
-        """Write MS2PIP predictions to a DLIB SQLite file."""
-        from ms2pip._utils.dlib import metadata, open_sqlite
 
-        normalization = "basepeak_10000"
-        precision = 5
-        if not self.normalization == normalization:
-            self._normalize_spectra(method=normalization)
-            self._generate_preds_dict()
-        if not self.peprec_dict:
-            self._generate_peprec_dict()
-        if precision not in self.diff_modification_mapping:
-            self._generate_diff_modification_mapping(precision)
-
-        filename = "{}.dlib".format(self.output_filename)
-        logger.info("Writing results to %s", filename)
-
-        logger.debug(
-            "write mode is ignored for DLIB at the file mode, although append or not is respected"
-        )
-        if "a" not in self.write_mode and os.path.exists(filename):
-            os.remove(filename)
-
-        if self.return_stringbuffer:
-            raise NotImplementedError("`return_stringbuffer` not implemented for DLIB output.")
-
-        if not self.has_rt:
-            raise NotImplementedError("Retention times required to write DLIB file.")
-
-        with open_sqlite(filename) as connection:
-            metadata.create_all()
-            self._write_dlib_metadata(connection)
-            peptide_to_proteins = self._write_dlib_entries(connection, precision)
-            self._write_dlib_peptide_to_protein(connection, peptide_to_proteins)
-
-    def get_normalized_predictions(self, normalization_method="tic"):
-        """Return normalized copy of predictions."""
-        self._normalize_spectra(method=normalization_method)
-        return self.all_preds.copy()
-
-    @output_format("csv")
-    def write_csv(self):
-        """Write MS2PIP predictions to CSV."""
-
-        self._normalize_spectra(method="tic")
-
-        # Write to file or stringbuffer
-        if self.return_stringbuffer:
-            file_object = StringIO()
-            logger.info("Writing results to StringIO using %s", "write_csv")
-        else:
-            f_name = "{}_predictions.csv".format(self.output_filename)
-            file_object = open(f_name, self.write_mode)
-            logger.info("Writing results to %s", f_name)
-
-        try:
-            self.all_preds.to_csv(
-                file_object, float_format="%.6g", index=False, lineterminator="\n"
-            )
-        except TypeError:  # Pandas < 1.5 (Required for Python 3.7 support)
-            self.all_preds.to_csv(
-                file_object, float_format="%.6g", index=False, line_terminator="\n"
-            )
-        return file_object
+SUPPORTED_FORMATS = {
+    "tsv": TSV,
+    "msp": MSP,
+    "mgf": MGF,
+    "spectronaut": Spectronaut,
+    "bibliospec": Bibliospec,
+    "dlib": DLIB,
+}
 
 
-def write_single_spectrum_csv(spectrum, filepath):
-    """Write a single spectrum to a CSV file."""
-    with open(filepath, "wt") as f:
-        writer = csv.writer(f, delimiter=",", lineterminator="\n")
-        writer.writerow(["mz", "intensity", "annotation"])
-        for mz, intensity, annotation in zip(
-            spectrum.mz,
-            spectrum.intensity,
-            spectrum.annotations,
-        ):
-            writer.writerow([mz, intensity, annotation])
+def _peptidoform_str_without_charge(peptidoform: Peptidoform) -> str:
+    """Get peptidoform string without charge."""
+    return re.sub(r"\/\d+$", "", str(peptidoform))
 
 
-def write_single_spectrum_png(spectrum, filepath):
-    """Plot a single spectrum and write to a PNG file."""
-    import matplotlib.pyplot as plt
-    import spectrum_utils.plot as sup
+def _unlogarithmize(intensities: np.array) -> np.array:
+    """Undo logarithmic transformation of intensities."""
+    return (2**intensities) - 0.001
 
-    ax = plt.gca()
-    ax.set_title("MS²PIP prediction for " + str(spectrum.peptidoform))
-    sup.spectrum(spectrum.to_spectrum_utils(), ax=ax)
-    plt.savefig(Path(filepath).with_suffix(".png"))
-    plt.close()
+
+def _basepeak_normalize(intensities: np.array, basepeak: Optional[float] = None) -> np.array:
+    """Normalize intensities to most intense peak."""
+    if not basepeak:
+        basepeak = intensities.max()
+    return intensities / basepeak

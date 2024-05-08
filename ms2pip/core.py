@@ -23,10 +23,11 @@ from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
-from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
+from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip.spectrum_input import read_spectrum_file
+from ms2pip.spectrum_output import SUPPORTED_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -480,7 +481,7 @@ class _Parallelized:
             self.output_formats = ["csv"]
         else:
             for output_format in output_formats:
-                if output_format not in SUPPORTED_OUTPUT_FORMATS:
+                if output_format not in SUPPORTED_FORMATS:
                     raise exceptions.UnknownOutputFormatError(output_format)
             self.output_formats = output_formats
 
@@ -600,6 +601,10 @@ class _Parallelized:
             If only peak annotations should be extracted from the spectrum file
 
         """
+        # Validate runs and collections
+        if not len(psm_list.collections) == 1 or not len(psm_list.runs) == 1:
+            raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
+
         args = (
             spectrum_file,
             vector_file,
@@ -728,7 +733,10 @@ def _process_peptidoform(
             MODELS[model]["peaks_version"],
             30.0,  # TODO: Remove CE feature
         )
-        predictions = {i: np.array(p, dtype=np.float32) for i, p in zip(ion_types, predictions)}
+        predictions = {
+            i: np.array(p, dtype=np.float32).clip(min=np.log2(0.001))  # Clip negative intensities
+            for i, p in zip(ion_types, predictions)
+        }
         feature_vectors = None
 
     return ProcessingResult(
