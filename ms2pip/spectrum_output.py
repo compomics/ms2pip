@@ -1,5 +1,39 @@
 """
-Write spectrum files from MS2PIP predictions.
+Write spectrum files from MS²PIP prediction results.
+
+
+Examples
+--------
+
+The simplest way to write MS²PIP predictions to a file is to use the :py:func:`write_spectra`
+function:
+
+>>> from ms2pip import predict_single, write_spectra
+>>> results = [predict_single("ACDE/2")]
+>>> write_spectra("/path/to/output/filename", results, "mgf")
+
+Specific writer classes can also be used directly. Writer classes should be used in a context
+manager to ensure the file is properly closed after writing. The following example writes MS²PIP
+predictions to a TSV file:
+
+>>> from ms2pip import predict_single
+>>> results = [predict_single("ACDE/2")]
+>>> with TSV("output.tsv") as writer:
+...     writer.write(results)
+
+Results can be written to the same file sequentially:
+
+>>> results_2 = [predict_single("PEPTIDEK/2")]
+>>> with TSV("output.tsv", write_mode="a") as writer:
+...     writer.write(results)
+...     writer.write(results_2)
+
+Results can be written to an existing file using the append mode:
+
+>>> with TSV("output.tsv", write_mode="a") as writer:
+...     writer.write(results_2)
+
+
 """
 
 from __future__ import annotations
@@ -7,6 +41,7 @@ from __future__ import annotations
 import csv
 import itertools
 import re
+import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from io import StringIO
@@ -23,60 +58,77 @@ from ms2pip._utils import dlib
 from ms2pip.result import ProcessingResult
 
 
-def _peptidoform_str_without_charge(peptidoform: Peptidoform) -> str:
-    """Get peptidoform string without charge."""
-    return re.sub(r"\/\d+$", "", str(peptidoform))
+def write_spectra(
+    filename: Union[str, Path],
+    processing_results: List[ProcessingResult],
+    file_format: str,
+    write_mode: str = "w",
+):
+    """
+    Write MS2PIP processing results to a supported spectrum file format.
 
+    Parameters
+    ----------
+    filename
+        Output filename without file extension.
+    processing_results
+        List of :py:class:`ms2pip.result.ProcessingResult` objects.
+    file_format
+        File format to write. See :py:attr:`FILE_FORMATS` for available formats.
+    write_mode
+        Write mode for file. Default is ``w`` (write). Use ``a`` (append) to add to existing file.
 
-def _unlogarithmize(intensities: np.array) -> np.array:
-    """Undo logarithmic transformation of intensities."""
-    return (2**intensities) - 0.001
-
-
-def _tic_normalize(intensities: np.array):
-    """Normalize intensities to total ion current (TIC)."""
-    return intensities / intensities.sum()
-
-
-def _basepeak_normalize(intensities: np.array, basepeak: Optional[float] = None) -> np.array:
-    """Normalize intensities to most intense peak."""
-    if not basepeak:
-        basepeak = intensities.max()
-    return intensities / basepeak
+    """
+    with SUPPORTED_FORMATS[file_format](filename, write_mode) as writer:
+        writer.write(processing_results)
 
 
 class _Writer(ABC):
     """Abstract base class for writing spectrum files."""
 
-    def __init__(self, file: Union[str, Path, StringIO], write_mode: str = "w"):
-        self.ssl_file = file
+    suffix = ".txt"
+
+    def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
+        self.filename = Path(filename).with_suffix(self.suffix)
         self.write_mode = write_mode
 
         self._open_file = None
 
     def __enter__(self):
         """Open file in context manager."""
-        if isinstance(self.ssl_file, (str, Path)):
-            self.ssl_file = Path(self.ssl_file)
-            self._open_file = open(self.ssl_file, self.write_mode)
+        self.open()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        """Close file in context manager."""
+        self.close()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.filename, self.write_mode})"
+
+    def open(self):
+        """Open file."""
+        if self._open_file:
+            self.close()
+        self._open_file = open(self.filename, self.write_mode)
+
+    def close(self):
+        """Close file."""
         if self._open_file:
             self._open_file.close()
+            self._open_file = None
 
     @property
     def _file_object(self):
-        """Get file object from file path or StringIO."""
+        """Get open file object."""
         if self._open_file:
             return self._open_file
         else:
-            if isinstance(self.ssl_file, StringIO):
-                return self.ssl_file
-            elif isinstance(self.ssl_file, (str, Path)):
-                raise TypeError("Use `with` statement to open file from path.")
-            else:
-                raise TypeError("Unsupported type for `file`.")
+            warnings.warn(
+                "Opening file outside of context manager. Manually close file after use."
+            )
+            self.open()
+            return self._open_file
 
     def write(self, processing_results: List[ProcessingResult]):
         """Write multiple processing results to file."""
@@ -92,6 +144,7 @@ class _Writer(ABC):
 class TSV(_Writer):
     """Write TSV files from MS2PIP processing results."""
 
+    suffix = ".tsv"
     field_names = [
         "psm_index",
         "ion_type",
@@ -104,7 +157,9 @@ class TSV(_Writer):
 
     def write(self, processing_results: List[ProcessingResult]):
         """Write multiple processing results to file."""
-        writer = csv.DictWriter(self._file_object, fieldnames=self.field_names, delimiter="\t")
+        writer = csv.DictWriter(
+            self._file_object, fieldnames=self.field_names, delimiter="\t", lineterminator="\n"
+        )
         if self.write_mode == "w":
             writer.writeheader()
         for result in processing_results:
@@ -140,6 +195,8 @@ class TSV(_Writer):
 
 class MSP(_Writer):
     """Write MSP files from MS2PIP processing results."""
+
+    suffix = ".msp"
 
     def write(self, results: List[ProcessingResult]):
         """Write multiple processing results to file."""
@@ -251,6 +308,8 @@ class MSP(_Writer):
 class MGF(_Writer):
     """Write MGF files from MS2PIP processing results."""
 
+    suffix = ".mgf"
+
     def write(self, results: List[ProcessingResult]):
         """Write multiple processing results to file."""
         for result in results:
@@ -283,6 +342,7 @@ class MGF(_Writer):
 class Spectronaut(_Writer):
     """Write Spectronaut files from MS2PIP processing results."""
 
+    suffix = ".spectronaut.tsv"
     field_names = [
         "ModifiedPeptide",
         "StrippedPeptide",
@@ -301,7 +361,9 @@ class Spectronaut(_Writer):
 
     def write(self, processing_results: List[ProcessingResult]):
         """Write multiple processing results to file."""
-        writer = csv.DictWriter(self._file_object, fieldnames=self.field_names, delimiter="\t")
+        writer = csv.DictWriter(
+            self._file_object, fieldnames=self.field_names, delimiter="\t", lineterminator="\n"
+        )
         if self.write_mode == "w":
             writer.writeheader()
         for result in processing_results:
@@ -359,8 +421,15 @@ class Spectronaut(_Writer):
 
 
 class Bibliospec(_Writer):
-    """Write Bibliospec files from MS2PIP processing results."""
+    """
+    Write Bibliospec SSL and MS2 files from MS2PIP processing results.
 
+    Bibliospec SSL and MS2 files are also compatible with Skyline.
+
+    """
+
+    ssl_suffix = ".ssl"
+    ms2_suffix = ".ms2"
     ssl_field_names = [
         "file",
         "scan",
@@ -371,79 +440,60 @@ class Bibliospec(_Writer):
         "retention-time",
     ]
 
-    def __init__(
-        self,
-        ssl_file: Union[str, Path, StringIO],
-        ms2_file: Union[str, Path, StringIO],
-        write_mode: str = "w",
-    ):
-        """
-        Write Bibliospec files from MS2PIP processing results.
-
-        Parameters
-        ----------
-        ssl_file : Union[str, Path, StringIO]
-            Path to SSL file or StringIO object.
-        ms2_file : Union[str, Path, StringIO]
-            Path to MS2 file or StringIO object.
-        write_mode : str
-            Write mode for files. Default is "w".
-        """
-
-        self.ssl_file = ssl_file
-        self.ms2_file = ms2_file
-        self.write_mode = write_mode
+    def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
+        super().__init__(filename, write_mode)
+        self.ssl_file = self.filename.with_suffix(self.ssl_suffix)
+        self.ms2_file = self.filename.with_suffix(self.ms2_suffix)
 
         self._open_ssl_file = None
         self._open_ms2_file = None
 
-    def __enter__(self):
-        """Open file in context manager."""
-        if isinstance(self.ssl_file, (str, Path)):
-            self.ssl_file = Path(self.ssl_file)
-            self._open_ssl_file = open(self.ssl_file, self.write_mode)
-        if isinstance(self.ms2_file, (str, Path)):
-            self.ms2_file = Path(self.ms2_file)
-            self._open_ms2_file = open(self.ms2_file, self.write_mode)
-        return self
+    def open(self):
+        """Open files."""
+        self._open_ssl_file = open(self.ssl_file, self.write_mode)
+        self._open_ms2_file = open(self.ms2_file, self.write_mode)
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def close(self):
+        """Close files."""
         if self._open_ssl_file:
             self._open_ssl_file.close()
+            self._open_ssl_file = None
         if self._open_ms2_file:
             self._open_ms2_file.close()
+            self._open_ms2_file = None
 
     @property
     def _ssl_file_object(self):
-        """Get SSL file object from file path or StringIO."""
+        """Get open SSL file object."""
         if self._open_ssl_file:
             return self._open_ssl_file
         else:
-            if isinstance(self.ssl_file, StringIO):
-                return self.ssl_file
-            elif isinstance(self.ssl_file, (str, Path)):
-                raise TypeError("Use `with` statement to open file from path.")
-            else:
-                raise TypeError("Unsupported type for `file`.")
+            warnings.warn(
+                "Opening file outside of context manager. Manually close file after use."
+            )
+            self.open()
+            return self._open_ssl_file
 
     @property
     def _ms2_file_object(self):
-        """Get MS2 file object from file path or StringIO."""
+        """Get open MS2 file object."""
         if self._open_ms2_file:
             return self._open_ms2_file
         else:
-            if isinstance(self.ms2_file, StringIO):
-                return self.ms2_file
-            elif isinstance(self.ms2_file, (str, Path)):
-                raise TypeError("Use `with` statement to open file from path.")
-            else:
-                raise TypeError("Unsupported type for `file`.")
+            warnings.warn(
+                "Opening file outside of context manager. Manually close file after use."
+            )
+            self.open()
+            return self._open_ms2_file
 
     def write(self, processing_results: List[ProcessingResult]):
         """Write multiple processing results to file."""
         # Create CSV writer
         ssl_dict_writer = csv.DictWriter(
-            self._ssl_file_object, fieldnames=self.ssl_field_names, delimiter="\t"
+            self._ssl_file_object,
+            fieldnames=self.ssl_field_names,
+            delimiter="\t",
+            lineterminator="\n",
         )
 
         # Write headers
@@ -560,39 +610,53 @@ class DLIB(_Writer):
     """
     Write DLIB files from MS2PIP processing results.
 
-    See https://bitbucket.org/searleb/encyclopedia/wiki/EncyclopeDIA%20File%20Formats for
-    documentation on the DLIB format.
+    See `EncyclopeDIA File Formats <https://bitbucket.org/searleb/encyclopedia/wiki/EncyclopeDIA%20File%20Formats>`_
+    for documentation on the DLIB format.
 
     """
 
+    suffix = ".dlib"
+
+    def open(self):
+        """Open file."""
+        if self.write_mode == "w":
+            self._open_file = self.filename.unlink(missing_ok=True)
+        self._open_file = dlib.open_sqlite(self.filename)
+
     def write(self, processing_results: List[ProcessingResult]):
         """Write MS2PIP predictions to a DLIB SQLite file."""
-        with dlib.open_sqlite(self.file) as connection:
-            dlib.metadata.create_all()
-            self._write_metadata(connection)
-            self._write_entries(processing_results, connection, self.file)
-            self._write_peptide_to_protein(processing_results, connection)
+        connection = self._file_object
+        dlib.metadata.create_all()
+        self._write_metadata(connection)
+        self._write_entries(processing_results, connection, self.filename)
+        self._write_peptide_to_protein(processing_results, connection)
 
-    def _write_result(self, result: ProcessingResult):
-        """Write single processing result to file."""
-        ...
+    def _write_result(self, result: ProcessingResult): ...
 
     @staticmethod
     def _format_modified_sequence(peptidoform: Peptidoform) -> str:
         """Format modified sequence as string for DLIB."""
-        # TODO: Implement
-        # From the EncyclopeDIA DLIB documentation:
-        # PeptideModSeq has strings like "QKEC[+57.0214635]SDK" to indicate PTMs. PTMs are always
-        # encoded as delta masses (including fixed PTMs such as carbamidomethylation). Sites can
-        # only have one PTM mass, so compound masses are allowed, such as
-        # "M[+58.00548]ELS[+79.966331]C[+57.0214635]PGSR", where +58.00548 indicates both
-        # acetylation and oxidation. N- and C-terminus PTMs should be annotated on the first or
-        # last amino acid in the peptide, respectively. Metabolic labels can be incorporated in
-        # the same way, for example EC[+57.0214635]SDK[+8.014199].
-        raise NotImplementedError
+        # Sum all sequential mass shifts for each position
+        masses = [
+            sum(mod.mass for mod in mods) if mods else 0 for _, mods in peptidoform.parsed_sequence
+        ]
+
+        # Add N- and C-terminal modifications
+        for term, position in [("n_term", 0), ("c_term", len(peptidoform) - 1)]:
+            if peptidoform.properties[term]:
+                masses[position] += sum(mod.mass for mod in peptidoform.properties[term])
+
+        # Format modified sequence
+        return "".join(
+            [
+                f"{aa}[{mass:+.6f}]" if mass else aa
+                for aa, mass in zip(peptidoform.sequence, masses)
+            ]
+        )
 
     @staticmethod
     def _write_metadata(connection: engine.Connection):
+        """Write metadata to DLIB SQLite file."""
         with connection.begin():
             version = connection.execute(
                 select([dlib.Metadata.c.Value]).where(dlib.Metadata.c.Key == "version")
@@ -611,6 +675,7 @@ class DLIB(_Writer):
         connection: engine.Connection,
         output_filename: str,
     ):
+        """Write spectra to DLIB SQLite file."""
         with connection.begin():
             for result in processing_results:
                 if not result.psm.retention_time:
@@ -622,7 +687,7 @@ class DLIB(_Writer):
 
                 connection.execute(
                     dlib.Entry.insert().values(
-                        PrecursorMz=result.psm.precursor_mz,
+                        PrecursorMz=result.psm.peptidoform.theoretical_mz,
                         PrecursorCharge=result.psm.get_precursor_charge(),
                         PeptideModSeq=DLIB._format_modified_sequence(result.psm.peptidoform),
                         PeptideSeq=result.psm.peptidoform.sequence,
@@ -630,20 +695,20 @@ class DLIB(_Writer):
                         RTInSeconds=result.psm.retention_time,
                         Score=0,
                         MassEncodedLength=n_peaks,
-                        MassArray=spectrum.mz,
+                        MassArray=spectrum.mz.tolist(),
                         IntensityEncodedLength=n_peaks,
-                        IntensityArray=intensity_normalized,
-                        SourceFile=output_filename,
+                        IntensityArray=intensity_normalized.tolist(),
+                        SourceFile=str(output_filename),
                     )
                 )
 
     @staticmethod
     def _write_peptide_to_protein(results: List[ProcessingResult], connection: engine.Connection):
-        from ms2pip._utils.dlib import PeptideToProtein
-
+        """Write peptide-to-protein mappings to DLIB SQLite file."""
         peptide_to_proteins = {
             (result.psm.peptidoform.sequence, protein)
             for result in results
+            if result.psm.protein_list
             for protein in result.psm.protein_list
         }
 
@@ -651,7 +716,9 @@ class DLIB(_Writer):
             sql_peptide_to_proteins = set()
             proteins = {protein for _, protein in peptide_to_proteins}
             for peptide_to_protein in connection.execute(
-                PeptideToProtein.select().where(PeptideToProtein.c.ProteinAccession.in_(proteins))
+                dlib.PeptideToProtein.select().where(
+                    dlib.PeptideToProtein.c.ProteinAccession.in_(proteins)
+                )
             ):
                 sql_peptide_to_proteins.add(
                     (
@@ -663,7 +730,34 @@ class DLIB(_Writer):
             peptide_to_proteins.difference_update(sql_peptide_to_proteins)
             for seq, protein in peptide_to_proteins:
                 connection.execute(
-                    PeptideToProtein.insert().values(
+                    dlib.PeptideToProtein.insert().values(
                         PeptideSeq=seq, isDecoy=False, ProteinAccession=protein
                     )
                 )
+
+
+SUPPORTED_FORMATS = {
+    "tsv": TSV,
+    "msp": MSP,
+    "mgf": MGF,
+    "spectronaut": Spectronaut,
+    "bibliospec": Bibliospec,
+    "dlib": DLIB,
+}
+
+
+def _peptidoform_str_without_charge(peptidoform: Peptidoform) -> str:
+    """Get peptidoform string without charge."""
+    return re.sub(r"\/\d+$", "", str(peptidoform))
+
+
+def _unlogarithmize(intensities: np.array) -> np.array:
+    """Undo logarithmic transformation of intensities."""
+    return (2**intensities) - 0.001
+
+
+def _basepeak_normalize(intensities: np.array, basepeak: Optional[float] = None) -> np.array:
+    """Normalize intensities to most intense peak."""
+    if not basepeak:
+        basepeak = intensities.max()
+    return intensities / basepeak

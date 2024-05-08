@@ -23,9 +23,10 @@ from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
-from ms2pip.constants import MODELS, SUPPORTED_OUTPUT_FORMATS
+from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.spectrum_input import read_spectrum_file
+from ms2pip.spectrum_output import SUPPORTED_FORMATS, write_spectra
 
 logger = logging.getLogger(__name__)
 

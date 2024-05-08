@@ -1,7 +1,6 @@
-
 from psm_utils import Peptidoform
 
-from ms2pip.spectrum_output import MSP, Bibliospec
+from ms2pip.spectrum_output import MSP, Bibliospec, DLIB
 
 
 class TestMSP:
@@ -32,3 +31,17 @@ class TestBiblioSpec:
         for peptidoform_str, expected_output in test_cases:
             peptidoform = Peptidoform(peptidoform_str)
             assert Bibliospec._format_modified_sequence(peptidoform) == expected_output
+
+
+class TestDLIB:
+    def test__format_modified_sequence(self):
+        test_cases = [
+            ("ACDE/2", "ACDE"),
+            ("AC[Carbamidomethyl]DE/2", "AC[+57.021464]DE"),
+            ("[Glu->pyro-Glu]-EPEPTIDEK/2", "E[-18.010565]PEPTIDEK"),
+            ("PEPTIDEK-[Amidated]/2", "PEPTIDEK[-0.984016]"),
+            ("AM[Oxidation]C[Carbamidomethyl]DE/2", "AM[+15.994915]C[+57.021464]DE"),
+        ]
+
+        for test_in, expected_out in test_cases:
+            assert DLIB._format_modified_sequence(Peptidoform(test_in)) == expected_out
