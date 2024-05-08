@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import csv
 import itertools
+import logging
 import re
 import warnings
 from abc import ABC, abstractmethod
@@ -57,11 +58,13 @@ from sqlalchemy import engine, select
 from ms2pip._utils import dlib
 from ms2pip.result import ProcessingResult
 
+LOGGER = logging.getLogger(__name__)
+
 
 def write_spectra(
     filename: Union[str, Path],
     processing_results: List[ProcessingResult],
-    file_format: str,
+    file_format: str = "tsv",
     write_mode: str = "w",
 ):
     """
@@ -80,13 +83,14 @@ def write_spectra(
 
     """
     with SUPPORTED_FORMATS[file_format](filename, write_mode) as writer:
+        LOGGER.info(f"Writing to {writer.filename}")
         writer.write(processing_results)
 
 
 class _Writer(ABC):
     """Abstract base class for writing spectrum files."""
 
-    suffix = ".txt"
+    suffix = ""
 
     def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
         self.filename = Path(filename).with_suffix(self.suffix)
@@ -182,11 +186,11 @@ class TSV(_Writer):
             "psm_index": result.psm_index,
             "ion_type": ion_type,
             "ion_number": ion_index + 1,
-            "mz": "{:.10g}".format(result.theoretical_mz[ion_type][ion_index]),
-            "predicted": "{:.10g}".format(result.predicted_intensity[ion_type][ion_index])
+            "mz": "{:.8f}".format(result.theoretical_mz[ion_type][ion_index]),
+            "predicted": "{:.8f}".format(result.predicted_intensity[ion_type][ion_index])
             if result.predicted_intensity
             else None,
-            "observed": "{:.10g}".format(result.observed_intensity[ion_type][ion_index])
+            "observed": "{:.8f}".format(result.observed_intensity[ion_type][ion_index])
             if result.observed_intensity
             else None,
             "rt": result.psm.retention_time if result.psm.retention_time else None,
@@ -219,7 +223,7 @@ class MSP(_Writer):
 
         # Peaks
         lines.extend(
-            f"{mz:.10g}\t{intensity:.10g}\t{annotation}/0.0" for mz, intensity, annotation in peaks
+            f"{mz:.8f}\t{intensity:.8f}\t{annotation}/0.0" for mz, intensity, annotation in peaks
         )
 
         # Write to file
@@ -259,7 +263,7 @@ class MSP(_Writer):
         if not mods:
             return "Mods=0"
         else:
-            return f"Mods={len(mods)}/{'/'.join(sorted(mods))}"
+            return f"Mods={len(mods)}/{'/'.join(mods)}"
 
     @staticmethod
     def _format_parent_mass(peptidoform: Peptidoform) -> str:
@@ -332,11 +336,11 @@ class MGF(_Writer):
         ]
 
         # Peaks
-        lines.extend(f"{mz:.10g} {intensity:.10g}" for mz, intensity in peaks)
+        lines.extend(f"{mz:.8f} {intensity:.8f}" for mz, intensity in peaks)
 
         # Write to file
         self._file_object.writelines(line + "\n" for line in lines if line)
-        self._file_object.write("END IONS\n")
+        self._file_object.write("END IONS\n\n")
 
 
 class Spectronaut(_Writer):
@@ -385,9 +389,9 @@ class Spectronaut(_Writer):
             "ModifiedPeptide": _peptidoform_str_without_charge(psm.peptidoform),
             "StrippedPeptide": psm.peptidoform.sequence,
             "PrecursorCharge": psm.get_precursor_charge(),
-            "PrecursorMz": f"{psm.peptidoform.theoretical_mz:.10g}",
-            "IonMobility": f"{psm.ion_mobility:.10g}" if psm.ion_mobility else None,
-            "iRT": f"{psm.retention_time:.10g}" if psm.retention_time else None,
+            "PrecursorMz": f"{psm.peptidoform.theoretical_mz:.8f}",
+            "IonMobility": f"{psm.ion_mobility:.8f}" if psm.ion_mobility else None,
+            "iRT": f"{psm.retention_time:.8f}" if psm.retention_time else None,
             "ProteinId": "".join(psm.protein_list) if psm.protein_list else None,
         }
 
@@ -411,8 +415,8 @@ class Spectronaut(_Writer):
                 zip(intensities[ion_type], result.theoretical_mz[ion_type])
             ):
                 yield {
-                    "RelativeFragmentIntensity": f"{intensity:.10g}",
-                    "FragmentMz": f"{mz:.10g}",
+                    "RelativeFragmentIntensity": f"{intensity:.8f}",
+                    "FragmentMz": f"{mz:.8f}",
                     "FragmentType": fragment_type,
                     "FragmentNumber": ion_index + 1,
                     "FragmentCharge": fragment_charge,
@@ -567,7 +571,7 @@ class Bibliospec(_Writer):
         ]
 
         # Peaks
-        lines.extend(f"{mz:.10g}\t{intensity:.10g}" for mz, intensity in peaks)
+        lines.extend(f"{mz:.8f}\t{intensity:.8f}" for mz, intensity in peaks)
 
         # Write to file
         self._ms2_file_object.writelines(line + "\n" for line in lines)

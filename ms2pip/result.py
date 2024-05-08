@@ -1,4 +1,5 @@
 """Definition and handling of MS²PIP results."""
+
 from __future__ import annotations
 
 import csv
@@ -6,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from psm_utils import PSM
-from pydantic import ConfigDict, BaseModel
+from pydantic import BaseModel, ConfigDict
 
 try:
     import spectrum_utils.plot as sup
@@ -115,44 +116,11 @@ def calculate_correlations(results: List[ProcessingResult]) -> None:
         result.correlation = np.corrcoef(pred_int, obs_int)[0][1]
 
 
-def results_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
-    """Write processing results to CSV file."""
-    with open(output_file, "wt") as f:
-        fieldnames = [
-            "psm_index",
-            "ion_type",
-            "ion_number",
-            "mz",
-            "predicted",
-            "observed",
-        ]
-        writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
-        writer.writeheader()
-        for result in results:
-            if result.theoretical_mz is not None:
-                for ion_type in result.theoretical_mz:
-                    for i in range(len(result.theoretical_mz[ion_type])):
-                        writer.writerow(
-                            {
-                                "psm_index": result.psm_index,
-                                "ion_type": ion_type,
-                                "ion_number": i + 1,
-                                "mz": "{:.6g}".format(result.theoretical_mz[ion_type][i]),
-                                "predicted": "{:.6g}".format(
-                                    result.predicted_intensity[ion_type][i]
-                                ) if result.predicted_intensity else None,
-                                "observed": "{:.6g}".format(result.observed_intensity[ion_type][i])
-                                if result.observed_intensity
-                                else None,
-                            }
-                        )
-
-
-def correlations_to_csv(results: List["ProcessingResult"], output_file: str) -> None:
+def write_correlations(results: List["ProcessingResult"], output_file: str) -> None:
     """Write correlations to CSV file."""
     with open(output_file, "wt") as f:
         fieldnames = ["psm_index", "correlation"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t", lineterminator="\n")
         writer.writeheader()
         for result in results:
             writer.writerow({"psm_index": result.psm_index, "correlation": result.correlation})
