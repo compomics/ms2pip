@@ -160,8 +160,8 @@ def predict_library(
     """
     if fasta_file and config:
         # Use provided proteome, but overwrite fasta_file
+        config["fasta_file"] = fasta_file
         config = ProteomeSearchSpace.from_any(config)
-        config.fasta_file = fasta_file
     elif fasta_file and not config:
         # Default proteome search space with provided fasta_file
         config = ProteomeSearchSpace(fasta_file=fasta_file)
@@ -177,7 +177,7 @@ def predict_library(
     for batch in track(
         _into_batches(search_space, batch_size=batch_size),
         description="Predicting spectra...",
-        total = ceil(len(search_space) / batch_size),
+        total=ceil(len(search_space) / batch_size),
     ):
         logging.disable(logging.CRITICAL)
         yield predict_batch(
