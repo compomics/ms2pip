@@ -160,8 +160,8 @@ def predict_library(
     """
     if fasta_file and config:
         # Use provided proteome, but overwrite fasta_file
-        config["fasta_file"] = fasta_file
         config = ProteomeSearchSpace.from_any(config)
+        config.fasta_file = fasta_file
     elif fasta_file and not config:
         # Default proteome search space with provided fasta_file
         config = ProteomeSearchSpace(fasta_file=fasta_file)
