@@ -40,6 +40,10 @@ For an unspecific protein digestion, the cleavage rule can be set to ``unspecifi
 result in a cleavage rule that allows cleavage after any amino acid with an unlimited number of
 allowed missed cleavages.
 
+To disable protein digestion when the FASTA file contains peptides, set the cleavage rule to
+``-``. This will treat each line in the FASTA file as a separate peptide sequence, but still
+allow for modifications and charges to be added.
+
 
 Examples
 --------

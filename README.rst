@@ -59,6 +59,7 @@ The MS³PIP Python application can perform the following tasks:
 - ``correlate``: Compare predicted and observed intensities and optionally compute correlations.
 - ``get-training-data``: Extract feature vectors and target intensities from observed spectra for
   training.
+- ``annotate-spectra``: Annotate peaks in observed spectra.
 
 MS²PIP supports a wide range of PSM input formats and spectrum output formats, and includes
 pre-trained models for multiple fragmentation methods, instruments and labeling techniques. See
