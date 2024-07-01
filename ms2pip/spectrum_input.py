@@ -34,7 +34,7 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
         raise UnsupportedSpectrumFiletypeError(file_extension)
 
     for spectrum in get_ms2_spectra(str(spectrum_file)):
-        yield ObservedSpectrum(
+        obs_spectrum = ObservedSpectrum(
             mz=np.array(spectrum.mz, dtype=np.float32),
             intensity=np.array(spectrum.intensity, dtype=np.float32),
             identifier=str(spectrum.identifier),
@@ -42,6 +42,14 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
             precursor_charge=float(spectrum.precursor.charge),
             retention_time=float(spectrum.precursor.rt),
         )
+        # Workaround for mobiusklein/mzdata#3
+        if (
+            obs_spectrum.identifier == ""
+            or obs_spectrum.mz.shape[0] == 0
+            or obs_spectrum.intensity.shape[0] == 0
+        ):
+            continue
+        yield obs_spectrum
 
 
 def _is_minitdf(spectrum_file: str) -> bool:

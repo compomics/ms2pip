@@ -846,8 +846,8 @@ def _process_spectra(
             spectrum_id = match[1]
         except (TypeError, IndexError):
             raise exceptions.TitlePatternError(
-                "Spectrum title pattern could not be matched to spectrum IDs "
-                f"`{spectrum.identifier}`. "
+                f"Spectrum title pattern `{spectrum_id_pattern}` could not be matched to "
+                f"spectrum ID `{spectrum.identifier}`. "
                 " Are you sure that the regex contains a capturing group?"
             )
 
