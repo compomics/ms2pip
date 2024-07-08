@@ -23,6 +23,7 @@ from ms2pip._utils.encoder import Encoder
 from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
+from ms2pip._utils.ion_mobility import IonMobility
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
@@ -74,6 +75,7 @@ def predict_single(
 def predict_batch(
     psms: Union[PSMList, str, Path],
     add_retention_time: bool = False,
+    add_ion_mobility: bool = False,
     psm_filetype: Optional[str] = None,
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
@@ -91,6 +93,8 @@ def predict_batch(
         filetypes. See https://psm-utils.readthedocs.io/en/stable/#supported-file-formats.
     add_retention_time
         Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    add_ion_mobility
+        Add ion mobility predictions with IM2Deep (Requires optional IM2Deep dependency).
     model
         Model to use for prediction. Default: "HCD".
     model_dir
@@ -113,6 +117,11 @@ def predict_batch(
         rt_predictor = RetentionTime(processes=processes)
         rt_predictor.add_rt_predictions(psm_list)
 
+    if add_ion_mobility:
+        logger.info("Adding ion mobility predictions")
+        im_predictor = IonMobility(processes=processes)
+        im_predictor.add_im_predictions(psm_list)
+
     with Encoder.from_psm_list(psm_list) as encoder:
         ms2pip_parallelized = _Parallelized(
             encoder=encoder,
@@ -130,6 +139,7 @@ def predict_library(
     fasta_file: Optional[Union[str, Path]] = None,
     config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
     add_retention_time: bool = False,
+    add_ion_mobility: bool = False,
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     batch_size: int = 100000,
@@ -148,6 +158,8 @@ def predict_library(
         parameters. Required if `fasta_file` is not provided.
     add_retention_time
         Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    add_ion_mobility
+        Add ion mobility predictions with IM2Deep (Requires optional IM2Deep dependency).
     model
         Model to use for prediction. Default: "HCD".
     model_dir
@@ -156,6 +168,11 @@ def predict_library(
         Number of peptides to process in each batch.
     processes
         Number of parallel processes for multiprocessing steps. By default, all available.
+
+    Yields
+    ------
+    predictions: List[ProcessingResult]
+        Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
     if fasta_file and config:
@@ -183,6 +200,7 @@ def predict_library(
         yield predict_batch(
             search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
             add_retention_time=add_retention_time,
+            add_ion_mobility=add_ion_mobility,
             model=model,
             model_dir=model_dir,
             processes=processes,
@@ -197,6 +215,7 @@ def correlate(
     spectrum_id_pattern: Optional[str] = None,
     compute_correlations: bool = False,
     add_retention_time: bool = False,
+    add_ion_mobility: bool = False,
     model: Optional[str] = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     ms2_tolerance: float = 0.02,
@@ -221,6 +240,8 @@ def correlate(
         Compute correlations between predictions and targets.
     add_retention_time
         Add retention time predictions with DeepLC (Requires optional DeepLC dependency).
+    add_ion_mobility
+        Add ion mobility predictions with IM2Deep (Requires optional IM2Deep dependency).
     model
         Model to use for prediction. Default: "HCD".
     model_dir
@@ -244,6 +265,11 @@ def correlate(
         logger.info("Adding retention time predictions")
         rt_predictor = RetentionTime(processes=processes)
         rt_predictor.add_rt_predictions(psm_list)
+
+    if add_ion_mobility:
+        logger.info("Adding ion mobility predictions")
+        im_predictor = IonMobility(processes=processes)
+        im_predictor.add_im_predictions(psm_list)
 
     with Encoder.from_psm_list(psm_list) as encoder:
         ms2pip_parallelized = _Parallelized(

@@ -157,6 +157,7 @@ class TSV(_Writer):
         "predicted",
         "observed",
         "rt",
+        "im",
     ]
 
     def write(self, processing_results: List[ProcessingResult]):
@@ -194,6 +195,7 @@ class TSV(_Writer):
             if result.observed_intensity
             else None,
             "rt": result.psm.retention_time if result.psm.retention_time else None,
+            "im": result.psm.ion_mobility if result.psm.ion_mobility else None,
         }
 
 
@@ -243,9 +245,12 @@ class MSP(_Writer):
             if not modifications:
                 return None
             if len(modifications) > 1:
-                raise ValueError("Multiple modifications per amino acid not supported.")
+                raise ValueError("Multiple modifications per amino acid not supported in MSP.")
             modification = modifications[0]
-            return f"{position},{amino_acid},{modification.name}"
+            try:
+                return f"{position},{amino_acid},{modification.name}"
+            except AttributeError:  # MassModification has no attribute `name`
+                return f"{position},{amino_acid},{modification.value}"
 
         sequence_mods = [
             _format_single_modification(aa, pos + 1, mods)
@@ -287,6 +292,14 @@ class MSP(_Writer):
             return None
 
     @staticmethod
+    def _format_ion_mobility(psm: PSM) -> Union[str, None]:
+        """Format ion mobility as string."""
+        if psm.ion_mobility:
+            return f"IonMobility={psm.ion_mobility}"
+        else:
+            return None
+
+    @staticmethod
     def _format_identifier(psm: PSM) -> str:
         """Format MS2PIP ID as string."""
         return f"SpectrumIdentifier={psm.spectrum_id}"
@@ -302,6 +315,7 @@ class MSP(_Writer):
                     MSP._format_parent_mass(psm.peptidoform),
                     MSP._format_protein_string(psm),
                     MSP._format_retention_time(psm),
+                    MSP._format_ion_mobility(psm),
                     MSP._format_identifier(psm),
                 ],
             )
@@ -310,7 +324,11 @@ class MSP(_Writer):
 
 
 class MGF(_Writer):
-    """Write MGF files from MS2PIP processing results."""
+    """
+    Write MGF files from MS2PIP processing results.
+
+    See http://www.matrixscience.com/help/data_file_help.html for documentation on the MGF format.
+    """
 
     suffix = ".mgf"
 
@@ -333,6 +351,7 @@ class MGF(_Writer):
             f"CHARGE={result.psm.get_precursor_charge()}+",
             f"SCANS={result.psm.spectrum_id}",
             f"RTINSECONDS={result.psm.retention_time}" if result.psm.retention_time else None,
+            f"ION_MOBILITY={result.psm.ion_mobility}" if result.psm.ion_mobility else None,
         ]
 
         # Peaks
@@ -428,7 +447,9 @@ class Bibliospec(_Writer):
     """
     Write Bibliospec SSL and MS2 files from MS2PIP processing results.
 
-    Bibliospec SSL and MS2 files are also compatible with Skyline.
+    Bibliospec SSL and MS2 files are also compatible with Skyline. See
+    https://skyline.ms/wiki/home/software/BiblioSpec/page.view?name=BiblioSpec%20input%20and%20output%20file%20formats
+    for documentation on the Bibliospec file formats.
 
     """
 
@@ -442,6 +463,7 @@ class Bibliospec(_Writer):
         "score-type",
         "score",
         "retention-time",
+        "ion-mobility",
     ]
 
     def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
@@ -551,6 +573,7 @@ class Bibliospec(_Writer):
                 "score-type": None,
                 "score": None,
                 "retention-time": result.psm.retention_time if result.psm.retention_time else None,
+                "ion-mobility": result.psm.ion_mobility if result.psm.ion_mobility else None,
             }
         )
 
