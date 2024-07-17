@@ -68,13 +68,14 @@ pre-trained models for multiple fragmentation methods, instruments and labeling 
 Related projects
 ----------------
 
-- `DeepLC <https://github.com/compomics/deeplc/>`_: Retention time prediction for
-  (modified) peptides using deep learning.
-- `MS²Rescore <https://github.com/compomics/ms2rescore/>`_: Improve peptide
-  identification sensitivity with MS²PIP and DeepLC predictions.
-- `psm_utils <https://github.com/compomics/psm_utils/>`_: Common utilities for
-  parsing and handling peptide-spectrum matches and search engine results in
-  Python
+- `MS²Rescore <https://github.com/compomics/ms2rescore/>`_: Use MS²PIP and other peptide prediction
+  tools to boost peptide identification results.
+- `DeepLC <https://github.com/compomics/deeplc/>`_: Retention time prediction for (modified)
+  peptides using deep learning.
+- `IM2Deep <https://github.com/compomics/im2deep>`_: Ion mobility prediction for (modified)
+  peptides using deep learning.
+- `psm_utils <https://github.com/compomics/psm_utils/>`_: Common utilities for parsing and handling
+  peptide-spectrum matches and search engine results in Python
 
 Citations
 ---------
