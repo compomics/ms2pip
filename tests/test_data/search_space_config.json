@@ -1,0 +1,14 @@
+{
+  "fasta_file": "tests/test_data/test.fasta",
+  "min_length": 7,
+  "max_length": 30,
+  "min_precursor_mz": 400,
+  "max_precursor_mz": 2000,
+  "cleavage_rule": "trypsin",
+  "missed_cleavages": 2,
+  "semi_specific": false,
+  "add_decoys": false,
+  "modifications": [],
+  "max_variable_modifications": 3,
+  "charges": [2, 3]
+}
