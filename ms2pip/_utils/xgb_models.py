@@ -97,7 +97,7 @@ def _download_model(model, model_hash, model_dir):
 
     logger.info(f"Downloading {model} to {filename}...")
     urllib.request.urlretrieve(
-        os.path.join("http://genesis.ugent.be/uvpublicdata/ms2pip/", model), filename
+        os.path.join("https://genesis.ugent.be/uvpublicdata/ms2pip/", model), filename
     )
     if not _check_model_integrity(filename, model_hash):
         raise InvalidXGBoostModelError()
