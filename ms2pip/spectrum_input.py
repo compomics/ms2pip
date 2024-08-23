@@ -29,8 +29,17 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
         If the file extension is not supported.
 
     """
-    file_extension = Path(spectrum_file).suffix.lower()
-    if file_extension not in [".mgf", ".mzml", ".d"] and not _is_minitdf(spectrum_file):
+    spectrum_path = Path(spectrum_file)
+    file_extension = spectrum_path.suffix.lower()
+    if (
+        file_extension not in [".mgf", ".mzml", ".raw", ".d"]
+        and not (
+            file_extension == ".gz"
+            and len(spectrum_path.suffixes) > 1
+            and spectrum_path.suffixes[-2].lower() in [".mgf", ".mzml"]
+        )
+        and not _is_minitdf(spectrum_file)
+    ):
         raise UnsupportedSpectrumFiletypeError(file_extension)
 
     for spectrum in get_ms2_spectra(str(spectrum_file)):
