@@ -65,7 +65,7 @@ For instance:
 
 .. code-block:: sh
 
-    ms2pip correlate results.sage.tsv --spectrum-file spectra.mgf
+    ms2pip correlate --psm-filetype sage results.sage.tsv spectra.mgf
 
 
 ``get-training-data``
