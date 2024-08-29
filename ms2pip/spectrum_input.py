@@ -51,15 +51,3 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
         ):
             continue
         yield obs_spectrum
-
-
-def _is_minitdf(spectrum_file: str) -> bool:
-    """
-    Check if the spectrum file is a Bruker miniTDF folder.
-
-    A Bruker miniTDF folder has no fixed name, but contains files matching the patterns
-    ``*ms2spectrum.bin`` and ``*ms2spectrum.parquet``.
-    """
-    files = set(Path(spectrum_file).glob("*ms2spectrum.bin"))
-    files.update(Path(spectrum_file).glob("*ms2spectrum.parquet"))
-    return len(files) >= 2
