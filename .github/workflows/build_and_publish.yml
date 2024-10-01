@@ -3,6 +3,7 @@ name: Build and publish to PyPI
 on:
   release:
     types: [created]
+  pull_request:  # for testing
 
 jobs:
   build-sdist:
@@ -46,18 +47,18 @@ jobs:
           name: dist-${{ matrix.os }}
           path: dist
 
-  publish-to-pypi:
-    needs: [build-sdist, build-wheels]
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/ms2pip
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-      - name: Move wheels to dist
-        run: |
-          mv wheels-*/*.whl dist/
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+  # publish-to-pypi:
+  #   needs: [build-sdist, build-wheels]
+  #   runs-on: ubuntu-latest
+  #   environment:
+  #     name: pypi
+  #     url: https://pypi.org/p/ms2pip
+  #   permissions:
+  #     id-token: write
+  #   steps:
+  #     - uses: actions/download-artifact@v4
+  #     - name: Move wheels to dist
+  #       run: |
+  #         mv wheels-*/*.whl dist/
+  #     - name: Publish to PyPI
+  #       uses: pypa/gh-action-pypi-publish@release/v1
