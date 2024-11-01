@@ -29,11 +29,12 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
         If the file extension is not supported.
 
     """
-    file_extension = Path(spectrum_file).suffix.lower()
-    if file_extension not in [".mgf", ".mzml", ".d"] and not _is_minitdf(spectrum_file):
-        raise UnsupportedSpectrumFiletypeError(file_extension)
+    try:
+        spectra = get_ms2_spectra(str(spectrum_file))
+    except ValueError:
+        raise UnsupportedSpectrumFiletypeError(Path(spectrum_file).suffixes)
 
-    for spectrum in get_ms2_spectra(str(spectrum_file)):
+    for spectrum in spectra:
         obs_spectrum = ObservedSpectrum(
             mz=np.array(spectrum.mz, dtype=np.float32),
             intensity=np.array(spectrum.intensity, dtype=np.float32),
@@ -50,15 +51,3 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
         ):
             continue
         yield obs_spectrum
-
-
-def _is_minitdf(spectrum_file: str) -> bool:
-    """
-    Check if the spectrum file is a Bruker miniTDF folder.
-
-    A Bruker miniTDF folder has no fixed name, but contains files matching the patterns
-    ``*ms2spectrum.bin`` and ``*ms2spectrum.parquet``.
-    """
-    files = set(Path(spectrum_file).glob("*ms2spectrum.bin"))
-    files.update(Path(spectrum_file).glob("*ms2spectrum.parquet"))
-    return len(files) >= 2
