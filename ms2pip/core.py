@@ -17,17 +17,17 @@ from psm_utils import PSM, Peptidoform, PSMList
 from rich.progress import track
 
 import ms2pip.exceptions as exceptions
-from ms2pip import spectrum_output
 from ms2pip._cython_modules import ms2pip_pyx
 from ms2pip._utils.encoder import Encoder
 from ms2pip._utils.feature_names import get_feature_names
+from ms2pip._utils.ion_mobility import IonMobility
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
-from ms2pip._utils.ion_mobility import IonMobility
 from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.search_space import ProteomeSearchSpace
+from ms2pip.spectrum import ObservedSpectrum
 from ms2pip.spectrum_input import read_spectrum_file
 from ms2pip.spectrum_output import SUPPORTED_FORMATS
 
@@ -289,6 +289,62 @@ def correlate(
         logger.info(f"Median correlation: {np.median(list(r.correlation for r in results))}")
 
     return results
+
+
+def correlate_single(
+    observed_spectrum: ObservedSpectrum,
+    ms2_tolerance: float = 0.02,
+    model: str = "HCD",
+) -> ProcessingResult:
+    """
+    Correlate single observed spectrum with predicted intensities.\f
+
+    Parameters
+    ----------
+    observed_spectrum
+        ObservedSpectrum instance with observed m/z and intensity values and peptidoform.
+    ms2_tolerance
+        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+    model
+        Model to use for prediction. Default: "HCD".
+
+    Returns
+    -------
+    result: ProcessingResult
+        Result with theoretical m/z, predicted intensity, observed intensity, and correlation.
+
+    """
+    # Check peptidoform in observed spectrum
+    if not isinstance(observed_spectrum.peptidoform, Peptidoform):
+        raise ValueError("Peptidoform must be set in observed spectrum to correlate.")
+
+    # Annotate spectrum and get target intensities
+    with Encoder.from_peptidoform(observed_spectrum.peptidoform) as encoder:
+        ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
+        enc_peptidoform = encoder.encode_peptidoform(observed_spectrum.peptidoform)
+        targets = ms2pip_pyx.get_targets(
+            enc_peptidoform,
+            observed_spectrum.mz.astype(np.float32),
+            observed_spectrum.intensity.astype(np.float32),
+            float(ms2_tolerance),
+            MODELS[model]["peaks_version"],
+        )
+
+    # Reshape to dict with intensities per ion type
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+    observed_intensity = {
+        i: np.array(p, dtype=np.float32).clip(min=np.log2(0.001))  # Clip negative intensities
+        for i, p in zip(ion_types, targets)
+    }
+
+    # Predict spectrum and add target intensities
+    result = predict_single(observed_spectrum.peptidoform, model=model)
+    result.observed_intensity = observed_intensity
+
+    # Add correlation
+    calculate_correlations([result])
+
+    return result
 
 
 def get_training_data(
@@ -703,19 +759,6 @@ class _Parallelized:
             result.feature_vectors = None
 
         return results
-
-    # TODO IMPLEMENT
-    def write_predictions(
-        self, all_preds: pd.DataFrame, peptides: pd.DataFrame, output_filename: str
-    ):
-        raise NotImplementedError
-        spec_out = spectrum_output.SpectrumOutput(
-            all_preds,
-            peptides,
-            self.params["ms2pip"],
-            output_filename=output_filename,
-        )
-        spec_out.write_results(self.output_formats)
 
 
 def _process_peptidoform(
