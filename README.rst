@@ -44,7 +44,7 @@ Python and C.
    ``DVAQIFNNILR/2``.
 
 You can install MS²PIP on your machine by following the
-`installation instructions <https://ms2pip.readthedocs.io/installation/>`_. For a more
+`installation instructions <https://ms2pip.readthedocs.io/en/latest/installation/>`_. For a more
 user-friendly experience, go to the `MS²PIP web server <https://iomics.ugent.be/ms2pip>`_. There,
 you can easily upload a list of peptide sequences, after which the corresponding predicted MS2
 spectra can be downloaded in multiple file formats. The web server can also be contacted through
