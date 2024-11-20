@@ -3,7 +3,6 @@ name: Build and publish to PyPI
 on:
   release:
     types: [created]
-  pull_request:
 
 jobs:
   build-sdist:
