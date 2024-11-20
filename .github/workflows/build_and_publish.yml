@@ -51,8 +51,8 @@ jobs:
     needs: [build-sdist, build-wheels]
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/ms2pip
+      name: pypi
+      url: https://pypi.org/p/ms2pip
     permissions:
       id-token: write
     steps:
@@ -63,5 +63,3 @@ jobs:
           mv dist-*/*.whl dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
