@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class IonMobility:
-    """Predict ion mobility using IM²Deep."""
+    """Predict ion mobility using IM2Deep."""
 
     def __init__(self, processes=1) -> None:
         # Lazy import to avoid loading loading heavy dependencies when not needed
@@ -27,6 +27,6 @@ class IonMobility:
         """Add ion mobility predictions to the PSMList."""
         logger.info("Predicting ion mobility...")
         predictions: pd.Series = self.predict_fn(
-            psm_list, write_output=False, n_jobs=self.processes
+            psm_list, write_output=False, n_jobs=self.processes, ion_mobility=True
         )
         psm_list["ion_mobility"] = predictions.values
