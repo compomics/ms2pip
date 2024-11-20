@@ -6,7 +6,7 @@ Pip package
 .. image:: https://flat.badgen.net/badge/install%20with/pip/green
    :target: https://pypi.org/project/ms2pip/
 
-With Python 3.8 or higher, run:
+With Python 3.9 or higher, run:
 
 .. code-block:: bash
 
