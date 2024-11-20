@@ -68,6 +68,14 @@ For instance:
     ms2pip correlate --psm-filetype sage results.sage.tsv spectra.mgf
 
 
+``correlate-single``
+--------------------
+
+Predict spectrum intensities for a single peptide and correlate them with observed intensities from
+an :py:class:`ObservedSpectrum` object. This mode is only available through the Python API, not
+through the command-line interface.
+
+
 ``get-training-data``
 ---------------------
 
