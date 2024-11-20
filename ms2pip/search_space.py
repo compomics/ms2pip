@@ -160,7 +160,7 @@ class ProteomeSearchSpace(BaseModel):
     min_length: int = 8
     max_length: int = 30
     min_precursor_mz: Optional[float] = 0
-    max_precursor_mz: Optional[float] = np.Inf
+    max_precursor_mz: Optional[float] = np.inf
     cleavage_rule: str = "trypsin"
     missed_cleavages: int = 2
     semi_specific: bool = False
@@ -184,7 +184,7 @@ class ProteomeSearchSpace(BaseModel):
         min_precursor_mz
             Minimum precursor m/z for peptides. Default is 0.
         max_precursor_mz
-            Maximum precursor m/z for peptides. Default is np.Inf.
+            Maximum precursor m/z for peptides. Default is np.inf.
         cleavage_rule
             Cleavage rule for peptide digestion. Default is "trypsin".
         missed_cleavages
