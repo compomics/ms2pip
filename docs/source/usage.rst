@@ -148,8 +148,14 @@ Any unresolvable modification will result in an error. If needed, PSM files can 
 Spectrum file
 -------------
 
-In the :ref:`correlate` and :ref:`get-training-data` usage modes, an MGF or mzML file with observed
-spectra must be provided to MS²PIP.
+In the :ref:`correlate` and :ref:`get-training-data` usage modes, a spectrum file with observed
+spectra must be provided to MS²PIP. Spectrum files in mzML, MGF, Thermo raw, and Bruker raw formats
+are supported.
+
+.. note::
+
+    To read Thermo raw files, the
+    `.NET runtime <https://learn.microsoft.com/en-us/dotnet/core/install/>`_ must be installed.
 
 Make sure that the PSM file ``spectrum_id`` matches the MGF ``TITLE`` field or mzML ``nativeID``
 fields. If the values of these fields are different, but the PSM file ``spectrum_id`` is embedded

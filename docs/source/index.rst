@@ -11,6 +11,7 @@
    installation
    usage
    prediction-models
+   webserver-api
 
 
 .. toctree::
