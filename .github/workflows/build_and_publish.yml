@@ -3,6 +3,8 @@ name: Build and publish to PyPI
 on:
   release:
     types: [created]
+  workflow_dispatch:
+  push:
 
 jobs:
   build-sdist:
@@ -60,5 +62,6 @@ jobs:
         run: |
           mkdir dist/
           mv dist-*/*.whl dist/
+          mv dist-*/*.tar.gz dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
