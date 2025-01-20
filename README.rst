@@ -57,6 +57,7 @@ The MS³PIP Python application can perform the following tasks:
 - ``predict-batch``: Predict fragmentation spectra for a batch of peptides.
 - ``predict-library``: Predict a spectral library from protein FASTA file.
 - ``correlate``: Compare predicted and observed intensities and optionally compute correlations.
+- ``correlate-single``: Compare predicted and observed intensities for a single peptide spectrum.
 - ``get-training-data``: Extract feature vectors and target intensities from observed spectra for
   training.
 - ``annotate-spectra``: Annotate peaks in observed spectra.
