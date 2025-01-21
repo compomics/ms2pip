@@ -32,3 +32,4 @@ python:
 
 sphinx:
   builder: dirhtml
+  configuration: docs/source/conf.py
