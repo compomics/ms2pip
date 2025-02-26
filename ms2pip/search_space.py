@@ -15,7 +15,7 @@ dictionary, a JSON file, or as a :py:class:`~ProteomeSearchSpace` object. For ex
    {
      "fasta_file": "test.fasta",
      "min_length": 8,
-     "max_length": 3,
+     "max_length": 30,
      "cleavage_rule": "trypsin",
      "missed_cleavages": 2,
      "semi_specific": false,
@@ -204,7 +204,23 @@ class ProteomeSearchSpace(BaseModel):
         """
 
         super().__init__(**data)
-        self._peptidoform_spaces: List[_PeptidoformSearchSpace] = []
+        self._peptidoform_spaces: Optional[List[_PeptidoformSearchSpace]] = None
+
+    @field_validator("min_length")
+    @classmethod
+    def _validate_min_length(cls, v):
+        if v > 3:
+            return v
+        else:
+            raise ValueError("Minimum peptide length must be greater than 3.")
+
+    @field_validator("max_length")
+    @classmethod
+    def _validate_max_length(cls, v):
+        if v <= 100:
+            return v
+        else:
+            raise ValueError("Maximum peptide length must be less than or equal to 100.")
 
     @field_validator("modifications")
     @classmethod
@@ -229,7 +245,7 @@ class ProteomeSearchSpace(BaseModel):
         return self
 
     def __len__(self):
-        if not self._peptidoform_spaces:
+        if self._peptidoform_spaces is None:
             raise ValueError("Search space must be built before length can be determined.")
         return sum(len(pep_space) for pep_space in self._peptidoform_spaces)
 
@@ -285,7 +301,7 @@ class ProteomeSearchSpace(BaseModel):
 
         """
         # Build search space if not already built
-        if not self._peptidoform_spaces:
+        if self._peptidoform_spaces is None:
             raise ValueError("Search space must be built before PSMs can be generated.")
 
         spectrum_id = 0
