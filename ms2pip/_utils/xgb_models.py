@@ -39,22 +39,27 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, processes=1
         Number of CPUs to use in multiprocessing
 
     """
-    # Init models
-    xgboost_models = _initialize_xgb_models(
-        model_params["xgboost_model_files"],
-        model_dir,
-        processes,
-    )
+    xgb.set_config(verbosity=0)
+
     if isinstance(features, np.ndarray):
         features = xgb.DMatrix(features)
+    elif isinstance(features, xgb.DMatrix):
+        pass
+    else:
+        raise ValueError("Unsupported input type for features.")
 
-    logger.debug("Predicting intensities from XGBoost model files...")
     prediction_dict = {}
-    for ion_type, xgb_model in xgboost_models.items():
+    n_models = len(model_params["xgboost_model_files"].items())
+    for i, (ion_type, model_filename) in enumerate(model_params["xgboost_model_files"].items()):
+        model_file = os.path.join(model_dir, model_filename)
+        logger.debug(f"Initializing model from file: `{model_file}`")
+        xgb_model = xgb.Booster({"nthread": processes}, model_file=model_file)
+
         # Get predictions from XGBoost model
+        logger.debug(f"Predicting intensities from XGBoost model {i + 1}/{n_models}...")
         preds = xgb_model.predict(features)
         preds = preds.clip(min=np.log2(0.001))  # Clip negative intensities
-        xgb_model.__del__()
+        del(xgb_model)
 
         # Reshape into arrays for each peptide
         if ion_type.lower() in ["x", "y", "y2", "z"]:
@@ -113,18 +118,5 @@ def _check_model_integrity(filename, model_hash):
     if sha1_hash.hexdigest() == model_hash:
         return True
     else:
-        logger.warn("Model hash not recognized.")
+        logger.warning("Model hash not recognized.")
         return False
-
-
-def _initialize_xgb_models(xgboost_model_files, model_dir, nthread) -> dict:
-    """Initialize xgboost models and return them in a dict with ion types as keys."""
-    xgb.set_config(verbosity=0)
-    xgboost_models = {}
-    for ion_type in xgboost_model_files.keys():
-        model_file = os.path.join(model_dir, xgboost_model_files[ion_type])
-        logger.debug(f"Initializing model from file: `{model_file}`")
-        xgb_model = xgb.Booster({"nthread": nthread})
-        xgb_model.load_model(model_file)
-        xgboost_models[ion_type] = xgb_model
-    return xgboost_models
