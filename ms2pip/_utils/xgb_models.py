@@ -40,6 +40,7 @@ def get_predictions_xgb(features, num_ions, model_params, model_dir, processes=1
 
     """
     xgb.set_config(verbosity=0)
+    os.environ.pop("CUDA_VISIBLE_DEVICES", None)  # See issue at dmlc/xgboost#11283
 
     if isinstance(features, np.ndarray):
         features = xgb.DMatrix(features)
