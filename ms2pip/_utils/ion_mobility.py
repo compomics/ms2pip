@@ -1,4 +1,4 @@
-"""Module for ion mobility prediction with IM²Deep."""
+"""Module for ion mobility prediction with IM2Deep."""
 
 import logging
 
