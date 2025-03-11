@@ -27,6 +27,6 @@ class IonMobility:
         """Add ion mobility predictions to the PSMList."""
         logger.info("Predicting ion mobility...")
         predictions: pd.Series = self.predict_fn(
-            psm_list, write_output=False, n_jobs=self.processes
+            psm_list, write_output=False, n_jobs=self.processes, ion_mobility=True
         )
         psm_list["ion_mobility"] = predictions.values

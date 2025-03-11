@@ -104,7 +104,7 @@ class RetentionTime:
         """
         column_map = {"peptide": "seq", "modifications": "modifications"}
         peprec = peptide_record.to_dataframe(self.psm_list)[column_map.keys()]
-        self.deeplc_pep_df = peprec.rename(columns=column_map)
+        self.deeplc_pep_df = peprec.rename(columns=column_map) #TODO: allow PSMList input
 
     def _run_deeplc(self):
         """Run DeepLC."""
@@ -133,7 +133,7 @@ class RetentionTime:
         """
         self.psm_list = psm_list
 
-        if self.predictor == "deeplc":
+        if self.predictor == "deeplc": #TODO: throw out
             self._predict_deeplc()
         else:
             raise NotImplementedError(self.predictor)
