@@ -112,15 +112,15 @@ def predict_batch(
         psms = PSMList(psm_list=psms)
     psm_list = read_psms(psms, filetype=psm_filetype)
 
-    if add_retention_time:
-        logger.info("Adding retention time predictions")
-        rt_predictor = RetentionTime(processes=processes)
-        rt_predictor.add_rt_predictions(psm_list)
+    # if add_retention_time:
+    #     logger.info("Adding retention time predictions")
+    #     rt_predictor = RetentionTime(processes=processes)
+    #     rt_predictor.add_rt_predictions(psm_list)
 
-    if add_ion_mobility:
-        logger.info("Adding ion mobility predictions")
-        im_predictor = IonMobility(processes=processes)
-        im_predictor.add_im_predictions(psm_list)
+    # if add_ion_mobility:
+    #     logger.info("Adding ion mobility predictions")
+    #     im_predictor = IonMobility(processes=processes)
+    #     im_predictor.add_im_predictions(psm_list)
 
     with Encoder.from_psm_list(psm_list) as encoder:
         ms2pip_parallelized = _Parallelized(
@@ -189,16 +189,34 @@ def predict_library(
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
     search_space = ProteomeSearchSpace.from_any(config)
-    search_space.build()
+    search_space.build(processes=processes)
+
+    # Convert to PSMList
+    psm_list = search_space.to_psm_list()
+
+    # Filter PSMs by mz
+    # TODO: Parallelize this step?
+    psm_list_filtered = search_space.filter_psms_by_mz(psm_list)
+
+    # Add retention time and ion mobility predictions
+    if add_retention_time:
+        logger.info("Adding retention time predictions...")
+        rt_predictor = RetentionTime(processes=processes)
+        rt_predictor.add_rt_predictions(psm_list_filtered)
+    if add_ion_mobility:
+        logger.info("Adding ion mobility predictions...")
+        im_predictor = IonMobility(processes=processes)
+        im_predictor.add_im_predictions(psm_list_filtered)
 
     for batch in track(
-        _into_batches(search_space, batch_size=batch_size),
+        _into_batches(psm_list_filtered, batch_size=batch_size),
         description="Predicting spectra...",
         total=ceil(len(search_space) / batch_size),
     ):
+
         logging.disable(logging.CRITICAL)
         yield predict_batch(
-            search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
+            batch,
             add_retention_time=add_retention_time,
             add_ion_mobility=add_ion_mobility,
             model=model,

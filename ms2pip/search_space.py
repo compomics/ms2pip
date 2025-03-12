@@ -265,7 +265,9 @@ class ProteomeSearchSpace(BaseModel):
             Number of processes to use for parallelization.
 
         """
-        processes = processes if processes else multiprocessing.cpu_count()
+        processes = (
+            processes if processes else multiprocessing.cpu_count()
+        )  # Always ignored because of the default value
         self._digest_fasta(processes)
         self._remove_redundancy()
         self._add_modifications(processes)
@@ -307,6 +309,10 @@ class ProteomeSearchSpace(BaseModel):
                 if self.min_precursor_mz <= psm.peptidoform.theoretical_mz <= self.max_precursor_mz
             ]
         )
+
+    def to_psm_list(self) -> PSMList:
+        """Convert search space to PSMList."""
+        return PSMList(psm_list=list(self))
 
     def _digest_fasta(self, processes: int = 1):
         """Digest FASTA file to peptides and populate search space."""
