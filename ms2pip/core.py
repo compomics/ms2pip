@@ -112,15 +112,15 @@ def predict_batch(
         psms = PSMList(psm_list=psms)
     psm_list = read_psms(psms, filetype=psm_filetype)
 
-    # if add_retention_time:
-    #     logger.info("Adding retention time predictions")
-    #     rt_predictor = RetentionTime(processes=processes)
-    #     rt_predictor.add_rt_predictions(psm_list)
+    if add_retention_time:
+        logger.info("Adding retention time predictions")
+        rt_predictor = RetentionTime(processes=processes)
+        rt_predictor.add_rt_predictions(psm_list)
 
-    # if add_ion_mobility:
-    #     logger.info("Adding ion mobility predictions")
-    #     im_predictor = IonMobility(processes=processes)
-    #     im_predictor.add_im_predictions(psm_list)
+    if add_ion_mobility:
+        logger.info("Adding ion mobility predictions")
+        im_predictor = IonMobility(processes=processes)
+        im_predictor.add_im_predictions(psm_list)
 
     with Encoder.from_psm_list(psm_list) as encoder:
         ms2pip_parallelized = _Parallelized(
@@ -217,8 +217,6 @@ def predict_library(
         logging.disable(logging.CRITICAL)
         yield predict_batch(
             batch,
-            add_retention_time=add_retention_time,
-            add_ion_mobility=add_ion_mobility,
             model=model,
             model_dir=model_dir,
             processes=processes,
