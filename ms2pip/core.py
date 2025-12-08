@@ -14,7 +14,6 @@ from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Un
 import numpy as np
 import pandas as pd
 from psm_utils import PSM, Peptidoform, PSMList
-from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip._cython_modules import ms2pip_pyx
@@ -189,14 +188,11 @@ def predict_library(
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
     search_space = ProteomeSearchSpace.from_any(config)
-    search_space.build()
+    search_space.build(processes)
 
-    for batch in track(
-        _into_batches(search_space, batch_size=batch_size),
-        description="Predicting spectra...",
-        total=ceil(len(search_space) / batch_size),
-    ):
-        logging.disable(logging.CRITICAL)
+    n_batches = len(search_space) // batch_size + 1
+    for i, batch in enumerate(_into_batches(search_space, batch_size=batch_size)):
+        logging.info(f"Processing batch {i + 1}/{n_batches}...")
         yield predict_batch(
             search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
             add_retention_time=add_retention_time,
@@ -205,7 +201,6 @@ def predict_library(
             model_dir=model_dir,
             processes=processes,
         )
-        logging.disable(logging.NOTSET)
 
 
 def correlate(
@@ -553,7 +548,7 @@ class _Parallelized:
         """Get multiprocessing pool."""
         logger.debug(f"Starting workers (processes={self.processes})...")
         if multiprocessing.current_process().daemon:
-            logger.warn(
+            logger.warning(
                 "MS²PIP is running in a daemon process. Disabling multiprocessing as daemonic "
                 "processes cannot have children."
             )
