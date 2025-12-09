@@ -53,7 +53,8 @@ from typing import Any, Dict, Generator, List, Optional, Union
 import numpy as np
 from psm_utils import PSM, Peptidoform
 from pyteomics import proforma
-from sqlalchemy import engine, select
+from sqlalchemy import select
+from sqlalchemy.engine import Connection
 
 from ms2pip._utils import dlib
 from ms2pip.result import ProcessingResult
@@ -653,9 +654,9 @@ class DLIB(_Writer):
     def write(self, processing_results: List[ProcessingResult]):
         """Write MS2PIP predictions to a DLIB SQLite file."""
         connection = self._file_object
-        dlib.metadata.create_all()
+        dlib.metadata.create_all(connection.engine)
         self._write_metadata(connection)
-        self._write_entries(processing_results, connection, self.filename)
+        self._write_entries(processing_results, connection, str(self.filename))
         self._write_peptide_to_protein(processing_results, connection)
 
     def _write_result(self, result: ProcessingResult): ...
@@ -682,11 +683,11 @@ class DLIB(_Writer):
         )
 
     @staticmethod
-    def _write_metadata(connection: engine.Connection):
+    def _write_metadata(connection: Connection):
         """Write metadata to DLIB SQLite file."""
         with connection.begin():
             version = connection.execute(
-                select([dlib.Metadata.c.Value]).where(dlib.Metadata.c.Key == "version")
+                select(dlib.Metadata.c.Value).where(dlib.Metadata.c.Key == "version")
             ).scalar()
             if version is None:
                 connection.execute(
@@ -699,7 +700,7 @@ class DLIB(_Writer):
     @staticmethod
     def _write_entries(
         processing_results: List[ProcessingResult],
-        connection: engine.Connection,
+        connection: Connection,
         output_filename: str,
     ):
         """Write spectra to DLIB SQLite file."""
@@ -730,7 +731,7 @@ class DLIB(_Writer):
                 )
 
     @staticmethod
-    def _write_peptide_to_protein(results: List[ProcessingResult], connection: engine.Connection):
+    def _write_peptide_to_protein(results: List[ProcessingResult], connection: Connection):
         """Write peptide-to-protein mappings to DLIB SQLite file."""
         peptide_to_proteins = {
             (result.psm.peptidoform.sequence, protein)
@@ -743,7 +744,7 @@ class DLIB(_Writer):
             sql_peptide_to_proteins = set()
             proteins = {protein for _, protein in peptide_to_proteins}
             for peptide_to_protein in connection.execute(
-                dlib.PeptideToProtein.select().where(
+                select(dlib.PeptideToProtein).where(
                     dlib.PeptideToProtein.c.ProteinAccession.in_(proteins)
                 )
             ):
