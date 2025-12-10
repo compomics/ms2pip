@@ -15,7 +15,7 @@ dictionary, a JSON file, or as a :py:class:`~ProteomeSearchSpace` object. For ex
    {
      "fasta_file": "test.fasta",
      "min_length": 8,
-     "max_length": 3,
+     "max_length": 30,
      "cleavage_rule": "trypsin",
      "missed_cleavages": 2,
      "semi_specific": false,
