@@ -47,6 +47,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from io import StringIO
 from pathlib import Path
+from os import PathLike
 from time import localtime, strftime
 from typing import Any, Dict, Generator, List, Optional, Union
 
@@ -63,7 +64,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def write_spectra(
-    filename: Union[str, Path],
+    filename: Union[str, PathLike],
     processing_results: List[ProcessingResult],
     file_format: str = "tsv",
     write_mode: str = "w",
@@ -93,7 +94,7 @@ class _Writer(ABC):
 
     suffix = ""
 
-    def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
+    def __init__(self, filename: Union[str, PathLike], write_mode: str = "w"):
         self.filename = Path(filename).with_suffix(self.suffix)
         self.write_mode = write_mode
 
@@ -467,7 +468,7 @@ class Bibliospec(_Writer):
         "ion-mobility",
     ]
 
-    def __init__(self, filename: Union[str, Path], write_mode: str = "w"):
+    def __init__(self, filename: Union[str, PathLike], write_mode: str = "w"):
         super().__init__(filename, write_mode)
         self.ssl_file = self.filename.with_suffix(self.ssl_suffix)
         self.ms2_file = self.filename.with_suffix(self.ms2_suffix)
@@ -619,7 +620,7 @@ class Bibliospec(_Writer):
         )
 
     @staticmethod
-    def _get_last_ssl_scan_number(ssl_file: Union[str, Path, StringIO]):
+    def _get_last_ssl_scan_number(ssl_file: Union[str, PathLike, StringIO]):
         """Read scan number of last line in a Bibliospec SSL file."""
         if isinstance(ssl_file, StringIO):
             ssl_file.seek(0)
@@ -656,7 +657,7 @@ class DLIB(_Writer):
         connection = self._file_object
         dlib.metadata.create_all(connection.engine)
         self._write_metadata(connection)
-        self._write_entries(processing_results, connection, str(self.filename))
+        self._write_entries(processing_results, connection, self.filename)
         self._write_peptide_to_protein(processing_results, connection)
 
     def _write_result(self, result: ProcessingResult): ...
@@ -701,7 +702,7 @@ class DLIB(_Writer):
     def _write_entries(
         processing_results: List[ProcessingResult],
         connection: Connection,
-        output_filename: str,
+        output_filename: Union[str, PathLike],
     ):
         """Write spectra to DLIB SQLite file."""
         with connection.begin():
