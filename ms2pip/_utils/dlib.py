@@ -18,16 +18,18 @@ from sqlalchemy import (
     TypeDecorator,
 )
 from sqlalchemy.dialects.sqlite import BLOB
+from sqlalchemy.engine import Connection
 
 DLIB_VERSION = "0.1.14"
 
 
 class CompressedArray(TypeDecorator):
-    """ Sqlite-like does not support arrays.
-        Let's use a custom type decorator.
+    """Sqlite-like does not support arrays.
+    Let's use a custom type decorator.
 
-        See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
+    See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
     """
+
     impl = BLOB
 
     def __init__(self, dtype, *args, **kwargs):
@@ -49,51 +51,55 @@ class CompressedArray(TypeDecorator):
 
 metadata = MetaData()
 
-big_float = numpy.dtype('>f4')
-big_double = numpy.dtype('>f8')
+big_float = numpy.dtype(">f4")
+big_double = numpy.dtype(">f8")
 
 Entry = Table(
-    'entries',
+    "entries",
     metadata,
-    Column('PrecursorMz', Float, nullable=False, index=True),
-    Column('PrecursorCharge', Integer, nullable=False),
-    Column('PeptideModSeq', String, nullable=False),
-    Column('PeptideSeq', String, nullable=False, index=True),
-    Column('Copies', Integer, nullable=False),
-    Column('RTInSeconds', Float, nullable=False),
-    Column('Score', Float, nullable=False),
-    Column('MassEncodedLength', Integer, nullable=False),
-    Column('MassArray', CompressedArray(big_double), nullable=False),
-    Column('IntensityEncodedLength', Integer, nullable=False),
-    Column('IntensityArray', CompressedArray(big_float), nullable=False),
-    Column('CorrelationEncodedLength', Integer, nullable=True),
-    Column('CorrelationArray', CompressedArray(big_float), nullable=True),
-    Column('RTInSecondsStart', Float, nullable=True),
-    Column('RTInSecondsStop', Float, nullable=True),
-    Column('MedianChromatogramEncodedLength', Integer, nullable=True),
-    Column('MedianChromatogramArray', CompressedArray(big_float), nullable=True),
-    Column('SourceFile', String, nullable=False),
+    Column("PrecursorMz", Float, nullable=False, index=True),
+    Column("PrecursorCharge", Integer, nullable=False),
+    Column("PeptideModSeq", String, nullable=False),
+    Column("PeptideSeq", String, nullable=False, index=True),
+    Column("Copies", Integer, nullable=False),
+    Column("RTInSeconds", Float, nullable=False),
+    Column("Score", Float, nullable=False),
+    Column("MassEncodedLength", Integer, nullable=False),
+    Column("MassArray", CompressedArray(big_double), nullable=False),
+    Column("IntensityEncodedLength", Integer, nullable=False),
+    Column("IntensityArray", CompressedArray(big_float), nullable=False),
+    Column("CorrelationEncodedLength", Integer, nullable=True),
+    Column("CorrelationArray", CompressedArray(big_float), nullable=True),
+    Column("RTInSecondsStart", Float, nullable=True),
+    Column("RTInSecondsStop", Float, nullable=True),
+    Column("MedianChromatogramEncodedLength", Integer, nullable=True),
+    Column("MedianChromatogramArray", CompressedArray(big_float), nullable=True),
+    Column("SourceFile", String, nullable=False),
 )
 
-Index('ix_entries_PeptideModSeq_PrecursorCharge_SourceFile', Entry.c.PeptideModSeq, Entry.c.PrecursorCharge, Entry.c.SourceFile)
+Index(
+    "ix_entries_PeptideModSeq_PrecursorCharge_SourceFile",
+    Entry.c.PeptideModSeq,
+    Entry.c.PrecursorCharge,
+    Entry.c.SourceFile,
+)
 
 PeptideToProtein = Table(
-    'peptidetoprotein',
+    "peptidetoprotein",
     metadata,
-    Column('PeptideSeq', String, nullable=False, index=True),
-    Column('isDecoy', Boolean, nullable=True),
-    Column('ProteinAccession', String, nullable=False, index=True),
+    Column("PeptideSeq", String, nullable=False, index=True),
+    Column("isDecoy", Boolean, nullable=True),
+    Column("ProteinAccession", String, nullable=False, index=True),
 )
 
 Metadata = Table(
-    'metadata',
+    "metadata",
     metadata,
-    Column('Key', String, nullable=False, index=True),
-    Column('Value', String, nullable=False),
+    Column("Key", String, nullable=False, index=True),
+    Column("Value", String, nullable=False),
 )
 
 
-def open_sqlite(filename: Union[str, Path]) -> sqlalchemy.engine.Connection:
+def open_sqlite(filename: Union[str, Path]) -> Connection:
     engine = sqlalchemy.create_engine(f"sqlite:///{filename}")
-    metadata.bind = engine
     return engine.connect()
