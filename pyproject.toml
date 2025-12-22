@@ -16,7 +16,7 @@ keywords = [
 ]
 authors = [
     { name = "Ralf Gabriels", email = "ralf@gabriels.dev" },
-    { name = "Sven Degroeve", email = "sven.degroeve@ugent.be" },
+    { name = "Sven Degroeve" },
     { name = "Arthur Declercq", email = "arthur.declercq@ugent.be" },
     { name = "Kevin Velghe", email = "kevin.velghe@ugent.be" },
     { name = "Ana Sílvia C. Silva" },
