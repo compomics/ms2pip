@@ -15,6 +15,7 @@ from ms2pip.core import (  # noqa: F401 E402
     predict_batch,
     predict_library,
     correlate,
+    process_observed_spectra,
     get_training_data,
     annotate_spectra,
     download_models,
