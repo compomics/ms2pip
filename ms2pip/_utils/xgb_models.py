@@ -96,7 +96,11 @@ def _download_model(model, model_hash, model_dir):
     filename = os.path.join(model_dir, model)
 
     logger.info(f"Downloading {model} to {filename}...")
-    urllib.request.urlretrieve(f"https://zenodo.org/records/13270668/files/{model}", filename)
+    try:
+        urllib.request.urlretrieve(f"https://genesis.ugent.be/uvpublicdata/ms2pip/{model}", filename)
+    except Exception:
+        logger.warning("Falling back to Zenodo for model downloads.")
+        urllib.request.urlretrieve(f"https://zenodo.org/records/13270668/files/{model}", filename)
     if not _check_model_integrity(filename, model_hash):
         raise InvalidXGBoostModelError()
 
