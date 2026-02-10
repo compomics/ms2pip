@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import rich
 from psm_utils.io import READERS
-from rich.console import Console
 from rich.logging import RichHandler
 from werkzeug.utils import secure_filename
 
@@ -17,7 +17,6 @@ from ms2pip.plot import spectrum_to_png
 from ms2pip.result import write_correlations
 from ms2pip.spectrum_output import SUPPORTED_FORMATS, write_spectra
 
-console = Console()
 logger = logging.getLogger(__name__)
 
 LOGGING_LEVELS = {
@@ -55,7 +54,7 @@ def cli(*args, **kwargs):
             RichHandler(rich_tracebacks=True, show_level=True, show_path=False)
         ],
     )
-    console.print(build_credits())
+    rich.print(build_credits())
 
 
 @cli.command(help=ms2pip.core.predict_single.__doc__)
@@ -78,7 +77,7 @@ def predict_single(*args, **kwargs):
     predicted_spectrum, _ = result.as_spectra()
 
     # Write output
-    console.print(build_prediction_table(predicted_spectrum))
+    rich.print(build_prediction_table(predicted_spectrum))
     write_spectra(output_name, [result], output_format)
     if plot:
         spectrum_to_png(predicted_spectrum, output_name)
