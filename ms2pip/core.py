@@ -196,7 +196,6 @@ def predict_library(
         description="Predicting spectra...",
         total=ceil(len(search_space) / batch_size),
     ):
-        logging.disable(logging.CRITICAL)
         yield predict_batch(
             search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
             add_retention_time=add_retention_time,
@@ -205,7 +204,6 @@ def predict_library(
             model_dir=model_dir,
             processes=processes,
         )
-        logging.disable(logging.NOTSET)
 
 
 def correlate(
