@@ -52,7 +52,7 @@ def cli(*args, **kwargs):
         datefmt="%Y-%m-%d %H:%M:%S",
         level=LOGGING_LEVELS[kwargs["logging_level"]],
         handlers=[
-            RichHandler(rich_tracebacks=True, console=console, show_level=True, show_path=False)
+            RichHandler(rich_tracebacks=True, show_level=True, show_path=False)
         ],
     )
     console.print(build_credits())
