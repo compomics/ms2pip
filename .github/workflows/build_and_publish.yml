@@ -32,7 +32,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14] # macos-13 for intel, macos-14 for apple silicon
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel] # macos-latest for ARM, macos-15-intel for x86_64; see https://github.com/actions/runner-images/issues/13046
     steps:
       - uses: actions/checkout@v4
         with:
