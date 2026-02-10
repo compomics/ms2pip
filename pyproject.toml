@@ -94,7 +94,7 @@ skip = "cp36-* cp37-* cp38-*"
 test-command = "ms2pip --help"
 
 # Prevent building from source for packages with complex C/C++ dependencies
-environment = { PIP_ONLY_BINARY = "pyarrow,pandas,numpy,lxml,xgboost" }
+environment = { PIP_ONLY_BINARY = "pyarrow,pandas,numpy,lxml,xgboost,scipy" }
 
 [tool.cibuildwheel.macos]
 before-all = "brew install libomp"
