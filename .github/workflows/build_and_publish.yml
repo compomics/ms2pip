@@ -32,13 +32,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel] # macos-latest for ARM, macos-15-intel for x86_64; see https://github.com/actions/runner-images/issues/13046
+        os: [ubuntu-latest, windows-latest, macos-15, macos-15-intel]
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: "true"
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22.0
+        uses: pypa/cibuildwheel@v3.4.0
         with:
           output-dir: dist
       - uses: actions/upload-artifact@v4
