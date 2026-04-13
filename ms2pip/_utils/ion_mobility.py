@@ -14,7 +14,7 @@ class IonMobility:
     def __init__(self, processes=1) -> None:
         # Lazy import to avoid loading loading heavy dependencies when not needed
         try:
-            from im2deep.im2deep import predict_ccs  # noqa: F401
+            from im2deep.im2deep import predict_ccs  # noqa: F401  # type: ignore[ty:unresolved-import]
 
             self.predict_fn = predict_ccs
             self.processes = processes

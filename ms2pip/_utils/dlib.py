@@ -2,7 +2,6 @@
 
 import zlib
 from pathlib import Path
-from typing import Union
 
 import numpy
 import sqlalchemy
@@ -44,9 +43,9 @@ class CompressedArray(TypeDecorator):
         decompressed = zlib.decompress(value)
         return numpy.frombuffer(decompressed, dtype=self.dtype).tolist()
 
-    def copy(self):
+    def copy(self):  # type: ignore[ty:invalid-method-override]
         # NOTE: length will be passed through to BLOB
-        return CompressedArray(self.dtype, self.impl.length)
+        return CompressedArray(self.dtype, self.impl.length)  # type: ignore[ty:unresolved-attribute]
 
 
 metadata = MetaData()
@@ -100,6 +99,6 @@ Metadata = Table(
 )
 
 
-def open_sqlite(filename: Union[str, Path]) -> Connection:
+def open_sqlite(filename: str | Path) -> Connection:
     engine = sqlalchemy.create_engine(f"sqlite:///{filename}")
     return engine.connect()

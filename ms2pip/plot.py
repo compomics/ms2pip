@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Union
 
 from ms2pip.spectrum import Spectrum
 
@@ -12,7 +11,7 @@ except ImportError:
     _can_plot = False
 
 
-def spectrum_to_png(spectrum: Spectrum, filepath: Union[str, Path]):
+def spectrum_to_png(spectrum: Spectrum, filepath: str | Path):
     """Plot a single spectrum and write to a PNG file."""
     if not _can_plot:
         raise ImportError("Matplotlib and spectrum_utils are required to plot spectra.")

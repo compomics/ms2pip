@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 from psm_utils import Peptidoform
 from pydantic import model_validator, field_validator, ConfigDict, BaseModel
+
 try:
     import spectrum_utils.spectrum as sus
     import spectrum_utils.plot as sup
 except ImportError:
-    sus = None
-    sup = None
+    sus = None  # type: ignore[ty:invalid-assignment]
+    sup = None  # type: ignore[ty:invalid-assignment]
 
 
 class Spectrum(BaseModel):
@@ -21,14 +22,14 @@ class Spectrum(BaseModel):
 
     mz: np.ndarray
     intensity: np.ndarray
-    annotations: Optional[np.ndarray] = None
-    identifier: Optional[str] = None
-    peptidoform: Optional[Union[Peptidoform, str]] = None
-    precursor_mz: Optional[float] = None
-    precursor_charge: Optional[int] = None
-    retention_time: Optional[float] = None
-    mass_tolerance: Optional[float] = None
-    mass_tolerance_unit: Optional[str] = None
+    annotations: np.ndarray | None = None
+    identifier: str | None = None
+    peptidoform: Peptidoform | str | None = None
+    precursor_mz: float | None = None
+    precursor_charge: int | None = None
+    retention_time: float | None = None
+    mass_tolerance: float | None = None
+    mass_tolerance_unit: str | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -71,7 +72,7 @@ class Spectrum(BaseModel):
 
     @model_validator(mode="after")
     @classmethod
-    def check_array_lengths(cls, data: dict):
+    def check_array_lengths(cls, data):
         if len(data.mz) != len(data.intensity):
             raise ValueError("Array lengths do not match.")
         if data.annotations is not None:
@@ -149,7 +150,7 @@ class Spectrum(BaseModel):
             if not self.peptidoform:
                 raise ValueError("`precursor_charge` or `peptidoform` must be set.")
             else:
-                precursor_charge = self.peptidoform.precursor_charge
+                precursor_charge = self.peptidoform.precursor_charge  # type: ignore[ty:unresolved-attribute]
 
         if self.precursor_mz:
             precursor_mz = self.precursor_mz
@@ -158,19 +159,21 @@ class Spectrum(BaseModel):
                 raise ValueError("`precursor_mz` or `peptidoform` must be set.")
             else:
                 warnings.warn("precursor_mz not set, using theoretical precursor m/z.")
-                precursor_mz = self.peptidoform.theoretical_mz
+                precursor_mz = self.peptidoform.theoretical_mz  # type: ignore[ty:unresolved-attribute]
 
         spectrum = sus.MsmsSpectrum(
             identifier=self.identifier if self.identifier else "spectrum",
-            precursor_mz=precursor_mz,
-            precursor_charge=precursor_charge,
+            precursor_mz=precursor_mz,  # type: ignore[ty:invalid-argument-type]
+            precursor_charge=precursor_charge,  # type: ignore[ty:invalid-argument-type]
             mz=self.mz,
             intensity=self.intensity,
-            retention_time=self.retention_time,
+            retention_time=self.retention_time,  # type: ignore[ty:invalid-argument-type]
         )
         if self.peptidoform:
             spectrum.annotate_proforma(
-                str(self.peptidoform), self.mass_tolerance, self.mass_tolerance_unit
+                str(self.peptidoform),
+                self.mass_tolerance,  # type: ignore[ty:invalid-argument-type]
+                self.mass_tolerance_unit,  # type: ignore[ty:invalid-argument-type]
             )
         return spectrum
 
@@ -184,7 +187,5 @@ class ObservedSpectrum(Spectrum):
 class PredictedSpectrum(Spectrum):
     """Predicted MS2 spectrum."""
 
-    mass_tolerance: Optional[float] = 0.001
-    mass_tolerance_unit: Optional[str] = "Da"
-
-    pass
+    mass_tolerance: float | None = 0.001
+    mass_tolerance_unit: str | None = "Da"
