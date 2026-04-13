@@ -32,6 +32,7 @@ from ms2pip.spectrum import ObservedSpectrum
 from ms2pip._spectrum_processing import (
     annotate_spectrum,
     load_and_match_spectra,
+    proforma_to_mass_shift,
     targets_from_annotations,
 )
 
@@ -71,7 +72,7 @@ def _predict_batch_internal(
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
     frag_model = MODELS[model]["fragmentation"]
 
-    proformas = [str(psm.peptidoform.proforma) for psm in psm_list]
+    proformas = [proforma_to_mass_shift(psm.peptidoform) for psm in psm_list]
     num_ions = [len(psm.peptidoform.parsed_sequence) - 1 for psm in psm_list]
 
     _set_rayon_threads(processes)
@@ -157,7 +158,7 @@ def _correlate_internal(
         )
         all_targets.append(targets)
 
-    proformas = [str(psm.peptidoform.proforma) for _, psm, _, _ in psm_spectrum_annotations]
+    proformas = [proforma_to_mass_shift(psm.peptidoform) for _, psm, _, _ in psm_spectrum_annotations]
     num_ions = [
         len(psm.peptidoform.parsed_sequence) - 1 for _, psm, _, _ in psm_spectrum_annotations
     ]
@@ -670,7 +671,7 @@ def correlate_preloaded(
                     ),
                 )
             )
-            batch_proformas.append(str(psm.peptidoform.proforma))
+            batch_proformas.append(proforma_to_mass_shift(psm.peptidoform))
             batch_seq_lens.append(len(psm.peptidoform.parsed_sequence))
 
         annotated = annotate_ms2_spectra(

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 from psm_utils import PSM, PSMList
+from psm_utils import Peptidoform
 from ms2rescore_rs import (
     MS2Spectrum,  # type: ignore[ty:unresolved-import]
     Precursor,  # type: ignore[ty:unresolved-import]
@@ -19,6 +20,37 @@ from ms2rescore_rs import (
 import ms2pip.exceptions as exceptions
 from ms2pip.constants import MODELS
 from ms2pip.spectrum import ObservedSpectrum
+
+
+def proforma_to_mass_shift(peptidoform: Peptidoform) -> str:
+    """
+    Convert a Peptidoform to a mass-shift ProForma string.
+
+    Replaces all modification labels with numeric mass shifts so that
+    ms2rescore-rs can parse them. Handles sequence modifications and
+    N/C-terminal modifications.
+
+    Note: This does not handle ProForma features like labile modifications,
+    unlocalized modifications, tagged intervals, or isotope labels. These are
+    not used by ms2pip.
+    """
+    parts = []
+    n_term = peptidoform.properties.get("n_term")
+    if n_term:
+        for mod in n_term:
+            parts.append(f"[+{mod.mass:.4f}]-")
+    for aa, mods in peptidoform.parsed_sequence:
+        parts.append(aa)
+        if mods:
+            for mod in mods:
+                parts.append(f"[+{mod.mass:.4f}]")
+    c_term = peptidoform.properties.get("c_term")
+    if c_term:
+        for mod in c_term:
+            parts.append(f"-[+{mod.mass:.4f}]")
+    if peptidoform.precursor_charge:
+        parts.append(f"/{peptidoform.precursor_charge}")
+    return "".join(parts)
 
 
 def read_raw_spectra(spectrum_file: str) -> Generator[MS2Spectrum, None, None]:
@@ -69,7 +101,7 @@ def annotate_spectrum(
         ),
     )
     frag_model = MODELS[model]["fragmentation"]
-    proforma = str(psm.peptidoform.proforma)
+    proforma = proforma_to_mass_shift(psm.peptidoform)
     seq_len = len(psm.peptidoform.parsed_sequence)
 
     annotated = annotate_ms2_spectra(
@@ -197,7 +229,7 @@ def load_and_match_spectra(
     for raw_idx, (_, spectrum, psm_pairs) in enumerate(matched_raw):
         for psm_idx, (_, psm) in enumerate(psm_pairs):
             batch_spectra.append(spectrum)
-            batch_proformas.append(str(psm.peptidoform.proforma))
+            batch_proformas.append(proforma_to_mass_shift(psm.peptidoform))
             batch_seq_lens.append(len(psm.peptidoform.parsed_sequence))
             batch_indices.append((raw_idx, psm_idx))
 

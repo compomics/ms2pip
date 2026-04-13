@@ -1,7 +1,11 @@
 import numpy as np
 from psm_utils import PSM, Peptidoform
 
-from ms2pip._spectrum_processing import annotate_spectrum, targets_from_annotations
+from ms2pip._spectrum_processing import (
+    annotate_spectrum,
+    proforma_to_mass_shift,
+    targets_from_annotations,
+)
 
 
 def test_targets_from_annotations_basic():
@@ -101,3 +105,34 @@ def test_annotate_spectrum():
     # At least some peaks should be annotated (b1 at ~72.044, b2 at ~175.054)
     annotated_peaks = [i for i, anns in enumerate(annotations) if len(anns) > 0]
     assert len(annotated_peaks) > 0
+
+
+def test_proforma_to_mass_shift_unmodified():
+    result = proforma_to_mass_shift(Peptidoform("PEPTIDE/2"))
+    assert result == "PEPTIDE/2"
+
+
+def test_proforma_to_mass_shift_unimod_names():
+    result = proforma_to_mass_shift(Peptidoform("PEPTC[UNIMOD:Carbamidomethyl]M[UNIMOD:Oxidation]IDE/2"))
+    assert "[+" in result
+    assert "Carbamidomethyl" not in result
+    assert "Oxidation" not in result
+    assert result.startswith("PEPTC[+57.0215]M[+15.9949]")
+    assert result.endswith("/2")
+
+
+def test_proforma_to_mass_shift_nterm():
+    result = proforma_to_mass_shift(Peptidoform("[UNIMOD:Acetyl]-PEPTIDE/2"))
+    assert result.startswith("[+42.0106]-PEPTIDE")
+    assert result.endswith("/2")
+
+
+def test_proforma_to_mass_shift_already_mass_shift():
+    result = proforma_to_mass_shift(Peptidoform("PEPTC[+57.0215]IDE/2"))
+    assert result == "PEPTC[+57.0215]IDE/2"
+
+
+def test_proforma_to_mass_shift_no_charge():
+    result = proforma_to_mass_shift(Peptidoform("PEPTIDE"))
+    assert result == "PEPTIDE"
+    assert "/" not in result

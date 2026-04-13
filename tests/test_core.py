@@ -80,12 +80,9 @@ def test_predict_batch():
 
 
 def test_predict_library():
-    config = {
-        "fasta_file": "tests/test_data/test.fasta",
-        "modifications": [],  # No modifications to avoid UNIMOD name issues
-        "charges": [2],
-    }
-    batches = list(predict_library(config=config, batch_size=100))
+    batches = list(
+        predict_library(fasta_file="tests/test_data/test.fasta", batch_size=100)
+    )
 
     assert len(batches) >= 1
     for batch in batches:
