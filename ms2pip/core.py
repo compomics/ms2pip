@@ -29,7 +29,7 @@ from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip.spectrum import ObservedSpectrum
-from ms2pip.spectrum_input import (
+from ms2pip._spectrum_processing import (
     annotate_spectrum,
     load_and_match_spectra,
     targets_from_annotations,

@@ -10,11 +10,11 @@ from psm_utils import Peptidoform
 from pydantic import model_validator, field_validator, ConfigDict, BaseModel
 
 try:
-    import spectrum_utils.spectrum as sus  # type: ignore[ty:unresolved-import]
-    import spectrum_utils.plot as sup  # type: ignore[ty:unresolved-import]
+    import spectrum_utils.spectrum as sus
+    import spectrum_utils.plot as sup
 except ImportError:
-    sus = None
-    sup = None
+    sus = None  # type: ignore[ty:invalid-assignment]
+    sup = None  # type: ignore[ty:invalid-assignment]
 
 
 class Spectrum(BaseModel):
@@ -163,15 +163,17 @@ class Spectrum(BaseModel):
 
         spectrum = sus.MsmsSpectrum(
             identifier=self.identifier if self.identifier else "spectrum",
-            precursor_mz=precursor_mz,
-            precursor_charge=precursor_charge,
+            precursor_mz=precursor_mz,  # type: ignore[ty:invalid-argument-type]
+            precursor_charge=precursor_charge,  # type: ignore[ty:invalid-argument-type]
             mz=self.mz,
             intensity=self.intensity,
-            retention_time=self.retention_time,
+            retention_time=self.retention_time,  # type: ignore[ty:invalid-argument-type]
         )
         if self.peptidoform:
             spectrum.annotate_proforma(
-                str(self.peptidoform), self.mass_tolerance, self.mass_tolerance_unit
+                str(self.peptidoform),
+                self.mass_tolerance,  # type: ignore[ty:invalid-argument-type]
+                self.mass_tolerance_unit,  # type: ignore[ty:invalid-argument-type]
             )
         return spectrum
 

@@ -12,9 +12,9 @@ from psm_utils import PSM
 from pydantic import BaseModel, ConfigDict
 
 try:
-    import spectrum_utils.plot as sup  # type: ignore[ty:unresolved-import]
+    import spectrum_utils.plot as sup
 except ImportError:
-    sup = None
+    sup = None  # type: ignore[ty:invalid-assignment]
 
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
@@ -95,15 +95,15 @@ class ProcessingResult(BaseModel):
             spec.to_spectrum_utils() if spec else None for spec in self.as_spectra()
         )
         if predicted and observed:
-            ax = sup.mirror(observed, predicted)  # type: ignore[ty:unresolved-attribute]
+            ax = sup.mirror(observed, predicted)
             ax.set_title(
                 f"Observed (top) and predicted (bottom) spectra for {self.psm.peptidoform}"
             )
         elif predicted:
-            ax = sup.spectrum(predicted)  # type: ignore[ty:unresolved-attribute]
+            ax = sup.spectrum(predicted)
             ax.set_title(f"Predicted spectrum for {self.psm.peptidoform}")
         elif observed:
-            ax = sup.spectrum(observed)  # type: ignore[ty:unresolved-attribute]
+            ax = sup.spectrum(observed)
             ax.set_title(f"Observed spectrum for {self.psm.peptidoform}")
         else:
             raise ValueError("No spectra to plot.")
