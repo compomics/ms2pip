@@ -153,8 +153,8 @@ def targets_from_annotations(
     floor_value = np.float32(np.log2(0.001))
     targets = {ion: np.full(n_ions, floor_value, dtype=np.float32) for ion in ion_types}
 
-    for peak_idx, annotations in enumerate(peak_annotations):
-        for ann in annotations:
+    for peak_idx, peak_anns in enumerate(peak_annotations):
+        for ann in peak_anns:
             if isinstance(ann, tuple):
                 series, position, charge = ann
             else:
