@@ -71,7 +71,7 @@ class RetentionTime:
         """
         # Only import if DeepLC will be used, otherwise lots of extra heavy
         # dependencies (e.g. Tensorflow) are imported as well
-        import deeplc
+        import deeplc  # type: ignore[ty:unresolved-import]
 
         deeplc_params = self.config["deeplc"]
         if "calibration_file" in deeplc_params and deeplc_params["calibration_file"]:
@@ -109,7 +109,7 @@ class RetentionTime:
     def _run_deeplc(self):
         """Run DeepLC."""
         logger.info("Predicting retention times with DeepLC...")
-        self.deeplc_preds = self.deeplc_predictor.make_preds(seq_df=self.deeplc_pep_df.fillna(""))
+        self.deeplc_preds = self.deeplc_predictor.make_preds(seq_df=self.deeplc_pep_df.fillna(""))  # type: ignore[ty:unresolved-attribute]
 
     def _parse_deeplc_preds(self):
         """Add DeepLC predictions to peprec DataFrame."""

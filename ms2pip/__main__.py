@@ -76,7 +76,7 @@ def predict_single(*args, **kwargs):
     # Write output
     rich.print(build_prediction_table(predicted_spectrum))
     write_spectra(output_name, [result], output_format)
-    if plot:
+    if plot and predicted_spectrum:
         spectrum_to_png(predicted_spectrum, output_name)
 
 

@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import multiprocessing
 import multiprocessing.dummy
+import multiprocessing.pool
 from collections import defaultdict
 from collections.abc import Generator
 from functools import partial
@@ -272,7 +273,7 @@ class ProteomeSearchSpace(BaseModel):
         self._add_modifications(processes)
         self._add_charges()
 
-    def __iter__(self) -> Generator[PSM, None, None]:
+    def __iter__(self) -> Generator[PSM, None, None]:  # type: ignore[ty:invalid-method-override]
         """
         Generate PSMs from search space.
 
@@ -305,14 +306,14 @@ class ProteomeSearchSpace(BaseModel):
             psm_list=[
                 psm
                 for psm in psms
-                if self.min_precursor_mz <= psm.peptidoform.theoretical_mz <= self.max_precursor_mz
+                if self.min_precursor_mz <= psm.peptidoform.theoretical_mz <= self.max_precursor_mz  # type: ignore[ty:unsupported-operator]
             ]
         )
 
     def _digest_fasta(self, processes: int = 1):
         """Digest FASTA file to peptides and populate search space."""
         # Convert to string to avoid issues with Path objects
-        self.fasta_file = str(self.fasta_file)
+        self.fasta_file = str(self.fasta_file)  # type: ignore[ty:invalid-assignment]
         n_proteins = _count_fasta_entries(self.fasta_file)
         if self.add_decoys:
             fasta_db = pyteomics.fasta.decoy_db(
@@ -426,7 +427,7 @@ class _PeptidoformSearchSpace(BaseModel):
     def __len__(self):
         return len(self.modification_options) * len(self.charge_options)
 
-    def __iter__(self) -> Generator[str, None, None]:
+    def __iter__(self) -> Generator[str, None, None]:  # type: ignore[ty:invalid-method-override]
         """Yield peptidoform strings with given charges and modifications."""
         if not self.charge_options:
             raise ValueError("Peptide charge options not defined.")
@@ -661,7 +662,7 @@ def _get_peptidoform_modification_versions(
     return modification_versions
 
 
-def _get_pool(processes: int) -> multiprocessing.Pool | multiprocessing.dummy.Pool:
+def _get_pool(processes: int) -> multiprocessing.pool.Pool:
     """Get a multiprocessing pool with the given number of processes."""
     # TODO: fix None default value for processes
     if processes > 1:

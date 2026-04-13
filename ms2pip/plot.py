@@ -3,8 +3,8 @@ from pathlib import Path
 from ms2pip.spectrum import Spectrum
 
 try:
-    import matplotlib.pyplot as plt
-    import spectrum_utils.plot as sup
+    import matplotlib.pyplot as plt  # type: ignore[ty:unresolved-import]
+    import spectrum_utils.plot as sup  # type: ignore[ty:unresolved-import]
 
     _can_plot = True
 except ImportError:

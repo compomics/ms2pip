@@ -10,8 +10,8 @@ from psm_utils import Peptidoform
 from pydantic import model_validator, field_validator, ConfigDict, BaseModel
 
 try:
-    import spectrum_utils.spectrum as sus
-    import spectrum_utils.plot as sup
+    import spectrum_utils.spectrum as sus  # type: ignore[ty:unresolved-import]
+    import spectrum_utils.plot as sup  # type: ignore[ty:unresolved-import]
 except ImportError:
     sus = None
     sup = None
@@ -72,7 +72,7 @@ class Spectrum(BaseModel):
 
     @model_validator(mode="after")
     @classmethod
-    def check_array_lengths(cls, data: dict):
+    def check_array_lengths(cls, data):
         if len(data.mz) != len(data.intensity):
             raise ValueError("Array lengths do not match.")
         if data.annotations is not None:
@@ -150,7 +150,7 @@ class Spectrum(BaseModel):
             if not self.peptidoform:
                 raise ValueError("`precursor_charge` or `peptidoform` must be set.")
             else:
-                precursor_charge = self.peptidoform.precursor_charge
+                precursor_charge = self.peptidoform.precursor_charge  # type: ignore[ty:unresolved-attribute]
 
         if self.precursor_mz:
             precursor_mz = self.precursor_mz
@@ -159,7 +159,7 @@ class Spectrum(BaseModel):
                 raise ValueError("`precursor_mz` or `peptidoform` must be set.")
             else:
                 warnings.warn("precursor_mz not set, using theoretical precursor m/z.")
-                precursor_mz = self.peptidoform.theoretical_mz
+                precursor_mz = self.peptidoform.theoretical_mz  # type: ignore[ty:unresolved-attribute]
 
         spectrum = sus.MsmsSpectrum(
             identifier=self.identifier if self.identifier else "spectrum",

@@ -9,14 +9,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from ms2rescore_rs import (
+    AnnotatedMS2Spectrum,  # type: ignore[ty:unresolved-import]
+    MS2Spectrum,  # type: ignore[ty:unresolved-import]
+    Precursor,  # type: ignore[ty:unresolved-import]
+    annotate_ms2_spectra,  # type: ignore[ty:unresolved-import]
+    ms2pip_compute_features,  # type: ignore[ty:unresolved-import]
+    ms2pip_compute_theoretical_mz,  # type: ignore[ty:unresolved-import]
+)
 from psm_utils import PSM, Peptidoform, PSMList
 from rich.progress import track
-from ms2rescore_rs import (
-    AnnotatedMS2Spectrum,
-    MS2Spectrum,
-    ms2pip_compute_features,
-    ms2pip_compute_theoretical_mz,
-)
 
 import ms2pip.exceptions as exceptions
 from ms2pip._utils.ion_mobility import IonMobility
@@ -55,9 +57,9 @@ def _set_rayon_threads(processes: int | None) -> None:
 def _predict_batch_internal(
     psm_list: PSMList,
     model: str,
-    model_dir: str | Path,
+    model_dir: str | Path | None = None,
     processes: int | None = None,
-    xgb_models: Optional[dict] = None,
+    xgb_models: dict | None = None,
 ) -> list[ProcessingResult]:
     """
     Batch predict features, m/z, and intensities for all PSMs.
@@ -110,7 +112,7 @@ def _predict_batch_internal(
 def _correlate_internal(
     psm_spectrum_annotations: list[tuple[int, PSM, ObservedSpectrum, list]],
     model: str,
-    model_dir: str | Path,
+    model_dir: str | Path | None = None,
     vector_file: bool = False,
     annotations_only: bool = False,
     processes: int | None = None,
@@ -147,7 +149,7 @@ def _correlate_internal(
     all_targets = []
     for psm_index, psm, spectrum, peak_annotations in psm_spectrum_annotations:
         if not psm.peptidoform.precursor_charge:
-            psm.peptidoform.precursor_charge = spectrum.precursor_charge
+            psm.peptidoform.precursor_charge = spectrum.precursor_charge  # type: ignore[ty:invalid-assignment]
 
         seq_len = len(psm.peptidoform.parsed_sequence)
         targets = targets_from_annotations(
@@ -267,14 +269,18 @@ def _assemble_training_data(results: list[ProcessingResult], model: str) -> pd.D
     for ion_type in ion_types:
         if ion_type in ["a", "b", "b2", "c"]:
             training_data[f"target_{ion_type}"] = np.concatenate(
-                [r.observed_intensity[ion_type] for r in results if r.feature_vectors is not None]
+                [
+                    r.observed_intensity[ion_type]
+                    for r in results
+                    if r.feature_vectors is not None and r.observed_intensity is not None
+                ]
             )
         elif ion_type in ["x", "y", "y2", "z"]:
             training_data[f"target_{ion_type}"] = np.concatenate(
                 [
                     r.observed_intensity[ion_type][::-1]
                     for r in results
-                    if r.feature_vectors is not None
+                    if r.feature_vectors is not None and r.observed_intensity is not None
                 ]
             )
 
@@ -365,7 +371,7 @@ def predict_library(
     model_dir: str | Path | None = None,
     batch_size: int = 100000,
     processes: int | None = None,
-) -> Generator[ProcessingResult, None, None]:
+) -> Generator[list[ProcessingResult], None, None]:
     """
     Predict spectral library from protein FASTA file.\f
 
@@ -399,7 +405,7 @@ def predict_library(
     """
     if fasta_file and config:
         search_space = ProteomeSearchSpace.from_any(config)
-        search_space.fasta_file = fasta_file
+        search_space.fasta_file = Path(fasta_file)
     elif fasta_file and not config:
         search_space = ProteomeSearchSpace(fasta_file=fasta_file)
     elif not fasta_file and config:
@@ -600,6 +606,7 @@ def correlate_preloaded(
         if spec_id in preloaded_spectra:
             continue
         spectrum = psm.spectrum
+        assert spectrum is not None
         obs = ObservedSpectrum(
             mz=np.array(spectrum.mz, dtype=np.float32),
             intensity=np.array(spectrum.intensity, dtype=np.float32),
@@ -615,6 +622,8 @@ def correlate_preloaded(
         obs.log2_transform()
         preloaded_spectra[spec_id] = obs
         if spectra_are_annotated:
+            assert isinstance(spectrum, AnnotatedMS2Spectrum)
+            assert preloaded_annotations is not None
             preloaded_annotations[spec_id] = [
                 [(a.series, a.position, a.charge) for a in peak_anns]
                 for peak_anns in spectrum.peak_annotations
@@ -643,8 +652,6 @@ def correlate_preloaded(
 
     # Batch annotate any unannotated spectra
     if needs_annotation:
-        from ms2rescore_rs import Precursor, annotate_ms2_spectra
-
         frag_model = MODELS[model]["fragmentation"]
         batch_spectra = []
         batch_proformas = []
@@ -801,7 +808,11 @@ def get_training_data(
         )
 
     results = _correlate_internal(
-        matched, model, model_dir=None, vector_file=True, processes=processes
+        matched,
+        model,
+        model_dir=None,
+        vector_file=True,
+        processes=processes,
     )
 
     logger.info("Assembling training data in DataFrame...")
@@ -867,11 +878,15 @@ def annotate_spectra(
         )
 
     return _correlate_internal(
-        matched, model, model_dir=None, annotations_only=True, processes=processes
+        matched,
+        model,
+        model_dir=None,
+        annotations_only=True,
+        processes=processes,
     )
 
 
-def download_models(models: Optional[list[str]] = None, model_dir: str | Path | None = None):
+def download_models(models: list[str] | None = None, model_dir: str | Path | None = None):
     """
     Download all specified models to the specified directory.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 from logging import getLogger
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -11,10 +12,8 @@ from psm_utils import PSM
 from pydantic import BaseModel, ConfigDict
 
 try:
-    import spectrum_utils.plot as sup
-    import spectrum_utils.spectrum as sus
+    import spectrum_utils.plot as sup  # type: ignore[ty:unresolved-import]
 except ImportError:
-    sus = None
     sup = None
 
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
@@ -26,7 +25,7 @@ class ProcessingResult(BaseModel):
     """Result of processing a single PSM."""
 
     psm_index: int
-    psm: PSM | None = None
+    psm: PSM
     theoretical_mz: dict[str, np.ndarray] | None = None
     predicted_intensity: dict[str, np.ndarray] | None = None
     observed_intensity: dict[str, np.ndarray] | None = None
@@ -96,15 +95,15 @@ class ProcessingResult(BaseModel):
             spec.to_spectrum_utils() if spec else None for spec in self.as_spectra()
         )
         if predicted and observed:
-            ax = sup.mirror(observed, predicted)
+            ax = sup.mirror(observed, predicted)  # type: ignore[ty:unresolved-attribute]
             ax.set_title(
                 f"Observed (top) and predicted (bottom) spectra for {self.psm.peptidoform}"
             )
         elif predicted:
-            ax = sup.spectrum(predicted)
+            ax = sup.spectrum(predicted)  # type: ignore[ty:unresolved-attribute]
             ax.set_title(f"Predicted spectrum for {self.psm.peptidoform}")
         elif observed:
-            ax = sup.spectrum(observed)
+            ax = sup.spectrum(observed)  # type: ignore[ty:unresolved-attribute]
             ax.set_title(f"Observed spectrum for {self.psm.peptidoform}")
         else:
             raise ValueError("No spectra to plot.")
@@ -114,12 +113,14 @@ class ProcessingResult(BaseModel):
 def calculate_correlations(results: list[ProcessingResult]) -> None:
     """Calculate and add Pearson correlations to list of results."""
     for result in results:
-        pred_int = np.concatenate([i for i in result.predicted_intensity.values()])
-        obs_int = np.concatenate([i for i in result.observed_intensity.values()])
+        if result.predicted_intensity is None or result.observed_intensity is None:
+            continue
+        pred_int = np.concatenate(list(result.predicted_intensity.values()))
+        obs_int = np.concatenate(list(result.observed_intensity.values()))
         result.correlation = np.corrcoef(pred_int, obs_int)[0][1]
 
 
-def write_correlations(results: list["ProcessingResult"], output_file: str) -> None:
+def write_correlations(results: list[ProcessingResult], output_file: str | Path) -> None:
     """Write correlations to CSV file."""
     with open(output_file, "wt") as f:
         fieldnames = ["psm_index", "correlation"]

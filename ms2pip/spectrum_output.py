@@ -173,7 +173,7 @@ class TSV(_Writer):
         for result in processing_results:
             self._write_result(result, writer)
 
-    def _write_result(self, result: ProcessingResult, writer: csv.DictWriter):
+    def _write_result(self, result: ProcessingResult, writer: csv.DictWriter):  # type: ignore[ty:invalid-method-override]
         """Write single processing result to file."""
         # Only write results with predictions or observations
         if not result.theoretical_mz:
@@ -190,7 +190,7 @@ class TSV(_Writer):
             "psm_index": result.psm_index,
             "ion_type": ion_type,
             "ion_number": ion_index + 1,
-            "mz": "{:.8f}".format(result.theoretical_mz[ion_type][ion_index]),
+            "mz": "{:.8f}".format(result.theoretical_mz[ion_type][ion_index]),  # type: ignore[ty:not-subscriptable]
             "predicted": "{:.8f}".format(result.predicted_intensity[ion_type][ion_index])
             if result.predicted_intensity
             else None,
@@ -207,7 +207,7 @@ class MSP(_Writer):
 
     suffix = ".msp"
 
-    def write(self, results: list[ProcessingResult]):
+    def write(self, results: list[ProcessingResult]):  # type: ignore[ty:invalid-method-override]
         """Write multiple processing results to file."""
         for result in results:
             self._write_result(result)
@@ -215,20 +215,20 @@ class MSP(_Writer):
     def _write_result(self, result: ProcessingResult):
         """Write single processing result to file."""
         predicted_spectrum = result.as_spectra()[0]
-        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4
-        peaks = zip(predicted_spectrum.mz, intensity_normalized, predicted_spectrum.annotations)
+        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4  # type: ignore[ty:unresolved-attribute]
+        peaks = zip(predicted_spectrum.mz, intensity_normalized, predicted_spectrum.annotations)  # type: ignore[ty:invalid-argument-type, ty:unresolved-attribute]
 
         # Header
         lines = [
             f"Name: {result.psm.peptidoform.sequence}/{result.psm.get_precursor_charge()}",
             f"MW: {result.psm.peptidoform.theoretical_mass}",
             self._format_comment_line(result.psm),
-            f"Num peaks: {len(predicted_spectrum.mz)}",
+            f"Num peaks: {len(predicted_spectrum.mz)}",  # type: ignore[ty:unresolved-attribute]
         ]
 
         # Peaks
         lines.extend(
-            f"{mz:.8f}\t{intensity:.8f}\t{annotation}/0.0" for mz, intensity, annotation in peaks
+            f"{mz:.8f}\t{intensity:.8f}\t{annotation}/0.0" for mz, intensity, annotation in peaks  # type: ignore[ty:not-iterable]
         )
 
         # Write to file
@@ -256,7 +256,7 @@ class MSP(_Writer):
                 return f"{position},{amino_acid},{modification.value}"
 
         sequence_mods = [
-            _format_single_modification(aa, pos + 1, mods)
+            _format_single_modification(aa, pos + 1, mods)  # type: ignore[ty:invalid-argument-type]
             for pos, (aa, mods) in enumerate(peptidoform.parsed_sequence)
         ]
         n_term = _format_single_modification(
@@ -335,7 +335,7 @@ class MGF(_Writer):
 
     suffix = ".mgf"
 
-    def write(self, results: list[ProcessingResult]):
+    def write(self, results: list[ProcessingResult]):  # type: ignore[ty:invalid-method-override]
         """Write multiple processing results to file."""
         for result in results:
             self._write_result(result)
@@ -343,8 +343,8 @@ class MGF(_Writer):
     def _write_result(self, result: ProcessingResult):
         """Write single processing result to file."""
         predicted_spectrum = result.as_spectra()[0]
-        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4
-        peaks = zip(predicted_spectrum.mz, intensity_normalized)
+        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4  # type: ignore[ty:unresolved-attribute]
+        peaks = zip(predicted_spectrum.mz, intensity_normalized)  # type: ignore[ty:unresolved-attribute]
 
         # Header
         lines = [
@@ -395,7 +395,7 @@ class Spectronaut(_Writer):
         for result in processing_results:
             self._write_result(result, writer)
 
-    def _write_result(self, result: ProcessingResult, writer: csv.DictWriter):
+    def _write_result(self, result: ProcessingResult, writer: csv.DictWriter):  # type: ignore[ty:invalid-method-override]
         """Write single processing result to file."""
         # Only write results with predictions
         if result.predicted_intensity is None:
@@ -423,18 +423,18 @@ class Spectronaut(_Writer):
         # Normalize intensities
         intensities = {
             ion_type: _unlogarithmize(intensities)
-            for ion_type, intensities in result.predicted_intensity.items()
+            for ion_type, intensities in result.predicted_intensity.items()  # type: ignore[ty:unresolved-attribute]
         }
         max_intensity = max(itertools.chain(*intensities.values()))
         intensities = {
             ion_type: _basepeak_normalize(intensities[ion_type], basepeak=max_intensity)
             for ion_type in intensities
         }
-        for ion_type in result.predicted_intensity:
+        for ion_type in result.predicted_intensity:  # type: ignore[ty:not-iterable]
             fragment_type = ion_type[0].lower()
             fragment_charge = ion_type[1:] if len(ion_type) > 1 else "1"
             for ion_index, (intensity, mz) in enumerate(
-                zip(intensities[ion_type], result.theoretical_mz[ion_type])
+                zip(intensities[ion_type], result.theoretical_mz[ion_type])  # type: ignore[ty:invalid-argument-type, ty:not-subscriptable]
             ):
                 yield {
                     "RelativeFragmentIntensity": f"{intensity:.8f}",
@@ -554,7 +554,7 @@ class Bibliospec(_Writer):
         modified_sequence: str,
         scan_number: int,
         writer: csv.DictWriter,
-    ):
+    ):  # type: ignore[ty:invalid-method-override]
         """Write single processing result to files."""
         self._write_result_to_ssl(result, modified_sequence, scan_number, writer)
         self._write_result_to_ms2(result, modified_sequence, scan_number)
@@ -585,8 +585,8 @@ class Bibliospec(_Writer):
     ):
         """Write single processing result to the MS2 file."""
         predicted_spectrum = result.as_spectra()[0]
-        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4
-        peaks = zip(predicted_spectrum.mz, intensity_normalized)
+        intensity_normalized = _basepeak_normalize(predicted_spectrum.intensity) * 1e4  # type: ignore[ty:unresolved-attribute]
+        peaks = zip(predicted_spectrum.mz, intensity_normalized)  # type: ignore[ty:unresolved-attribute]
 
         # Header
         lines = [
@@ -608,8 +608,8 @@ class Bibliospec(_Writer):
         """Format modified sequence as string for Spectronaut."""
         modification_dict = defaultdict(list)
         for term, position in [("n_term", 0), ("c_term", len(peptidoform) - 1)]:
-            if peptidoform.properties[term]:
-                modification_dict[position].extend(peptidoform.properties[term])
+            if peptidoform.properties[term]:  # type: ignore[ty:invalid-key]
+                modification_dict[position].extend(peptidoform.properties[term])  # type: ignore[ty:invalid-key]
         for position, (_, mods) in enumerate(peptidoform.parsed_sequence):
             if mods:
                 modification_dict[position].extend(mods)
@@ -668,13 +668,13 @@ class DLIB(_Writer):
         """Format modified sequence as string for DLIB."""
         # Sum all sequential mass shifts for each position
         masses = [
-            sum(mod.mass for mod in mods) if mods else 0 for _, mods in peptidoform.parsed_sequence
+            sum(mod.mass for mod in mods) if mods else 0 for _, mods in peptidoform.parsed_sequence  # type: ignore[ty:unresolved-attribute]
         ]
 
         # Add N- and C-terminal modifications
         for term, position in [("n_term", 0), ("c_term", len(peptidoform) - 1)]:
-            if peptidoform.properties[term]:
-                masses[position] += sum(mod.mass for mod in peptidoform.properties[term])
+            if peptidoform.properties[term]:  # type: ignore[ty:invalid-key]
+                masses[position] += sum(mod.mass for mod in peptidoform.properties[term])  # type: ignore[ty:invalid-key]
 
         # Format modified sequence
         return "".join(
@@ -712,8 +712,8 @@ class DLIB(_Writer):
                     raise ValueError("Retention time required to write DLIB file.")
 
                 spectrum = result.as_spectra()[0]
-                intensity_normalized = _basepeak_normalize(spectrum.intensity) * 1e4
-                n_peaks = len(spectrum.mz)
+                intensity_normalized = _basepeak_normalize(spectrum.intensity) * 1e4  # type: ignore[ty:unresolved-attribute]
+                n_peaks = len(spectrum.mz)  # type: ignore[ty:unresolved-attribute]
 
                 connection.execute(
                     dlib.Entry.insert().values(
@@ -725,7 +725,7 @@ class DLIB(_Writer):
                         RTInSeconds=result.psm.retention_time,
                         Score=0,
                         MassEncodedLength=n_peaks,
-                        MassArray=spectrum.mz.tolist(),
+                        MassArray=spectrum.mz.tolist(),  # type: ignore[ty:unresolved-attribute]
                         IntensityEncodedLength=n_peaks,
                         IntensityArray=intensity_normalized.tolist(),
                         SourceFile=str(output_filename),
@@ -781,12 +781,12 @@ def _peptidoform_str_without_charge(peptidoform: Peptidoform) -> str:
     return re.sub(r"\/\d+$", "", str(peptidoform))
 
 
-def _unlogarithmize(intensities: np.array) -> np.array:
+def _unlogarithmize(intensities: np.array) -> np.array:  # type: ignore[ty:invalid-type-form]
     """Undo logarithmic transformation of intensities."""
     return (2**intensities) - 0.001
 
 
-def _basepeak_normalize(intensities: np.array, basepeak: float | None = None) -> np.array:
+def _basepeak_normalize(intensities: np.array, basepeak: float | None = None) -> np.array:  # type: ignore[ty:invalid-type-form]
     """Normalize intensities to most intense peak."""
     if not basepeak:
         basepeak = intensities.max()

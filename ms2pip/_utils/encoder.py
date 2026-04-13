@@ -172,7 +172,7 @@ class Encoder:
 
         self.modifications[(target, str(modification))] = {
             "mod_id": self._next_mod_id,
-            "mass_shift": modification.mass,
+            "mass_shift": modification.mass,  # type: ignore[ty:unresolved-attribute]
             "amino_acid": target,
             "amino_acid_id": amino_acid_id,
             "modification": modification,
@@ -188,9 +188,9 @@ class Encoder:
                 if mods:
                     unique_modifications.update({(aa, str(mod)): mod for mod in mods})
             for term in ["n_term", "c_term"]:
-                if peptidoform.properties[term]:
+                if peptidoform.properties[term]:  # type: ignore[ty:invalid-key]
                     unique_modifications.update(
-                        {(term, str(mod)): mod for mod in peptidoform.properties[term]}
+                        {(term, str(mod)): mod for mod in peptidoform.properties[term]}  # type: ignore[ty:invalid-key]
                     )
         except KeyError as e:
             raise exceptions.UnresolvableModificationError(e.args[0]) from e
@@ -209,9 +209,9 @@ class Encoder:
                     if mods:
                         unique_modifications.update({(aa, str(mod)): mod for mod in mods})
                 for term in ["n_term", "c_term"]:
-                    if psm.peptidoform.properties[term]:
+                    if psm.peptidoform.properties[term]:  # type: ignore[ty:invalid-key]
                         unique_modifications.update(
-                            {(term, str(mod)): mod for mod in psm.peptidoform.properties[term]}
+                            {(term, str(mod)): mod for mod in psm.peptidoform.properties[term]}  # type: ignore[ty:invalid-key]
                         )
         except KeyError as e:
             raise exceptions.UnresolvableModificationError(e.args[0]) from e
@@ -220,7 +220,7 @@ class Encoder:
         for (target, _), mod in unique_modifications.items():
             self._configure_modification(target, mod)
 
-    def write_encoder_files(self) -> str:
+    def write_encoder_files(self) -> None:
         """Write configured masses to temporary files for use in C code."""
         # AA file
         amino_file = tempfile.NamedTemporaryFile(delete=False, mode="w", newline="\n")

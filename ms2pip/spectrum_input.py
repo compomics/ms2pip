@@ -10,10 +10,10 @@ from pathlib import Path
 import numpy as np
 from psm_utils import PSM, PSMList
 from ms2rescore_rs import (
-    MS2Spectrum,
-    Precursor,
-    annotate_ms2_spectra,
-    get_ms2_spectra,
+    MS2Spectrum,  # type: ignore[ty:unresolved-import]
+    Precursor,  # type: ignore[ty:unresolved-import]
+    annotate_ms2_spectra,  # type: ignore[ty:unresolved-import]
+    get_ms2_spectra,  # type: ignore[ty:unresolved-import]
 )
 
 import ms2pip.exceptions as exceptions
@@ -215,7 +215,7 @@ def load_and_match_spectra(
     for spectrum in _read_raw_spectra(str(spectrum_file)):
         match = spectrum_id_regex.search(str(spectrum.identifier))
         try:
-            spectrum_id = match[1]
+            spectrum_id = match[1]  # type: ignore[ty:not-subscriptable]
         except (TypeError, IndexError):
             raise exceptions.TitlePatternError(
                 f"Spectrum title pattern `{spectrum_id_pattern}` could not be matched to "
