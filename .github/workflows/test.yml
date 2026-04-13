@@ -22,7 +22,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv run --group dev --python 3.13 ty check ms2pip/
+      - run: uv run --all-extras --group dev --python 3.13 ty check ms2pip/
 
   test:
     runs-on: ubuntu-latest
