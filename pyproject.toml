@@ -24,9 +24,7 @@ authors = [
 classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: Microsoft :: Windows",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Development Status :: 5 - Production/Stable",
@@ -74,7 +72,7 @@ publication = "https://doi.org/10.1093/nar/gkad335/"
 ms2pip = "ms2pip.__main__:main"
 
 [build-system]
-requires = ["setuptools", "cython", "numpy>=2.0"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -95,6 +93,3 @@ test-command = "ms2pip --help"
 
 # Prevent building from source for packages with complex C/C++/Rust dependencies
 environment = { PIP_ONLY_BINARY = "pyarrow,pandas,numpy,lxml,xgboost,scipy,ms2rescore-rs" }
-
-[tool.cibuildwheel.macos]
-before-all = "brew install libomp"

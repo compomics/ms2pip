@@ -1,43 +1,293 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
-import itertools
 import logging
-import multiprocessing
-import multiprocessing.dummy
-import re
-from collections import defaultdict
+import os
 from math import ceil
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from psm_utils import PSM, Peptidoform, PSMList
 from rich.progress import track
-from ms2rescore_rs import MS2Spectrum
+from ms2rescore_rs import (
+    AnnotatedMS2Spectrum,
+    MS2Spectrum,
+    ms2pip_compute_features,
+    ms2pip_compute_theoretical_mz,
+)
 
 import ms2pip.exceptions as exceptions
-from ms2pip._cython_modules import ms2pip_pyx
-from ms2pip._utils.encoder import Encoder
-from ms2pip._utils.feature_names import get_feature_names
 from ms2pip._utils.ion_mobility import IonMobility
 from ms2pip._utils.psm_input import read_psms
 from ms2pip._utils.retention_time import RetentionTime
-from ms2pip._utils.xgb_models import get_predictions_xgb, validate_requested_xgb_model
+from ms2pip._utils.xgb_models import load_xgb_models, predict_intensities, validate_model
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
 from ms2pip.search_space import ProteomeSearchSpace
 from ms2pip.spectrum import ObservedSpectrum
-from ms2pip.spectrum_input import read_spectrum_file
-from ms2pip.spectrum_output import SUPPORTED_FORMATS
+from ms2pip.spectrum_input import (
+    annotate_spectrum,
+    load_and_match_spectra,
+    targets_from_annotations,
+)
 
 logger = logging.getLogger(__name__)
+
+NUM_FEATURES = 139
+
+
+def _set_rayon_threads(processes: Optional[int]) -> None:
+    """Set RAYON_NUM_THREADS if processes is specified and not already set."""
+    if processes is None:
+        return
+    if "RAYON_NUM_THREADS" in os.environ:
+        logger.debug(
+            "RAYON_NUM_THREADS already set to %s; not overriding with processes=%d",
+            os.environ["RAYON_NUM_THREADS"],
+            processes,
+        )
+        return
+    os.environ["RAYON_NUM_THREADS"] = str(processes)
+
+
+def _predict_batch_internal(
+    psm_list: PSMList,
+    model: str,
+    model_dir: Union[str, Path],
+    processes: Optional[int] = None,
+    xgb_models: Optional[dict] = None,
+) -> List[ProcessingResult]:
+    """
+    Batch predict features, m/z, and intensities for all PSMs.
+
+    Uses ms2rescore-rs for feature computation and theoretical m/z calculation
+    (both internally parallelized via Rayon), then XGBoost for intensity prediction.
+    """
+    model_dir = validate_model(model, model_dir)
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+    frag_model = MODELS[model]["fragmentation"]
+
+    proformas = [str(psm.peptidoform.proforma) for psm in psm_list]
+    num_ions = [len(psm.peptidoform.parsed_sequence) - 1 for psm in psm_list]
+
+    _set_rayon_threads(processes)
+
+    # Batch compute theoretical m/z (single Rust call, Rayon-parallelized)
+    logger.debug("Computing theoretical m/z for %d peptides...", len(proformas))
+    all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
+
+    # Batch compute features (single Rust call, Rayon-parallelized)
+    logger.debug("Computing features for %d peptides...", len(proformas))
+    all_features = ms2pip_compute_features(proformas)
+
+    # Predict intensities with XGBoost
+    logger.debug("Predicting intensities with XGBoost...")
+    predictions = predict_intensities(
+        np.vstack(all_features).reshape(-1, NUM_FEATURES),
+        num_ions,
+        MODELS[model],
+        model_dir,
+        processes=processes,
+        xgb_models=xgb_models,
+    )
+
+    # Assemble results
+    results = []
+    for i, psm in enumerate(psm_list):
+        results.append(
+            ProcessingResult(
+                psm_index=i,
+                psm=psm,
+                theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
+                predicted_intensity=predictions[i],
+            )
+        )
+    return results
+
+
+def _correlate_internal(
+    psm_spectrum_annotations: List[Tuple[int, PSM, ObservedSpectrum, List]],
+    model: str,
+    model_dir: Union[str, Path],
+    vector_file: bool = False,
+    annotations_only: bool = False,
+    processes: Optional[int] = None,
+) -> List[ProcessingResult]:
+    """
+    Core correlation logic: extract targets, compute features/predictions, assemble results.
+
+    Parameters
+    ----------
+    psm_spectrum_annotations
+        List of (psm_index, psm, preprocessed_spectrum, peak_annotations) tuples.
+        Annotations are per-peak lists of ``(series, position, charge)`` tuples.
+    model
+        Name of prediction model.
+    model_dir
+        Directory for XGBoost model files.
+    vector_file
+        If True, return feature vectors instead of predictions (for training).
+    annotations_only
+        If True, return only m/z and observed intensities (no predictions).
+
+    """
+    if not annotations_only and not vector_file:
+        model_dir = validate_model(model, model_dir)
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+    frag_model = MODELS[model]["fragmentation"]
+
+    _set_rayon_threads(processes)
+
+    if not psm_spectrum_annotations:
+        return []
+
+    # Step 1: Extract targets from pre-computed annotations
+    all_targets = []
+    for psm_index, psm, spectrum, peak_annotations in psm_spectrum_annotations:
+        if not psm.peptidoform.precursor_charge:
+            psm.peptidoform.precursor_charge = spectrum.precursor_charge
+
+        seq_len = len(psm.peptidoform.parsed_sequence)
+        targets = targets_from_annotations(
+            peak_annotations, spectrum.intensity.astype(np.float32), ion_types, seq_len
+        )
+        all_targets.append(targets)
+
+    proformas = [str(psm.peptidoform.proforma) for _, psm, _, _ in psm_spectrum_annotations]
+    num_ions = [
+        len(psm.peptidoform.parsed_sequence) - 1 for _, psm, _, _ in psm_spectrum_annotations
+    ]
+
+    # Step 2: Compute features (needed for training and prediction, not annotation-only)
+    all_features = None
+    if not annotations_only:
+        logger.debug("Computing features for %d peptides...", len(proformas))
+        all_features = ms2pip_compute_features(proformas)
+
+    # Step 3: Compute theoretical m/z (needed for annotation and prediction, not training)
+    all_mz = None
+    if not vector_file:
+        logger.debug("Computing theoretical m/z for %d peptides...", len(proformas))
+        all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
+
+    # Step 4: Assemble results based on mode
+    results = []
+
+    if vector_file:
+        # Training mode: return feature vectors + observed targets
+        assert all_features is not None
+        for i, (psm_index, psm, _spectrum, _ann) in enumerate(psm_spectrum_annotations):
+            results.append(
+                ProcessingResult(
+                    psm_index=psm_index,
+                    psm=psm,
+                    theoretical_mz=None,
+                    predicted_intensity=None,
+                    observed_intensity=all_targets[i],
+                    correlation=None,
+                    feature_vectors=all_features[i],
+                )
+            )
+
+    elif annotations_only:
+        # Annotation mode: return m/z + observed targets
+        assert all_mz is not None
+        for i, (psm_index, psm, _spectrum, _ann) in enumerate(psm_spectrum_annotations):
+            mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
+            results.append(
+                ProcessingResult(
+                    psm_index=psm_index,
+                    psm=psm,
+                    theoretical_mz=mz,
+                    predicted_intensity=None,
+                    observed_intensity=all_targets[i],
+                    correlation=None,
+                    feature_vectors=None,
+                )
+            )
+
+    else:
+        # Prediction mode: compute XGBoost predictions
+        assert all_features is not None and all_mz is not None
+        logger.debug("Predicting intensities with XGBoost...")
+        predictions = predict_intensities(
+            np.vstack(all_features).reshape(-1, NUM_FEATURES),
+            num_ions,
+            MODELS[model],
+            model_dir,
+            processes=processes,
+        )
+
+        for i, (psm_index, psm, _spectrum, _ann) in enumerate(psm_spectrum_annotations):
+            mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
+            results.append(
+                ProcessingResult(
+                    psm_index=psm_index,
+                    psm=psm,
+                    theoretical_mz=mz,
+                    predicted_intensity=predictions[i],
+                    observed_intensity=all_targets[i],
+                )
+            )
+
+    return results
+
+
+def _into_batches(iterable, batch_size: int) -> Generator[list, None, None]:
+    """Accumulate iterator elements into batches of a given size."""
+    batch = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.DataFrame:
+    """Assemble training data from results list to single pandas DataFrame."""
+    from ms2pip._utils.feature_names import get_feature_names
+
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+
+    training_data = pd.DataFrame(
+        np.vstack([r.feature_vectors for r in results if r.feature_vectors is not None]),
+        columns=get_feature_names(),
+    )
+    training_data["psm_index"] = np.concatenate(
+        [
+            np.repeat(r.psm_index, r.feature_vectors.shape[0])
+            for r in results
+            if r.feature_vectors is not None
+        ]
+    )
+    for ion_type in ion_types:
+        if ion_type in ["a", "b", "b2", "c"]:
+            training_data[f"target_{ion_type}"] = np.concatenate(
+                [r.observed_intensity[ion_type] for r in results if r.feature_vectors is not None]
+            )
+        elif ion_type in ["x", "y", "y2", "z"]:
+            training_data[f"target_{ion_type}"] = np.concatenate(
+                [
+                    r.observed_intensity[ion_type][::-1]
+                    for r in results
+                    if r.feature_vectors is not None
+                ]
+            )
+
+    training_data = training_data[
+        ["psm_index"] + get_feature_names() + [f"target_{it}" for it in ion_types]
+    ]
+
+    return training_data
 
 
 def predict_single(
     peptidoform: Union[Peptidoform, str],
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
 ) -> ProcessingResult:
     """
@@ -46,31 +296,9 @@ def predict_single(
     if isinstance(peptidoform, str):
         peptidoform = Peptidoform(peptidoform)
     psm = PSM(peptidoform=peptidoform, spectrum_id=0)
-    model_dir = model_dir if model_dir else Path.home() / ".ms2pip"
-    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-
-    with Encoder.from_peptidoform(peptidoform) as encoder:
-        ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
-        result = _process_peptidoform(0, psm, model, encoder, ion_types=ion_types)
-
-        if "xgboost_model_files" in MODELS[model].keys():
-            validate_requested_xgb_model(
-                MODELS[model]["xgboost_model_files"],
-                MODELS[model]["model_hash"],
-                model_dir,
-            )
-            predictions = np.array(
-                get_predictions_xgb(
-                    result.feature_vectors,
-                    [len(peptidoform.parsed_sequence) - 1],
-                    MODELS[model],
-                    model_dir,
-                )
-            )
-            result.predicted_intensity = predictions[0]  # Only one spectrum in predictions
-            result.feature_vectors = None
-
-    return result
+    psm_list = PSMList(psm_list=[psm])
+    results = _predict_batch_internal(psm_list, model, model_dir)
+    return results[0]
 
 
 def predict_batch(
@@ -78,7 +306,7 @@ def predict_batch(
     add_retention_time: bool = False,
     add_ion_mobility: bool = False,
     psm_filetype: Optional[str] = None,
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     processes: Optional[int] = None,
 ) -> List[ProcessingResult]:
@@ -101,7 +329,8 @@ def predict_batch(
     model_dir
         Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
     processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
+        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
+        all available.
 
     Returns
     -------
@@ -123,17 +352,8 @@ def predict_batch(
         im_predictor = IonMobility(processes=processes)
         im_predictor.add_im_predictions(psm_list)
 
-    with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_parallelized = _Parallelized(
-            encoder=encoder,
-            model=model,
-            model_dir=model_dir,
-            processes=processes,
-        )
-        logger.info("Processing peptides...")
-        results = ms2pip_parallelized.process_peptides(psm_list)
-
-    return results
+    logger.info("Processing peptides...")
+    return _predict_batch_internal(psm_list, model, model_dir, processes=processes)
 
 
 def predict_library(
@@ -141,7 +361,7 @@ def predict_library(
     config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
     add_retention_time: bool = False,
     add_ion_mobility: bool = False,
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     batch_size: int = 100000,
     processes: Optional[int] = None,
@@ -168,7 +388,8 @@ def predict_library(
     batch_size
         Number of peptides to process in each batch.
     processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
+        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
+        all available.
 
     Yields
     ------
@@ -177,33 +398,39 @@ def predict_library(
 
     """
     if fasta_file and config:
-        # Use provided proteome, but overwrite fasta_file
-        config = ProteomeSearchSpace.from_any(config)
-        config.fasta_file = fasta_file
+        search_space = ProteomeSearchSpace.from_any(config)
+        search_space.fasta_file = fasta_file
     elif fasta_file and not config:
-        # Default proteome search space with provided fasta_file
-        config = ProteomeSearchSpace(fasta_file=fasta_file)
+        search_space = ProteomeSearchSpace(fasta_file=fasta_file)
     elif not fasta_file and config:
-        # Use provided proteome
-        config = ProteomeSearchSpace.from_any(config)
+        search_space = ProteomeSearchSpace.from_any(config)
     else:
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
-    search_space = ProteomeSearchSpace.from_any(config)
     search_space.build()
+
+    # Pre-load XGBoost models once for all batches
+    model_dir = validate_model(model, model_dir)
+    xgb_models = load_xgb_models(MODELS[model], model_dir, processes)
 
     for batch in track(
         _into_batches(search_space, batch_size=batch_size),
         description="Predicting spectra...",
         total=ceil(len(search_space) / batch_size),
     ):
-        yield predict_batch(
-            search_space.filter_psms_by_mz(PSMList(psm_list=list(batch))),
-            add_retention_time=add_retention_time,
-            add_ion_mobility=add_ion_mobility,
-            model=model,
-            model_dir=model_dir,
+        psm_list = search_space.filter_psms_by_mz(PSMList(psm_list=list(batch)))
+
+        if add_retention_time:
+            RetentionTime(processes=processes).add_rt_predictions(psm_list)
+        if add_ion_mobility:
+            IonMobility(processes=processes).add_im_predictions(psm_list)
+
+        yield _predict_batch_internal(
+            psm_list,
+            model,
+            model_dir,
             processes=processes,
+            xgb_models=xgb_models,
         )
 
 
@@ -215,9 +442,10 @@ def correlate(
     compute_correlations: bool = False,
     add_retention_time: bool = False,
     add_ion_mobility: bool = False,
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     ms2_tolerance: float = 0.02,
+    ms2_tolerance_mode: str = "Da",
     processes: Optional[int] = None,
 ) -> List[ProcessingResult]:
     """
@@ -246,9 +474,12 @@ def correlate(
     model_dir
         Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
     ms2_tolerance
-        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+        MS2 tolerance for observed spectrum peak annotation. By default, 0.02.
+    ms2_tolerance_mode
+        Unit of the MS2 tolerance: ``"Da"`` or ``"ppm"``. By default, ``"Da"``.
     processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
+        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
+        all available.
 
     Returns
     -------
@@ -270,18 +501,22 @@ def correlate(
         im_predictor = IonMobility(processes=processes)
         im_predictor.add_im_predictions(psm_list)
 
-    with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_parallelized = _Parallelized(
-            encoder=encoder,
-            model=model,
-            model_dir=model_dir,
-            ms2_tolerance=ms2_tolerance,
-            processes=processes,
-        )
-        logger.info("Processing spectra and peptides...")
-        results = ms2pip_parallelized.process_spectra(psm_list, spectrum_file, spectrum_id_pattern)
+    # Validate runs and collections
+    if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:
+        raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
 
-    # Correlations also requested
+    logger.info("Processing spectra and peptides...")
+    matched = load_and_match_spectra(
+        psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
+    )
+
+    if not matched:
+        raise exceptions.NoMatchingSpectraFound(
+            "No spectra matching spectrum IDs from PSM list could be found in provided file."
+        )
+
+    results = _correlate_internal(matched, model, model_dir, processes=processes)
+
     if compute_correlations:
         logger.info("Computing correlations")
         calculate_correlations(results)
@@ -293,23 +528,26 @@ def correlate(
 def correlate_preloaded(
     psms: Union[PSMList, List[PSM]],
     compute_correlations: bool = False,
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     model_dir: Optional[Union[str, Path]] = None,
     ms2_tolerance: float = 0.02,
+    ms2_tolerance_mode: str = "Da",
     processes: Optional[int] = None,
 ) -> List[ProcessingResult]:
     """
     Compare predicted and observed intensities for PSMs with preloaded spectra.\f
 
-    Processes PSMs that already have :py:class:`ms2rescore_rs.MS2Spectrum`
-    objects in their ``spectrum`` attribute. It extracts the spectra, performs predictions,
-    and optionally computes correlations.
+    Processes PSMs that already have :py:class:`ms2rescore_rs.MS2Spectrum` or
+    :py:class:`ms2rescore_rs.AnnotatedMS2Spectrum` objects in their ``spectrum``
+    attribute.
 
     Parameters
     ----------
     psms
         PSMList or list of PSM objects. Each PSM must have an
-        :py:class:`ms2rescore_rs.MS2Spectrum` object in its ``spectrum`` attribute.
+        :py:class:`ms2rescore_rs.MS2Spectrum` or
+        :py:class:`ms2rescore_rs.AnnotatedMS2Spectrum` object in its ``spectrum``
+        attribute.
     compute_correlations
         Compute correlations between predictions and targets. Default: False.
     model
@@ -317,9 +555,14 @@ def correlate_preloaded(
     model_dir
         Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
     ms2_tolerance
-        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+        MS2 tolerance for observed spectrum peak annotation. By default, 0.02.
+        Only used when spectra are not already annotated.
+    ms2_tolerance_mode
+        Unit of the MS2 tolerance: ``"Da"`` or ``"ppm"``. By default, ``"Da"``.
+        Only used when spectra are not already annotated.
     processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
+        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
+        all available.
 
     Returns
     -------
@@ -330,8 +573,7 @@ def correlate_preloaded(
     Raises
     ------
     ValueError
-        If PSMs do not contain :py:class:`ms2rescore_rs.MS2Spectrum` objects in the
-        ``spectrum`` attribute.
+        If PSMs do not contain spectrum objects in the ``spectrum`` attribute.
 
     """
     if isinstance(psms, list):
@@ -339,11 +581,20 @@ def correlate_preloaded(
     else:
         psm_list = psms
 
-    if not all(psm_list["spectrum"]) or not (isinstance(psm_list["spectrum"][0], MS2Spectrum)):
-        raise ValueError("PSMs must contain MS2Spectrum objects in the 'spectrum' attribute.")
+    first_spectrum = psm_list["spectrum"][0]
+    if not all(psm_list["spectrum"]) or not isinstance(
+        first_spectrum, (MS2Spectrum, AnnotatedMS2Spectrum)
+    ):
+        raise ValueError(
+            "PSMs must contain MS2Spectrum or AnnotatedMS2Spectrum objects "
+            "in the 'spectrum' attribute."
+        )
 
-    # Convert MS2Spectrum -> ObservedSpectrum and preprocess
+    spectra_are_annotated = isinstance(first_spectrum, AnnotatedMS2Spectrum)
+
+    # Convert to ObservedSpectrum and preprocess; store annotations if present
     preloaded_spectra: Dict[str, ObservedSpectrum] = {}
+    preloaded_annotations: Optional[Dict[str, list]] = {} if spectra_are_annotated else None
     for psm in psm_list:
         spec_id = str(psm.spectrum_id)
         if spec_id in preloaded_spectra:
@@ -363,23 +614,88 @@ def correlate_preloaded(
         obs.tic_norm()
         obs.log2_transform()
         preloaded_spectra[spec_id] = obs
+        if spectra_are_annotated:
+            preloaded_annotations[spec_id] = [
+                [(a.series, a.position, a.charge) for a in peak_anns]
+                for peak_anns in spectrum.peak_annotations
+            ]
 
-    # Delegate to _Parallelized
-    with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_parallelized = _Parallelized(
-            encoder=encoder,
-            model=model,
-            model_dir=model_dir,
-            ms2_tolerance=ms2_tolerance,
-            processes=processes,
+    # Build PSM-spectrum-annotation tuples
+    # For unannotated spectra, batch annotate using ms2rescore-rs
+    psm_spectrum_annotations = []
+    needs_annotation = []  # indices into psm_spectrum_annotations that need annotation
+
+    for i, psm in enumerate(psm_list):
+        spec_id = str(psm.spectrum_id)
+        spectrum = preloaded_spectra.get(spec_id)
+        if spectrum is None:
+            continue
+        if preloaded_annotations is not None and spec_id in preloaded_annotations:
+            psm_spectrum_annotations.append(
+                (i, psm, spectrum, preloaded_annotations[spec_id])
+            )
+        else:
+            psm_spectrum_annotations.append((i, psm, spectrum, None))
+            needs_annotation.append(len(psm_spectrum_annotations) - 1)
+
+    if not psm_spectrum_annotations:
+        raise exceptions.NoMatchingSpectraFound(
+            "No spectra matching spectrum IDs from PSM list could be found."
         )
-        logger.info("Processing spectra and peptides...")
-        results = ms2pip_parallelized.process_preloaded_spectra(psm_list, preloaded_spectra)
+
+    # Batch annotate any unannotated spectra
+    if needs_annotation:
+        from ms2rescore_rs import Precursor, annotate_ms2_spectra
+
+        frag_model = MODELS[model]["fragmentation"]
+        batch_spectra = []
+        batch_proformas = []
+        batch_seq_lens = []
+        for idx in needs_annotation:
+            _, psm, spectrum, _ = psm_spectrum_annotations[idx]
+            batch_spectra.append(MS2Spectrum(
+                identifier=spectrum.identifier or "",
+                mz=list(spectrum.mz),
+                intensity=list(spectrum.intensity),
+                precursor=Precursor(
+                    mz=float(spectrum.precursor_mz) if spectrum.precursor_mz else 0.0,
+                    charge=int(spectrum.precursor_charge) if spectrum.precursor_charge else 0,
+                    rt=float(spectrum.retention_time) if spectrum.retention_time else 0.0,
+                ),
+            ))
+            batch_proformas.append(str(psm.peptidoform.proforma))
+            batch_seq_lens.append(len(psm.peptidoform.parsed_sequence))
+
+        annotated = annotate_ms2_spectra(
+            spectra=batch_spectra,
+            proformas=batch_proformas,
+            seq_lens=batch_seq_lens,
+            fragmentation_model=frag_model,
+            mass_mode="monoisotopic",
+            tolerance_value=float(ms2_tolerance),
+            tolerance_mode=ms2_tolerance_mode.lower(),
+        )
+
+        for j, idx in enumerate(needs_annotation):
+            psm_index, psm, spectrum, _ = psm_spectrum_annotations[idx]
+            peak_annotations = [
+                [(a.series, a.position, a.charge) for a in peak_anns]
+                for peak_anns in annotated[j].peak_annotations
+            ]
+            psm_spectrum_annotations[idx] = (psm_index, psm, spectrum, peak_annotations)
+
+    logger.info("Processing spectra and peptides...")
+    results = _correlate_internal(
+        psm_spectrum_annotations, model, model_dir, processes=processes
+    )
 
     if compute_correlations:
         logger.info("Computing correlations")
         calculate_correlations(results)
-        logger.info(f"Median correlation: {np.median([r.correlation for r in results if r.correlation is not None])}")
+        logger.info(
+            f"Median correlation: "
+            f"{np.median([r.correlation for r in results if r.correlation is not None])}"
+        )
 
     return results
 
@@ -387,6 +703,7 @@ def correlate_preloaded(
 def correlate_single(
     observed_spectrum: ObservedSpectrum,
     ms2_tolerance: float = 0.02,
+    ms2_tolerance_mode: str = "Da",
     model: str = "HCD",
 ) -> ProcessingResult:
     """
@@ -397,7 +714,9 @@ def correlate_single(
     observed_spectrum
         ObservedSpectrum instance with observed m/z and intensity values and peptidoform.
     ms2_tolerance
-        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+        MS2 tolerance for observed spectrum peak annotation. By default, 0.02.
+    ms2_tolerance_mode
+        Unit of the MS2 tolerance: ``"Da"`` or ``"ppm"``. By default, ``"Da"``.
     model
         Model to use for prediction. Default: "HCD".
 
@@ -407,36 +726,21 @@ def correlate_single(
         Result with theoretical m/z, predicted intensity, observed intensity, and correlation.
 
     """
-    # Check peptidoform in observed spectrum
     if not isinstance(observed_spectrum.peptidoform, Peptidoform):
         raise ValueError("Peptidoform must be set in observed spectrum to correlate.")
 
-    # Annotate spectrum and get target intensities
-    with Encoder.from_peptidoform(observed_spectrum.peptidoform) as encoder:
-        ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
-        enc_peptidoform = encoder.encode_peptidoform(observed_spectrum.peptidoform)
-        targets = ms2pip_pyx.get_targets(
-            enc_peptidoform,
-            observed_spectrum.mz.astype(np.float32),
-            observed_spectrum.intensity.astype(np.float32),
-            float(ms2_tolerance),
-            MODELS[model]["peaks_version"],
-        )
-
-    # Reshape to dict with intensities per ion type
+    psm = PSM(peptidoform=observed_spectrum.peptidoform, spectrum_id=0)
+    annotated = annotate_spectrum(observed_spectrum, psm, model, ms2_tolerance, ms2_tolerance_mode)
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-    observed_intensity = {
-        i: np.array(p, dtype=np.float32).clip(min=np.log2(0.001))  # Clip negative intensities
-        for i, p in zip(ion_types, targets)
-    }
+    seq_len = len(observed_spectrum.peptidoform.parsed_sequence)
+    observed_intensity = targets_from_annotations(
+        annotated, observed_spectrum.intensity.astype(np.float32), ion_types, seq_len
+    )
 
-    # Predict spectrum and add target intensities
     result = predict_single(observed_spectrum.peptidoform, model=model)
     result.observed_intensity = observed_intensity
 
-    # Add correlation
     calculate_correlations([result])
-
     return result
 
 
@@ -445,8 +749,9 @@ def get_training_data(
     spectrum_file: Union[str, Path],
     psm_filetype: Optional[str] = None,
     spectrum_id_pattern: Optional[str] = None,
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     ms2_tolerance: float = 0.02,
+    ms2_tolerance_mode: str = "Da",
     processes: Optional[int] = None,
 ):
     """
@@ -468,9 +773,12 @@ def get_training_data(
         Model to use as reference for the ion types that are extracted from the observed spectra.
         Default: "HCD", which results in the extraction of singly charged b- and y-ions.
     ms2_tolerance
-        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+        MS2 tolerance for observed spectrum peak annotation. By default, 0.02.
+    ms2_tolerance_mode
+        Unit of the MS2 tolerance: ``"Da"`` or ``"ppm"``. By default, ``"Da"``.
     processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
+        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
+        all available.
 
     Returns
     -------
@@ -481,22 +789,25 @@ def get_training_data(
     psm_list = read_psms(psms, filetype=psm_filetype)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
-    with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_parallelized = _Parallelized(
-            encoder=encoder,
-            model=model,
-            ms2_tolerance=ms2_tolerance,
-            processes=processes,
-        )
-        logger.info("Processing spectra and peptides...")
-        results = ms2pip_parallelized.process_spectra(
-            psm_list, spectrum_file, spectrum_id_pattern, vector_file=True
+    if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:
+        raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
+
+    logger.info("Processing spectra and peptides...")
+    matched = load_and_match_spectra(
+        psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
+    )
+
+    if not matched:
+        raise exceptions.NoMatchingSpectraFound(
+            "No spectra matching spectrum IDs from PSM list could be found in provided file."
         )
 
-        logger.info("Assembling training data in DataFrame...")
-        training_data = _assemble_training_data(results, model)
+    results = _correlate_internal(
+        matched, model, model_dir=None, vector_file=True, processes=processes
+    )
 
-    return training_data
+    logger.info("Assembling training data in DataFrame...")
+    return _assemble_training_data(results, model)
 
 
 def annotate_spectra(
@@ -504,8 +815,9 @@ def annotate_spectra(
     spectrum_file: Union[str, Path],
     psm_filetype: Optional[str] = None,
     spectrum_id_pattern: Optional[str] = None,
-    model: Optional[str] = "HCD",
+    model: str = "HCD",
     ms2_tolerance: float = 0.02,
+    ms2_tolerance_mode: str = "Da",
     processes: Optional[int] = None,
 ):
     """
@@ -527,9 +839,12 @@ def annotate_spectra(
         Model to use as reference for the ion types that are extracted from the observed spectra.
         Default: "HCD", which results in the extraction of singly charged b- and y-ions.
     ms2_tolerance
-        MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
+        MS2 tolerance for observed spectrum peak annotation. By default, 0.02.
+    ms2_tolerance_mode
+        Unit of the MS2 tolerance: ``"Da"`` or ``"ppm"``. By default, ``"Da"``.
     processes
-        Number of parallel processes for multiprocessing steps. By default, all available.
+        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
+        all available.
 
     Returns
     -------
@@ -540,19 +855,22 @@ def annotate_spectra(
     psm_list = read_psms(psms, filetype=psm_filetype)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
-    with Encoder.from_psm_list(psm_list) as encoder:
-        ms2pip_parallelized = _Parallelized(
-            encoder=encoder,
-            model=model,
-            ms2_tolerance=ms2_tolerance,
-            processes=processes,
-        )
-        logger.info("Processing spectra and peptides...")
-        results = ms2pip_parallelized.process_spectra(
-            psm_list, spectrum_file, spectrum_id_pattern, vector_file=False, annotations_only=True
+    if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:
+        raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
+
+    logger.info("Processing spectra and peptides...")
+    matched = load_and_match_spectra(
+        psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
+    )
+
+    if not matched:
+        raise exceptions.NoMatchingSpectraFound(
+            "No spectra matching spectrum IDs from PSM list could be found in provided file."
         )
 
-    return results
+    return _correlate_internal(
+        matched, model, model_dir=None, annotations_only=True, processes=processes
+    )
 
 
 def download_models(
@@ -577,619 +895,9 @@ def download_models(
         models = list(MODELS.keys())
 
     for model in models:
-        try:
-            if "xgb_model_files" in MODELS[model].keys():
-                continue
-        except KeyError:
+        if model not in MODELS:
             raise exceptions.UnknownModelError(model)
+        if "xgboost_model_files" not in MODELS[model]:
+            continue
         logger.debug("Downloading %s model files", model)
-        validate_requested_xgb_model(
-            MODELS[model]["xgboost_model_files"],
-            MODELS[model]["model_hash"],
-            model_dir,
-        )
-
-
-class _Parallelized:
-    """Implementations of common multiprocessing functionality across MS²PIP usage modes."""
-
-    def __init__(
-        self,
-        encoder: Encoder = None,
-        model: Optional[str] = None,
-        model_dir: Optional[Union[str, Path]] = None,
-        ms2_tolerance: float = 0.02,
-        processes: Optional[int] = None,
-    ):
-        """
-        Implementations of common multiprocessing functionality across MS²PIP usage modes.
-
-        Parameters
-        ----------
-        encoding
-            Configured encoding class instance. Required if input peptides contain modifications.
-        model
-            Name of the model to use for predictions. Overrides configuration file.
-        model_dir
-            Custom directory for downloaded XGBoost model files. By default, `~/.ms2pip` is used.
-        ms2_tolerance
-            MS2 tolerance in Da for observed spectrum peak annotation. By default, 0.02 Da.
-        processes
-            Number of parallel processes for multiprocessing steps. By default, all available.
-
-        """
-        # Input parameters
-        self.encoder = encoder
-        self.model = model
-        self.model_dir = model_dir if model_dir else Path.home() / ".ms2pip"
-        self.ms2_tolerance = ms2_tolerance
-        self.processes = processes if processes else multiprocessing.cpu_count()
-
-        # Setup encoder if not configured
-        if not self.encoder:
-            self.encoder = Encoder()
-            self.encoder.write_encoder_files()
-
-        # Validate requested model
-        if self.model in MODELS.keys():
-            logger.debug("Using %s model", self.model)
-            if "xgboost_model_files" in MODELS[self.model].keys():
-                validate_requested_xgb_model(
-                    MODELS[self.model]["xgboost_model_files"],
-                    MODELS[self.model]["model_hash"],
-                    self.model_dir,
-                )
-        else:
-            raise exceptions.UnknownModelError(self.model)
-
-    def _get_pool(self):
-        """Get multiprocessing pool."""
-        logger.debug(f"Starting workers (processes={self.processes})...")
-        if multiprocessing.current_process().daemon:
-            logger.warning(
-                "MS²PIP is running in a daemon process. Disabling multiprocessing as daemonic "
-                "processes cannot have children."
-            )
-            return multiprocessing.dummy.Pool(1)
-        elif self.processes == 1:
-            logger.debug("Using dummy multiprocessing pool.")
-            return multiprocessing.dummy.Pool(1)
-        else:
-            return multiprocessing.get_context("spawn").Pool(self.processes)
-
-    def _validate_output_formats(self, output_formats: List[str]) -> List[str]:
-        """Validate requested output formats."""
-        if not output_formats:
-            self.output_formats = ["csv"]
-        else:
-            for output_format in output_formats:
-                if output_format not in SUPPORTED_FORMATS:
-                    raise exceptions.UnknownOutputFormatError(output_format)
-            self.output_formats = output_formats
-
-    def _execute_in_pool(self, psm_list: PSMList, func: Callable, args: tuple):
-        """Execute function in multiprocessing pool."""
-
-        def get_chunk_size(n_items, n_processes):
-            """Get optimal chunk size for multiprocessing."""
-            if n_items < 5000:
-                return n_items
-            else:
-                max_chunk_size = 50000
-                n_chunks = ceil(ceil(n_items / n_processes) / max_chunk_size) * n_processes
-                return ceil(n_items / n_chunks)
-
-        def to_chunks(_list, chunk_size):
-            """Split _list into chunks of size chunk_size."""
-
-            def _generate_chunks():
-                for i in range(0, len(_list), chunk_size):
-                    yield _list[i : i + chunk_size]
-
-            _list = list(_list)
-            return list(_generate_chunks())
-
-        def _enumerated_psm_list_by_spectrum_id(psm_list, spectrum_ids_chunk):
-            selected_indices = np.flatnonzero(np.isin(psm_list["spectrum_id"], spectrum_ids_chunk))
-            return [(i, psm_list.psm_list[i]) for i in selected_indices]
-
-        with self._get_pool() as pool:
-            if not psm_list:
-                logger.warning("No PSMs to process.")
-                return []
-
-            # Split PSMList into chunks
-            if func == _process_spectra:
-                # Split by spectrum_id to keep PSMs for same spectrum together
-                spectrum_ids = set(psm_list["spectrum_id"])
-                chunk_size = get_chunk_size(len(spectrum_ids), pool._processes)
-                chunks = [
-                    _enumerated_psm_list_by_spectrum_id(psm_list, spectrum_ids_chunk)
-                    for spectrum_ids_chunk in to_chunks(spectrum_ids, chunk_size)
-                ]
-            else:
-                # Simple split by PSM
-                chunk_size = get_chunk_size(len(psm_list), pool._processes)
-                chunks = to_chunks(list(enumerate(psm_list)), chunk_size)
-
-            logger.debug(f"Processing {len(chunks)} chunk(s) of ~{chunk_size} entries each.")
-
-            # Add jobs to pool
-            mp_results = []
-            for psm_list_chunk in chunks:
-                mp_results.append(pool.apply_async(func, args=(psm_list_chunk, *args)))
-
-            # Gather results
-            # results = [
-            #     r.get()
-            #     for r in track(
-            #         mp_results,
-            #         disable=len(chunks) == 1,
-            #         description="Processing chunks...",
-            #         transient=True,
-            #         show_speed=False,
-            #     )
-            # ]
-            results = [r.get() for r in mp_results]
-
-        # Sort results by input order
-        results = list(
-            sorted(
-                itertools.chain.from_iterable(results),
-                key=lambda result: result.psm_index,
-            )
-        )
-
-        return results
-
-    def process_peptides(self, psm_list: PSMList) -> List[ProcessingResult]:
-        """Process peptides in parallel."""
-        results = self._execute_in_pool(
-            psm_list,
-            _process_peptides,
-            (self.encoder, self.model),
-        )
-        logger.debug(f"Gathered data for {len(results)} peptides.")
-
-        # Add XGBoost predictions if required
-        if "xgboost_model_files" in MODELS[self.model].keys():
-            results = self._add_xgboost_predictions(results)
-
-        return results
-
-    def process_spectra(
-        self,
-        psm_list: PSMList,
-        spectrum_file: Union[str, Path],
-        spectrum_id_pattern: str,
-        vector_file: bool = False,
-        annotations_only: bool = False,
-    ) -> List[ProcessingResult]:
-        """
-        Process PSMs and observed spectra in parallel
-
-        Parameters
-        ----------
-        psm_list
-            psm_utils.PSMList instance with PSMs to process
-        spectrum_file
-            Filename of spectrum file
-        spectrum_id_pattern
-            Regular expression pattern to apply to spectrum titles before matching to
-            peptide file entries
-        vector_file
-            If feature vectors should be extracted instead of predictions
-        annotations_only
-            If only peak annotations should be extracted from the spectrum file
-
-        """
-        # Validate runs and collections
-        if not len(psm_list.collections) == 1 or not len(psm_list.runs) == 1:
-            raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
-
-        args = (
-            spectrum_file,
-            vector_file,
-            self.encoder,
-            self.model,
-            self.ms2_tolerance,
-            spectrum_id_pattern,
-            annotations_only,
-            None,  # preloaded_spectra
-        )
-        results = self._execute_in_pool(psm_list, _process_spectra, args)
-
-        # Validate number of results
-        if not results:
-            raise exceptions.NoMatchingSpectraFound(
-                "No spectra matching spectrum IDs from PSM list could be found in provided file."
-            )
-        logger.debug(f"Gathered data for {len(results)} PSMs.")
-
-        # Add XGBoost predictions if required
-        if (
-            not (vector_file or annotations_only)
-            and "xgboost_model_files" in MODELS[self.model].keys()
-        ):
-            results = self._add_xgboost_predictions(results)
-
-        return results
-
-    def process_preloaded_spectra(
-        self,
-        psm_list: PSMList,
-        preloaded_spectra: Dict[str, ObservedSpectrum],
-    ) -> List[ProcessingResult]:
-        """
-        Process PSMs with pre-loaded and preprocessed ObservedSpectrum objects.
-
-        Parameters
-        ----------
-        psm_list
-            psm_utils.PSMList instance with PSMs to process.
-        preloaded_spectra
-            Dictionary mapping spectrum IDs to preprocessed ObservedSpectrum objects.
-
-        """
-        args = (
-            None,  # spec_file
-            False,  # vector_file
-            self.encoder,
-            self.model,
-            self.ms2_tolerance,
-            None,  # spectrum_id_pattern
-            False,  # annotations_only
-            preloaded_spectra,
-        )
-        results = self._execute_in_pool(psm_list, _process_spectra, args)
-
-        if not results:
-            raise exceptions.NoMatchingSpectraFound(
-                "No spectra matching spectrum IDs from PSM list could be found."
-            )
-        logger.debug(f"Gathered data for {len(results)} PSMs.")
-
-        if "xgboost_model_files" in MODELS[self.model].keys():
-            results = self._add_xgboost_predictions(results)
-
-        return results
-
-    def _add_xgboost_predictions(self, results: List[ProcessingResult]) -> List[ProcessingResult]:
-        """
-        Add XGBoost predictions to results.
-
-        Notes
-        -----
-        This functions is applied after the parallel processing, as XGBoost implements its own
-        multiprocessing.
-        """
-
-        if "xgboost_model_files" not in MODELS[self.model].keys():
-            raise ValueError("XGBoost model files not found in MODELS dictionary.")
-
-        logger.debug("Converting feature vectors to XGBoost DMatrix...")
-        import xgboost as xgb
-
-        results_to_predict = [r for r in results if r.feature_vectors is not None]
-
-        if not results_to_predict:
-            return results
-
-        num_ions = [len(r.psm.peptidoform.parsed_sequence) - 1 for r in results_to_predict]
-        xgb_vector = xgb.DMatrix(np.vstack(list(r.feature_vectors for r in results_to_predict)))
-
-        predictions = get_predictions_xgb(
-            xgb_vector,
-            num_ions,
-            MODELS[self.model],
-            self.model_dir,
-            processes=self.processes,
-        )
-
-        logger.debug("Adding XGBoost predictions to results...")
-        for result, preds in zip(results_to_predict, predictions):
-            result.predicted_intensity = preds
-            result.feature_vectors = None
-
-        return results
-
-
-def _process_peptidoform(
-    psm_index: int,
-    psm: PSM,
-    model: str,
-    encoder: Encoder,
-    ion_types: Optional[List[str]] = None,
-) -> ProcessingResult:
-    """
-    Process a single peptidoform from a PSM.
-
-    Get theoretical m/z and predicted intensities (from C model) or feature vectors (for XGBoost
-    model) for a single peptidoform from a PSM.
-
-    Notes
-    -----
-    - ``ms2pip_pyx.init()`` must be called before this function is called.
-    - Optionally, lowercase version of ``ion_types`` from the model configuration can be provided
-    to save computational time.
-
-    """
-    peptidoform = psm.peptidoform
-    if not ion_types:
-        ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-
-    enc_peptide = encoder.encode_peptide(peptidoform)
-    enc_peptidoform = encoder.encode_peptidoform(peptidoform)
-
-    # Get ion mzs and map to ion types
-    mz = ms2pip_pyx.get_mzs(enc_peptidoform, MODELS[model]["peaks_version"])
-    mz = {i: np.array(mz, dtype=np.float32) for i, mz in zip(ion_types, mz)}
-
-    # Get predictions from XGBoost models.
-    if "xgboost_model_files" in MODELS[model].keys():
-        predictions = None
-        feature_vectors = np.array(
-            ms2pip_pyx.get_vector(enc_peptide, enc_peptidoform, peptidoform.precursor_charge),
-            dtype=np.uint16,
-        )
-    # Or get predictions from C models.
-    else:
-        predictions = ms2pip_pyx.get_predictions(
-            enc_peptide,
-            enc_peptidoform,
-            peptidoform.precursor_charge,
-            MODELS[model]["id"],
-            MODELS[model]["peaks_version"],
-            30.0,  # TODO: Remove CE feature
-        )
-        predictions = {
-            i: np.array(p, dtype=np.float32).clip(min=np.log2(0.001))  # Clip negative intensities
-            for i, p in zip(ion_types, predictions)
-        }
-        feature_vectors = None
-
-    return ProcessingResult(
-        psm_index=psm_index,
-        psm=psm,
-        theoretical_mz=mz,
-        predicted_intensity=predictions,
-        observed_intensity=None,
-        feature_vectors=feature_vectors,
-    )
-
-
-def _process_peptides(
-    enumerated_psm_list: List[Tuple[int, PSM]],
-    encoder: Encoder,
-    model: str,
-) -> List[ProcessingResult]:
-    """
-    Predict spectrum for each entry in PeptideRecord DataFrame.
-
-    Parameters
-    ----------
-    enumerated_psm_list
-        List of tuples of (index, PSM) for each PSM in the input file.
-    encoder
-        Configured encoder to use for peptide and peptidoform encoding
-    model
-        Name of prediction model to be used
-
-    """
-    ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
-    results = []
-    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-
-    for psm_index, psm in enumerated_psm_list:
-        try:
-            result = _process_peptidoform(psm_index, psm, model, encoder, ion_types)
-        except (
-            exceptions.InvalidPeptidoformError,
-            exceptions.InvalidAminoAcidError,
-        ):
-            result = ProcessingResult(psm_index=psm_index, psm=psm)
-        results.append(result)
-
-    return results
-
-
-def _process_spectra(
-    enumerated_psm_list: List[Tuple[int, PSM]],
-    spec_file: Optional[str],
-    vector_file: bool,
-    encoder: Encoder,
-    model: str,
-    ms2_tolerance: float,
-    spectrum_id_pattern: Optional[str],
-    annotations_only: bool = False,
-    preloaded_spectra: Optional[Dict[str, ObservedSpectrum]] = None,
-) -> List[ProcessingResult]:
-    """
-    Perform requested tasks for each spectrum in spectrum file or from preloaded spectra.
-
-    Parameters
-    ----------
-    enumerated_psm_list
-        List of tuples of (index, PSM) for each PSM in the input file.
-    spec_file
-        Filename of spectrum file. Not used when ``preloaded_spectra`` is provided.
-    vector_file
-        If feature vectors should be extracted instead of predictions.
-    encoder: Encoder
-        Configured encoder to use for peptide and peptidoform encoding.
-    model
-        Name of prediction model to be used.
-    ms2_tolerance
-        Fragmentation spectrum m/z error tolerance in Dalton.
-    spectrum_id_pattern
-        Regular expression pattern to apply to spectrum titles before matching to
-        peptide file entries. Not used when ``preloaded_spectra`` is provided.
-    annotations_only
-        If only peak annotations should be extracted from the spectrum file.
-    preloaded_spectra
-        Optional dictionary mapping spectrum IDs to preprocessed ObservedSpectrum objects.
-        When provided, spectra are looked up directly instead of reading from ``spec_file``.
-
-    """
-    ms2pip_pyx.ms2pip_init(*encoder.encoder_files)
-    results = []
-    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-
-    def _process_psm_with_spectrum(psm_index, psm, spectrum):
-        """Process a single PSM against an observed spectrum."""
-        try:
-            enc_peptidoform = encoder.encode_peptidoform(psm.peptidoform)
-        except exceptions.InvalidAminoAcidError:
-            return ProcessingResult(psm_index=psm_index, psm=psm)
-
-        targets = ms2pip_pyx.get_targets(
-            enc_peptidoform,
-            spectrum.mz.astype(np.float32),
-            spectrum.intensity.astype(np.float32),
-            float(ms2_tolerance),
-            MODELS[model]["peaks_version"],
-        )
-        targets = {i: np.array(t, dtype=np.float32) for i, t in zip(ion_types, targets)}
-
-        if not psm.peptidoform.precursor_charge:
-            psm.peptidoform.precursor_charge = spectrum.precursor_charge
-
-        if vector_file:
-            enc_peptide = encoder.encode_peptide(psm.peptidoform)
-            feature_vectors = np.array(
-                ms2pip_pyx.get_vector(
-                    enc_peptide, enc_peptidoform, psm.peptidoform.precursor_charge
-                ),
-                dtype=np.uint16,
-            )
-            return ProcessingResult(
-                psm_index=psm_index,
-                psm=psm,
-                theoretical_mz=None,
-                predicted_intensity=None,
-                observed_intensity=targets,
-                correlation=None,
-                feature_vectors=feature_vectors,
-            )
-
-        elif annotations_only:
-            mz = ms2pip_pyx.get_mzs(enc_peptidoform, MODELS[model]["peaks_version"])
-            mz = {i: np.array(mz, dtype=np.float32) for i, mz in zip(ion_types, mz)}
-            return ProcessingResult(
-                psm_index=psm_index,
-                psm=psm,
-                theoretical_mz=mz,
-                predicted_intensity=None,
-                observed_intensity=targets,
-                correlation=None,
-                feature_vectors=None,
-            )
-
-        else:
-            try:
-                result = _process_peptidoform(psm_index, psm, model, encoder, ion_types)
-            except (
-                exceptions.InvalidPeptidoformError,
-                exceptions.InvalidAminoAcidError,
-            ):
-                return ProcessingResult(psm_index=psm_index, psm=psm)
-            else:
-                result.observed_intensity = targets
-                return result
-
-    if preloaded_spectra is not None:
-        # Spectra are already preprocessed; look up by spectrum ID
-        for psm_index, psm in enumerated_psm_list:
-            spectrum = preloaded_spectra.get(str(psm.spectrum_id))
-            if spectrum is None:
-                continue
-            results.append(_process_psm_with_spectrum(psm_index, psm, spectrum))
-    else:
-        # Read spectra from file and preprocess
-        assert spec_file is not None, "spec_file is required when preloaded_spectra is not provided"
-        try:
-            spectrum_id_regex = re.compile(spectrum_id_pattern)
-        except TypeError:
-            spectrum_id_regex = re.compile(r"(.*)")
-
-        psms_by_specid = defaultdict(list)
-        for psm_index, psm in enumerated_psm_list:
-            psms_by_specid[str(psm.spectrum_id)].append((psm_index, psm))
-
-        for spectrum in read_spectrum_file(spec_file):
-            match = spectrum_id_regex.search(spectrum.identifier)
-            try:
-                spectrum_id = match[1]
-            except (TypeError, IndexError):
-                raise exceptions.TitlePatternError(
-                    f"Spectrum title pattern `{spectrum_id_pattern}` could not be matched to "
-                    f"spectrum ID `{spectrum.identifier}`. "
-                    " Are you sure that the regex contains a capturing group?"
-                )
-
-            if spectrum_id not in psms_by_specid:
-                continue
-
-            # Spectrum preprocessing
-            for label_type in ["iTRAQ", "TMT"]:
-                if label_type in model:
-                    spectrum.remove_reporter_ions(label_type)
-            # spectrum.remove_precursor()  # TODO: Decide to implement this or not
-            spectrum.tic_norm()
-            spectrum.log2_transform()
-
-            for psm_index, psm in psms_by_specid[spectrum_id]:
-                results.append(_process_psm_with_spectrum(psm_index, psm, spectrum))
-
-    return results
-
-
-def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.DataFrame:
-    """Assemble training data from results list to single pandas DataFrame."""
-    # Get ion types
-    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-
-    # Assemble feature vectors, PSM indices, and targets
-    training_data = pd.DataFrame(
-        np.vstack([r.feature_vectors for r in results if r.feature_vectors is not None]),
-        columns=get_feature_names(),
-    )
-    training_data["psm_index"] = np.concatenate(
-        [
-            np.repeat(r.psm_index, r.feature_vectors.shape[0])
-            for r in results
-            if r.feature_vectors is not None
-        ]
-    )
-    for ion_type in ion_types:
-        if ion_type in ["a", "b", "b2", "c"]:
-            training_data[f"target_{ion_type}"] = np.concatenate(
-                [r.observed_intensity[ion_type] for r in results if r.feature_vectors is not None]
-            )
-        elif ion_type in ["x", "y", "y2", "z"]:
-            training_data[f"target_{ion_type}"] = np.concatenate(
-                [
-                    r.observed_intensity[ion_type][::-1]
-                    for r in results
-                    if r.feature_vectors is not None
-                ]
-            )
-
-    # Reorder columns
-    training_data = training_data[
-        ["psm_index"] + get_feature_names() + [f"target_{it}" for it in ion_types]
-    ]
-
-    return training_data
-
-
-def _into_batches(iterable: Iterable[Any], batch_size: int) -> Generator[List[Any], None, None]:
-    """Accumulate iterator elements into batches of a given size."""
-    batch = []
-    for item in iterable:
-        batch.append(item)
-        if len(batch) == batch_size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
+        validate_model(model, model_dir)

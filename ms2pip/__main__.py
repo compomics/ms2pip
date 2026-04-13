@@ -50,9 +50,7 @@ def cli(*args, **kwargs):
         format="%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         level=LOGGING_LEVELS[kwargs["logging_level"]],
-        handlers=[
-            RichHandler(rich_tracebacks=True, show_level=True, show_path=False)
-        ],
+        handlers=[RichHandler(rich_tracebacks=True, show_level=True, show_path=False)],
     )
     rich.print(build_credits())
 
@@ -142,6 +140,9 @@ def predict_library(*args, **kwargs):
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--model-dir")
 @click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option(
+    "--ms2-tolerance-mode", type=click.Choice(["Da", "ppm"], case_sensitive=False), default="Da"
+)
 @click.option("--processes", "-n", type=int)
 def correlate(*args, **kwargs):
     # Parse arguments
@@ -171,6 +172,9 @@ def correlate(*args, **kwargs):
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option(
+    "--ms2-tolerance-mode", type=click.Choice(["Da", "ppm"], case_sensitive=False), default="Da"
+)
 @click.option("--processes", "-n", type=int)
 def get_training_data(*args, **kwargs):
     # Parse arguments
@@ -193,6 +197,9 @@ def get_training_data(*args, **kwargs):
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option(
+    "--ms2-tolerance-mode", type=click.Choice(["Da", "ppm"], case_sensitive=False), default="Da"
+)
 @click.option("--processes", "-n", type=int)
 def annotate_spectra(*args, **kwargs):
     # Parse arguments
@@ -203,8 +210,8 @@ def annotate_spectra(*args, **kwargs):
     results = ms2pip.core.annotate_spectra(*args, **kwargs)
 
     # Write intensities
-    output_name_int = output_name.with_name(output_name.stem + "_observations").with_suffix()
-    logger.info(f"Writing intensities to {output_name_int.with_suffix('.tsv')}")
+    output_name = output_name.with_name(output_name.stem + "_observations")
+    logger.info(f"Writing intensities to {output_name.with_suffix('.tsv')}")
     write_spectra(output_name, results, "tsv")
 
 
