@@ -1,4 +1,7 @@
-from ms2pip._utils.encoder import AMINO_ACIDS
+AMINO_ACIDS = [
+    "A", "C", "D", "E", "F", "G", "H", "I", "K", "M",
+    "N", "P", "Q", "R", "S", "T", "V", "W", "Y",
+]
 
 
 def get_feature_names():

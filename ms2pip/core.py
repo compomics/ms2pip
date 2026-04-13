@@ -87,7 +87,7 @@ def _predict_batch_internal(
     # Predict intensities with XGBoost
     logger.debug("Predicting intensities with XGBoost...")
     predictions = predict_intensities(
-        np.vstack(all_features).reshape(-1, NUM_FEATURES),
+        np.concatenate([f.reshape(-1, NUM_FEATURES) for f in all_features]),
         num_ions,
         MODELS[model],
         model_dir,
@@ -215,7 +215,7 @@ def _correlate_internal(
         assert all_features is not None and all_mz is not None
         logger.debug("Predicting intensities with XGBoost...")
         predictions = predict_intensities(
-            np.vstack(all_features).reshape(-1, NUM_FEATURES),
+            np.concatenate([f.reshape(-1, NUM_FEATURES) for f in all_features]),
             num_ions,
             MODELS[model],
             model_dir,
