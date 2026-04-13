@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import logging
 from pathlib import Path
-from typing import Union
 
 import psm_utils.io.peptide_record
 from psm_utils import PSMList
@@ -10,7 +7,7 @@ from psm_utils import PSMList
 logger = logging.getLogger(__name__)
 
 
-def read_psms(psms: Union[str, Path, PSMList], filetype: Union[str, None]) -> PSMList:
+def read_psms(psms: str | Path | PSMList, filetype: str | None) -> PSMList:
     """Read PSMList or PSM file."""
     # Read PSMs
     if isinstance(psms, (str, Path)):

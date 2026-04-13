@@ -2,7 +2,6 @@
 
 import zlib
 from pathlib import Path
-from typing import Union
 
 import numpy
 import sqlalchemy
@@ -100,6 +99,6 @@ Metadata = Table(
 )
 
 
-def open_sqlite(filename: Union[str, Path]) -> Connection:
+def open_sqlite(filename: str | Path) -> Connection:
     engine = sqlalchemy.create_engine(f"sqlite:///{filename}")
     return engine.connect()

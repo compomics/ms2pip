@@ -109,9 +109,7 @@ class RetentionTime:
     def _run_deeplc(self):
         """Run DeepLC."""
         logger.info("Predicting retention times with DeepLC...")
-        self.deeplc_preds = self.deeplc_predictor.make_preds(
-            seq_df=self.deeplc_pep_df.fillna("")
-        )
+        self.deeplc_preds = self.deeplc_predictor.make_preds(seq_df=self.deeplc_pep_df.fillna(""))
 
     def _parse_deeplc_preds(self):
         """Add DeepLC predictions to peprec DataFrame."""

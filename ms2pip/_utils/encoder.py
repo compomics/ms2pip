@@ -1,10 +1,11 @@
 """Peptide and modification handling for MS2PIP."""
+
 from __future__ import annotations
 
 import logging
 import os
 import tempfile
-from typing import Generator
+from collections.abc import Generator
 
 import numpy as np
 from psm_utils import Peptidoform, PSMList

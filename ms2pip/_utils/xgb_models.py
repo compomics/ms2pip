@@ -6,7 +6,6 @@ import os
 import urllib.request
 from itertools import islice
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 import numpy as np
 import xgboost as xgb
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 _MAX_PREDICTION_THREADS = 16
 
 
-def validate_model(model: str, model_dir: Union[str, Path, None] = None) -> Path:
+def validate_model(model: str, model_dir: str | Path | None = None) -> Path:
     """
     Validate model name and ensure XGBoost model files are available.
 
@@ -60,7 +59,7 @@ def _validate_requested_xgb_model(xgboost_model_files, xgboost_model_hashes, mod
 def load_xgb_models(
     model_params: dict,
     model_dir,
-    processes: Optional[int] = None,
+    processes: int | None = None,
 ) -> dict:
     """
     Load XGBoost models from disk.
@@ -87,12 +86,12 @@ def load_xgb_models(
 
 def predict_intensities(
     features: np.ndarray,
-    num_ions: List[int],
+    num_ions: list[int],
     model_params: dict,
     model_dir,
-    processes: Optional[int] = None,
-    xgb_models: Optional[dict] = None,
-) -> List[Dict[str, np.ndarray]]:
+    processes: int | None = None,
+    xgb_models: dict | None = None,
+) -> list[dict[str, np.ndarray]]:
     """
     Predict intensities from feature vectors using XGBoost models.
 

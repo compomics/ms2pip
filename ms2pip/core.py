@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Generator
 from math import ceil
 from pathlib import Path
-from typing import Dict, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 NUM_FEATURES = 139
 
 
-def _set_rayon_threads(processes: Optional[int]) -> None:
+def _set_rayon_threads(processes: int | None) -> None:
     """Set RAYON_NUM_THREADS if processes is specified and not already set."""
     if processes is None:
         return
@@ -55,10 +55,10 @@ def _set_rayon_threads(processes: Optional[int]) -> None:
 def _predict_batch_internal(
     psm_list: PSMList,
     model: str,
-    model_dir: Union[str, Path],
-    processes: Optional[int] = None,
+    model_dir: str | Path,
+    processes: int | None = None,
     xgb_models: Optional[dict] = None,
-) -> List[ProcessingResult]:
+) -> list[ProcessingResult]:
     """
     Batch predict features, m/z, and intensities for all PSMs.
 
@@ -108,13 +108,13 @@ def _predict_batch_internal(
 
 
 def _correlate_internal(
-    psm_spectrum_annotations: List[Tuple[int, PSM, ObservedSpectrum, List]],
+    psm_spectrum_annotations: list[tuple[int, PSM, ObservedSpectrum, list]],
     model: str,
-    model_dir: Union[str, Path],
+    model_dir: str | Path,
     vector_file: bool = False,
     annotations_only: bool = False,
-    processes: Optional[int] = None,
-) -> List[ProcessingResult]:
+    processes: int | None = None,
+) -> list[ProcessingResult]:
     """
     Core correlation logic: extract targets, compute features/predictions, assemble results.
 
@@ -247,7 +247,7 @@ def _into_batches(iterable, batch_size: int) -> Generator[list, None, None]:
         yield batch
 
 
-def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.DataFrame:
+def _assemble_training_data(results: list[ProcessingResult], model: str) -> pd.DataFrame:
     """Assemble training data from results list to single pandas DataFrame."""
     from ms2pip._utils.feature_names import get_feature_names
 
@@ -286,9 +286,9 @@ def _assemble_training_data(results: List[ProcessingResult], model: str) -> pd.D
 
 
 def predict_single(
-    peptidoform: Union[Peptidoform, str],
+    peptidoform: Peptidoform | str,
     model: str = "HCD",
-    model_dir: Optional[Union[str, Path]] = None,
+    model_dir: str | Path | None = None,
 ) -> ProcessingResult:
     """
     Predict fragmentation spectrum for a single peptide.\f
@@ -302,14 +302,14 @@ def predict_single(
 
 
 def predict_batch(
-    psms: Union[PSMList, str, Path],
+    psms: PSMList | str | Path,
     add_retention_time: bool = False,
     add_ion_mobility: bool = False,
-    psm_filetype: Optional[str] = None,
+    psm_filetype: str | None = None,
     model: str = "HCD",
-    model_dir: Optional[Union[str, Path]] = None,
-    processes: Optional[int] = None,
-) -> List[ProcessingResult]:
+    model_dir: str | Path | None = None,
+    processes: int | None = None,
+) -> list[ProcessingResult]:
     """
     Predict fragmentation spectra for a batch of peptides.\f
 
@@ -334,7 +334,7 @@ def predict_batch(
 
     Returns
     -------
-    predictions: List[ProcessingResult]
+    predictions: list[ProcessingResult]
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
@@ -357,14 +357,14 @@ def predict_batch(
 
 
 def predict_library(
-    fasta_file: Optional[Union[str, Path]] = None,
-    config: Optional[Union[ProteomeSearchSpace, dict, str, Path]] = None,
+    fasta_file: str | Path | None = None,
+    config: ProteomeSearchSpace | dict | str | Path | None = None,
     add_retention_time: bool = False,
     add_ion_mobility: bool = False,
     model: str = "HCD",
-    model_dir: Optional[Union[str, Path]] = None,
+    model_dir: str | Path | None = None,
     batch_size: int = 100000,
-    processes: Optional[int] = None,
+    processes: int | None = None,
 ) -> Generator[ProcessingResult, None, None]:
     """
     Predict spectral library from protein FASTA file.\f
@@ -393,7 +393,7 @@ def predict_library(
 
     Yields
     ------
-    predictions: List[ProcessingResult]
+    predictions: list[ProcessingResult]
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
@@ -435,19 +435,19 @@ def predict_library(
 
 
 def correlate(
-    psms: Union[PSMList, str, Path],
-    spectrum_file: Union[str, Path],
-    psm_filetype: Optional[str] = None,
-    spectrum_id_pattern: Optional[str] = None,
+    psms: PSMList | str | Path,
+    spectrum_file: str | Path,
+    psm_filetype: str | None = None,
+    spectrum_id_pattern: str | None = None,
     compute_correlations: bool = False,
     add_retention_time: bool = False,
     add_ion_mobility: bool = False,
     model: str = "HCD",
-    model_dir: Optional[Union[str, Path]] = None,
+    model_dir: str | Path | None = None,
     ms2_tolerance: float = 0.02,
     ms2_tolerance_mode: str = "Da",
-    processes: Optional[int] = None,
-) -> List[ProcessingResult]:
+    processes: int | None = None,
+) -> list[ProcessingResult]:
     """
     Compare predicted and observed intensities and optionally compute correlations.\f
 
@@ -483,7 +483,7 @@ def correlate(
 
     Returns
     -------
-    results: List[ProcessingResult]
+    results: list[ProcessingResult]
         Predicted spectra with theoretical m/z and predicted intensity values, and optionally,
         correlations.
 
@@ -526,14 +526,14 @@ def correlate(
 
 
 def correlate_preloaded(
-    psms: Union[PSMList, List[PSM]],
+    psms: PSMList | list[PSM],
     compute_correlations: bool = False,
     model: str = "HCD",
-    model_dir: Optional[Union[str, Path]] = None,
+    model_dir: str | Path | None = None,
     ms2_tolerance: float = 0.02,
     ms2_tolerance_mode: str = "Da",
-    processes: Optional[int] = None,
-) -> List[ProcessingResult]:
+    processes: int | None = None,
+) -> list[ProcessingResult]:
     """
     Compare predicted and observed intensities for PSMs with preloaded spectra.\f
 
@@ -566,7 +566,7 @@ def correlate_preloaded(
 
     Returns
     -------
-    results: List[ProcessingResult]
+    results: list[ProcessingResult]
         ProcessingResult objects with theoretical m/z, predicted intensity, and observed
         intensity values, and optionally, correlations.
 
@@ -593,8 +593,8 @@ def correlate_preloaded(
     spectra_are_annotated = isinstance(first_spectrum, AnnotatedMS2Spectrum)
 
     # Convert to ObservedSpectrum and preprocess; store annotations if present
-    preloaded_spectra: Dict[str, ObservedSpectrum] = {}
-    preloaded_annotations: Optional[Dict[str, list]] = {} if spectra_are_annotated else None
+    preloaded_spectra: dict[str, ObservedSpectrum] = {}
+    preloaded_annotations: dict[str, list] | None = {} if spectra_are_annotated else None
     for psm in psm_list:
         spec_id = str(psm.spectrum_id)
         if spec_id in preloaded_spectra:
@@ -631,9 +631,7 @@ def correlate_preloaded(
         if spectrum is None:
             continue
         if preloaded_annotations is not None and spec_id in preloaded_annotations:
-            psm_spectrum_annotations.append(
-                (i, psm, spectrum, preloaded_annotations[spec_id])
-            )
+            psm_spectrum_annotations.append((i, psm, spectrum, preloaded_annotations[spec_id]))
         else:
             psm_spectrum_annotations.append((i, psm, spectrum, None))
             needs_annotation.append(len(psm_spectrum_annotations) - 1)
@@ -653,16 +651,18 @@ def correlate_preloaded(
         batch_seq_lens = []
         for idx in needs_annotation:
             _, psm, spectrum, _ = psm_spectrum_annotations[idx]
-            batch_spectra.append(MS2Spectrum(
-                identifier=spectrum.identifier or "",
-                mz=list(spectrum.mz),
-                intensity=list(spectrum.intensity),
-                precursor=Precursor(
-                    mz=float(spectrum.precursor_mz) if spectrum.precursor_mz else 0.0,
-                    charge=int(spectrum.precursor_charge) if spectrum.precursor_charge else 0,
-                    rt=float(spectrum.retention_time) if spectrum.retention_time else 0.0,
-                ),
-            ))
+            batch_spectra.append(
+                MS2Spectrum(
+                    identifier=spectrum.identifier or "",
+                    mz=list(spectrum.mz),
+                    intensity=list(spectrum.intensity),
+                    precursor=Precursor(
+                        mz=float(spectrum.precursor_mz) if spectrum.precursor_mz else 0.0,
+                        charge=int(spectrum.precursor_charge) if spectrum.precursor_charge else 0,
+                        rt=float(spectrum.retention_time) if spectrum.retention_time else 0.0,
+                    ),
+                )
+            )
             batch_proformas.append(str(psm.peptidoform.proforma))
             batch_seq_lens.append(len(psm.peptidoform.parsed_sequence))
 
@@ -685,9 +685,7 @@ def correlate_preloaded(
             psm_spectrum_annotations[idx] = (psm_index, psm, spectrum, peak_annotations)
 
     logger.info("Processing spectra and peptides...")
-    results = _correlate_internal(
-        psm_spectrum_annotations, model, model_dir, processes=processes
-    )
+    results = _correlate_internal(psm_spectrum_annotations, model, model_dir, processes=processes)
 
     if compute_correlations:
         logger.info("Computing correlations")
@@ -745,14 +743,14 @@ def correlate_single(
 
 
 def get_training_data(
-    psms: Union[PSMList, str, Path],
-    spectrum_file: Union[str, Path],
-    psm_filetype: Optional[str] = None,
-    spectrum_id_pattern: Optional[str] = None,
+    psms: PSMList | str | Path,
+    spectrum_file: str | Path,
+    psm_filetype: str | None = None,
+    spectrum_id_pattern: str | None = None,
     model: str = "HCD",
     ms2_tolerance: float = 0.02,
     ms2_tolerance_mode: str = "Da",
-    processes: Optional[int] = None,
+    processes: int | None = None,
 ):
     """
     Extract feature vectors and target intensities from observed spectra for training.\f
@@ -811,14 +809,14 @@ def get_training_data(
 
 
 def annotate_spectra(
-    psms: Union[PSMList, str, Path],
-    spectrum_file: Union[str, Path],
-    psm_filetype: Optional[str] = None,
-    spectrum_id_pattern: Optional[str] = None,
+    psms: PSMList | str | Path,
+    spectrum_file: str | Path,
+    psm_filetype: str | None = None,
+    spectrum_id_pattern: str | None = None,
     model: str = "HCD",
     ms2_tolerance: float = 0.02,
     ms2_tolerance_mode: str = "Da",
-    processes: Optional[int] = None,
+    processes: int | None = None,
 ):
     """
     Annotate observed spectra.\f
@@ -848,7 +846,7 @@ def annotate_spectra(
 
     Returns
     -------
-    results: List[ProcessingResult]
+    results: list[ProcessingResult]
         List of ProcessingResult objects with theoretical m/z and observed intensity values.
 
     """
@@ -873,9 +871,7 @@ def annotate_spectra(
     )
 
 
-def download_models(
-    models: Optional[List[str]] = None, model_dir: Optional[Union[str, Path]] = None
-):
+def download_models(models: Optional[list[str]] = None, model_dir: str | Path | None = None):
     """
     Download all specified models to the specified directory.
 

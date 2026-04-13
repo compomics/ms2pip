@@ -1,7 +1,6 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 import rich
@@ -32,7 +31,7 @@ PSM_FILETYPES = list(READERS.keys())
 
 def _infer_output_name(
     input_filename: str,
-    output_name: Optional[str] = None,
+    output_name: str | None = None,
 ) -> Path:
     """Infer output filename from input filename if output_filename was not defined."""
     if output_name:

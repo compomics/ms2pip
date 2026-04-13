@@ -1,9 +1,11 @@
 """Read, annotate, and match MS2 spectra."""
 
+from __future__ import annotations
+
 import re
 from collections import defaultdict
+from collections.abc import Generator
 from pathlib import Path
-from typing import Dict, Generator, List, Tuple, Union
 
 import numpy as np
 from psm_utils import PSM, PSMList
@@ -70,11 +72,7 @@ def _read_raw_spectra(spectrum_file: str) -> Generator[MS2Spectrum, None, None]:
         raise exceptions.UnsupportedSpectrumFiletypeError(Path(spectrum_file).suffixes) from e
 
     for spectrum in spectra:
-        if (
-            str(spectrum.identifier) == ""
-            or len(spectrum.mz) == 0
-            or len(spectrum.intensity) == 0
-        ):
+        if str(spectrum.identifier) == "" or len(spectrum.mz) == 0 or len(spectrum.intensity) == 0:
             continue
         yield spectrum
 
@@ -97,7 +95,7 @@ def annotate_spectrum(
     model: str,
     ms2_tolerance: float,
     ms2_tolerance_mode: str,
-) -> List[List[tuple]]:
+) -> list[list[tuple]]:
     """
     Annotate an ObservedSpectrum using ms2rescore-rs.
 
@@ -133,11 +131,11 @@ def annotate_spectrum(
 
 
 def targets_from_annotations(
-    peak_annotations: List,
+    peak_annotations: list,
     intensity: np.ndarray,
-    ion_types: List[str],
+    ion_types: list[str],
     seq_len: int,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Extract observed intensity targets from peak annotations.
 
@@ -188,12 +186,12 @@ def targets_from_annotations(
 
 def load_and_match_spectra(
     psm_list: PSMList,
-    spectrum_file: Union[str, Path],
+    spectrum_file: str | Path,
     spectrum_id_pattern: str,
     model: str,
     ms2_tolerance: float,
     ms2_tolerance_mode: str,
-) -> List[Tuple[int, PSM, ObservedSpectrum, List]]:
+) -> list[tuple[int, PSM, ObservedSpectrum, list]]:
     """
     Read spectra from file, annotate, preprocess, and match to PSMs.
 
@@ -213,7 +211,7 @@ def load_and_match_spectra(
         psms_by_specid[str(psm.spectrum_id)].append((i, psm))
 
     # Step 1: Read raw spectra and match to PSMs (no conversion yet)
-    matched_raw: List[Tuple[str, MS2Spectrum, List[Tuple[int, PSM]]]] = []
+    matched_raw: list[tuple[str, MS2Spectrum, list[tuple[int, PSM]]]] = []
     for spectrum in _read_raw_spectra(str(spectrum_file)):
         match = spectrum_id_regex.search(str(spectrum.identifier))
         try:
@@ -260,7 +258,7 @@ def load_and_match_spectra(
 
     # Step 3: Convert to ObservedSpectrum, preprocess, and assemble results
     # Cache converted/preprocessed spectra by spectrum_id to avoid redundant work
-    preprocessed_cache: Dict[str, ObservedSpectrum] = {}
+    preprocessed_cache: dict[str, ObservedSpectrum] = {}
     results = []
 
     for batch_idx, (raw_idx, psm_idx) in enumerate(batch_indices):

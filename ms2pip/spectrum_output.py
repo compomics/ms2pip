@@ -45,11 +45,12 @@ import re
 import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Generator
 from io import StringIO
-from pathlib import Path
 from os import PathLike
+from pathlib import Path
 from time import localtime, strftime
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any
 
 import numpy as np
 from psm_utils import PSM, Peptidoform
@@ -64,8 +65,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 def write_spectra(
-    filename: Union[str, PathLike],
-    processing_results: List[ProcessingResult],
+    filename: str | PathLike,
+    processing_results: list[ProcessingResult],
     file_format: str = "tsv",
     write_mode: str = "w",
 ):
@@ -94,7 +95,7 @@ class _Writer(ABC):
 
     suffix = ""
 
-    def __init__(self, filename: Union[str, PathLike], write_mode: str = "w"):
+    def __init__(self, filename: str | PathLike, write_mode: str = "w"):
         self.filename = Path(filename).with_suffix(self.suffix)
         self.write_mode = write_mode
 
@@ -136,7 +137,7 @@ class _Writer(ABC):
             self.open()
             return self._open_file
 
-    def write(self, processing_results: List[ProcessingResult]):
+    def write(self, processing_results: list[ProcessingResult]):
         """Write multiple processing results to file."""
         for result in processing_results:
             self._write_result(result)
@@ -162,7 +163,7 @@ class TSV(_Writer):
         "im",
     ]
 
-    def write(self, processing_results: List[ProcessingResult]):
+    def write(self, processing_results: list[ProcessingResult]):
         """Write multiple processing results to file."""
         writer = csv.DictWriter(
             self._file_object, fieldnames=self.field_names, delimiter="\t", lineterminator="\n"
@@ -206,7 +207,7 @@ class MSP(_Writer):
 
     suffix = ".msp"
 
-    def write(self, results: List[ProcessingResult]):
+    def write(self, results: list[ProcessingResult]):
         """Write multiple processing results to file."""
         for result in results:
             self._write_result(result)
@@ -241,8 +242,8 @@ class MSP(_Writer):
         def _format_single_modification(
             amino_acid: str,
             position: int,
-            modifications: Optional[List[proforma.ModificationBase]],
-        ) -> Union[str, None]:
+            modifications: list[proforma.ModificationBase] | None,
+        ) -> str | None:
             """Get modification label from :py:class:`proforma.ModificationBase` list."""
             if not modifications:
                 return None
@@ -278,7 +279,7 @@ class MSP(_Writer):
         return f"Parent={peptidoform.theoretical_mz}"
 
     @staticmethod
-    def _format_protein_string(psm: PSM) -> Union[str, None]:
+    def _format_protein_string(psm: PSM) -> str | None:
         """Format protein list as string."""
         if psm.protein_list:
             return f"Protein={','.join(psm.protein_list)}"
@@ -286,7 +287,7 @@ class MSP(_Writer):
             return None
 
     @staticmethod
-    def _format_retention_time(psm: PSM) -> Union[str, None]:
+    def _format_retention_time(psm: PSM) -> str | None:
         """Format retention time as string."""
         if psm.retention_time:
             return f"RetentionTime={psm.retention_time}"
@@ -294,7 +295,7 @@ class MSP(_Writer):
             return None
 
     @staticmethod
-    def _format_ion_mobility(psm: PSM) -> Union[str, None]:
+    def _format_ion_mobility(psm: PSM) -> str | None:
         """Format ion mobility as string."""
         if psm.ion_mobility:
             return f"IonMobility={psm.ion_mobility}"
@@ -334,7 +335,7 @@ class MGF(_Writer):
 
     suffix = ".mgf"
 
-    def write(self, results: List[ProcessingResult]):
+    def write(self, results: list[ProcessingResult]):
         """Write multiple processing results to file."""
         for result in results:
             self._write_result(result)
@@ -384,7 +385,7 @@ class Spectronaut(_Writer):
         "FragmentLossType",
     ]
 
-    def write(self, processing_results: List[ProcessingResult]):
+    def write(self, processing_results: list[ProcessingResult]):
         """Write multiple processing results to file."""
         writer = csv.DictWriter(
             self._file_object, fieldnames=self.field_names, delimiter="\t", lineterminator="\n"
@@ -404,7 +405,7 @@ class Spectronaut(_Writer):
             writer.writerow({**psm_info, **fragment_info})
 
     @staticmethod
-    def _process_psm(psm: PSM) -> Dict[str, Any]:
+    def _process_psm(psm: PSM) -> dict[str, Any]:
         """Process PSM to Spectronaut format."""
         return {
             "ModifiedPeptide": _peptidoform_str_without_charge(psm.peptidoform),
@@ -417,7 +418,7 @@ class Spectronaut(_Writer):
         }
 
     @staticmethod
-    def _yield_fragment_info(result: ProcessingResult) -> Generator[Dict[str, Any], None, None]:
+    def _yield_fragment_info(result: ProcessingResult) -> Generator[dict[str, Any], None, None]:
         """Yield fragment information for a processing result."""
         # Normalize intensities
         intensities = {
@@ -468,7 +469,7 @@ class Bibliospec(_Writer):
         "ion-mobility",
     ]
 
-    def __init__(self, filename: Union[str, PathLike], write_mode: str = "w"):
+    def __init__(self, filename: str | PathLike, write_mode: str = "w"):
         super().__init__(filename, write_mode)
         self.ssl_file = self.filename.with_suffix(self.ssl_suffix)
         self.ms2_file = self.filename.with_suffix(self.ms2_suffix)
@@ -514,7 +515,7 @@ class Bibliospec(_Writer):
             self.open()
             return self._open_ms2_file
 
-    def write(self, processing_results: List[ProcessingResult]):
+    def write(self, processing_results: list[ProcessingResult]):
         """Write multiple processing results to file."""
         # Create CSV writer
         ssl_dict_writer = csv.DictWriter(
@@ -620,7 +621,7 @@ class Bibliospec(_Writer):
         )
 
     @staticmethod
-    def _get_last_ssl_scan_number(ssl_file: Union[str, PathLike, StringIO]):
+    def _get_last_ssl_scan_number(ssl_file: str | PathLike | StringIO):
         """Read scan number of last line in a Bibliospec SSL file."""
         if isinstance(ssl_file, StringIO):
             ssl_file.seek(0)
@@ -652,7 +653,7 @@ class DLIB(_Writer):
             self._open_file = self.filename.unlink(missing_ok=True)
         self._open_file = dlib.open_sqlite(self.filename)
 
-    def write(self, processing_results: List[ProcessingResult]):
+    def write(self, processing_results: list[ProcessingResult]):
         """Write MS2PIP predictions to a DLIB SQLite file."""
         connection = self._file_object
         dlib.metadata.create_all(connection.engine)
@@ -700,9 +701,9 @@ class DLIB(_Writer):
 
     @staticmethod
     def _write_entries(
-        processing_results: List[ProcessingResult],
+        processing_results: list[ProcessingResult],
         connection: Connection,
-        output_filename: Union[str, PathLike],
+        output_filename: str | PathLike,
     ):
         """Write spectra to DLIB SQLite file."""
         with connection.begin():
@@ -732,7 +733,7 @@ class DLIB(_Writer):
                 )
 
     @staticmethod
-    def _write_peptide_to_protein(results: List[ProcessingResult], connection: Connection):
+    def _write_peptide_to_protein(results: list[ProcessingResult], connection: Connection):
         """Write peptide-to-protein mappings to DLIB SQLite file."""
         peptide_to_proteins = {
             (result.psm.peptidoform.sequence, protein)
@@ -785,7 +786,7 @@ def _unlogarithmize(intensities: np.array) -> np.array:
     return (2**intensities) - 0.001
 
 
-def _basepeak_normalize(intensities: np.array, basepeak: Optional[float] = None) -> np.array:
+def _basepeak_normalize(intensities: np.array, basepeak: float | None = None) -> np.array:
     """Normalize intensities to most intense peak."""
     if not basepeak:
         basepeak = intensities.max()

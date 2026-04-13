@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 from psm_utils import Peptidoform
 from pydantic import model_validator, field_validator, ConfigDict, BaseModel
+
 try:
     import spectrum_utils.spectrum as sus
     import spectrum_utils.plot as sup
@@ -21,14 +22,14 @@ class Spectrum(BaseModel):
 
     mz: np.ndarray
     intensity: np.ndarray
-    annotations: Optional[np.ndarray] = None
-    identifier: Optional[str] = None
-    peptidoform: Optional[Union[Peptidoform, str]] = None
-    precursor_mz: Optional[float] = None
-    precursor_charge: Optional[int] = None
-    retention_time: Optional[float] = None
-    mass_tolerance: Optional[float] = None
-    mass_tolerance_unit: Optional[str] = None
+    annotations: np.ndarray | None = None
+    identifier: str | None = None
+    peptidoform: Peptidoform | str | None = None
+    precursor_mz: float | None = None
+    precursor_charge: int | None = None
+    retention_time: float | None = None
+    mass_tolerance: float | None = None
+    mass_tolerance_unit: str | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -184,7 +185,5 @@ class ObservedSpectrum(Spectrum):
 class PredictedSpectrum(Spectrum):
     """Predicted MS2 spectrum."""
 
-    mass_tolerance: Optional[float] = 0.001
-    mass_tolerance_unit: Optional[str] = "Da"
-
-    pass
+    mass_tolerance: float | None = 0.001
+    mass_tolerance_unit: str | None = "Da"
