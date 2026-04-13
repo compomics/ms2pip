@@ -85,11 +85,3 @@ target-version = ['py310']
 [tool.ruff]
 line-length = 99
 target-version = 'py310'
-
-[tool.cibuildwheel]
-# Keep Python targets explicit so CI updates don't start publishing untested wheels.
-build = "cp3{10,11,12,13}-manylinux_x86_64 cp3{10,11,12,13}-win_amd64 cp3{10,11,12,13}-macosx_{x86_64,arm64}"
-test-command = "ms2pip --help"
-
-# Prevent building from source for packages with complex C/C++/Rust dependencies
-environment = { PIP_ONLY_BINARY = "pyarrow,pandas,numpy,lxml,xgboost,scipy,ms2rescore-rs" }

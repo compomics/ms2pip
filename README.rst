@@ -36,7 +36,8 @@ peptide fragmentation spectrum that accurately resembles its observed equivalent
 can be used to validate peptide identifications, generate proteome-wide spectral libraries, or to
 select discriminative transitions for targeted proteomics. MS²PIP employs the
 `XGBoost <https://xgboost.readthedocs.io/en/stable/>`_ machine learning algorithm and is written in
-Python and C.
+Python, with helper functions in Rust
+(`ms2rescore-rs <https://github.com/compomics/ms2rescore-rs>`_).
 
 .. figure:: https://raw.githubusercontent.com/compomics/ms2pip/v4.0.0/img/mirror-DVAQIFNNILR-2.png
 
