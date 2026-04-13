@@ -38,16 +38,16 @@ def proforma_to_mass_shift(peptidoform: Peptidoform) -> str:
     n_term = peptidoform.properties.get("n_term")
     if n_term:
         for mod in n_term:
-            parts.append(f"[+{mod.mass:.4f}]-")
+            parts.append(f"[{mod.mass:+.4f}]-")
     for aa, mods in peptidoform.parsed_sequence:
         parts.append(aa)
         if mods:
             for mod in mods:
-                parts.append(f"[+{mod.mass:.4f}]")
+                parts.append(f"[{mod.mass:+.4f}]")
     c_term = peptidoform.properties.get("c_term")
     if c_term:
         for mod in c_term:
-            parts.append(f"-[+{mod.mass:.4f}]")
+            parts.append(f"-[{mod.mass:+.4f}]")
     if peptidoform.precursor_charge:
         parts.append(f"/{peptidoform.precursor_charge}")
     return "".join(parts)

@@ -69,6 +69,9 @@ def _predict_batch_internal(
     (both internally parallelized via Rayon), then XGBoost for intensity prediction.
     """
     model_dir = validate_model(model, model_dir)
+    if not psm_list:
+        return []
+
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
     frag_model = MODELS[model]["fragmentation"]
 
@@ -735,12 +738,20 @@ def correlate_single(
     if not isinstance(observed_spectrum.peptidoform, Peptidoform):
         raise ValueError("Peptidoform must be set in observed spectrum to correlate.")
 
+    # Preprocess a copy of the spectrum (TIC normalization + log2 transform)
+    preprocessed = observed_spectrum.model_copy(deep=True)
+    for label_type in ["iTRAQ", "TMT"]:
+        if label_type in model:
+            preprocessed.remove_reporter_ions(label_type)
+    preprocessed.tic_norm()
+    preprocessed.log2_transform()
+
     psm = PSM(peptidoform=observed_spectrum.peptidoform, spectrum_id=0)
-    annotated = annotate_spectrum(observed_spectrum, psm, model, ms2_tolerance, ms2_tolerance_mode)
+    annotated = annotate_spectrum(preprocessed, psm, model, ms2_tolerance, ms2_tolerance_mode)
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
     seq_len = len(observed_spectrum.peptidoform.parsed_sequence)
     observed_intensity = targets_from_annotations(
-        annotated, observed_spectrum.intensity.astype(np.float32), ion_types, seq_len
+        annotated, preprocessed.intensity.astype(np.float32), ion_types, seq_len
     )
 
     result = predict_single(observed_spectrum.peptidoform, model=model)
