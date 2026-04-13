@@ -43,7 +43,7 @@ def proforma_to_mass_shift(peptidoform: Peptidoform) -> str:
         parts.append(aa)
         if mods:
             for mod in mods:
-                parts.append(f"[{mod.mass:+.4f}]")
+                parts.append(f"[{mod.mass:+.4f}]")  # type: ignore[ty:unresolved-attribute]
     c_term = peptidoform.properties.get("c_term")
     if c_term:
         for mod in c_term:
