@@ -22,8 +22,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --python 3.13
-      - run: uvx ty check --python .venv ms2pip/
+      - run: uv run --group dev --python 3.13 ty check ms2pip/
 
   test:
     runs-on: ubuntu-latest

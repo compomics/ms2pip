@@ -50,7 +50,7 @@ plotting = ["matplotlib>=3.0", "spectrum-utils>=0.4"]
 
 [dependency-groups]
 notebook = ["ipykernel", "ipywidgets", "pip"]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "ty"]
 docs = [
     "sphinx",
     "numpydoc>=1,<2",
