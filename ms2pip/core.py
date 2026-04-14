@@ -21,20 +21,18 @@ from psm_utils import PSM, Peptidoform, PSMList
 from rich.progress import track
 
 import ms2pip.exceptions as exceptions
-from ms2pip._utils.ion_mobility import IonMobility
-from ms2pip._utils.psm_input import read_psms
-from ms2pip._utils.retention_time import RetentionTime
-from ms2pip._utils.xgb_models import load_xgb_models, predict_intensities, validate_model
-from ms2pip.constants import MODELS
-from ms2pip.result import ProcessingResult, calculate_correlations
-from ms2pip.search_space import ProteomeSearchSpace
-from ms2pip.spectrum import ObservedSpectrum
 from ms2pip._spectrum_processing import (
     annotate_spectrum,
     load_and_match_spectra,
     proforma_to_mass_shift,
     targets_from_annotations,
 )
+from ms2pip._utils.psm_input import read_psms
+from ms2pip._utils.xgb_models import load_xgb_models, predict_intensities, validate_model
+from ms2pip.constants import MODELS
+from ms2pip.result import ProcessingResult, calculate_correlations
+from ms2pip.search_space import ProteomeSearchSpace
+from ms2pip.spectrum import ObservedSpectrum
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +159,9 @@ def _correlate_internal(
         )
         all_targets.append(targets)
 
-    proformas = [proforma_to_mass_shift(psm.peptidoform) for _, psm, _, _ in psm_spectrum_annotations]
+    proformas = [
+        proforma_to_mass_shift(psm.peptidoform) for _, psm, _, _ in psm_spectrum_annotations
+    ]
     num_ions = [
         len(psm.peptidoform.parsed_sequence) - 1 for _, psm, _, _ in psm_spectrum_annotations
     ]
@@ -295,6 +295,29 @@ def _assemble_training_data(results: list[ProcessingResult], model: str) -> pd.D
     return training_data
 
 
+def _add_im_rt(
+    psm_list: PSMList,
+    add_retention_time: bool,
+    add_ion_mobility: bool,
+    processes: int | None = None,
+) -> None:
+    """Add retention time and ion mobility predictions to PSMList if requested."""
+    if add_retention_time:
+        from deeplc import predict as _predict_rt
+
+        logger.info("Adding retention time predictions with DeepLC")
+        psm_list["retention_time"] = np.array(
+            _predict_rt(psm_list, predict_kwargs={"num_threads": processes}), dtype=np.float32
+        )  # type: ignore[ty:invalid-assignment]
+    if add_ion_mobility:
+        from im2deep import predict as _predict_im
+
+        logger.info("Adding ion mobility predictions with IM2Deep...")
+        psm_list["ion_mobility"] = np.array(
+            _predict_im(psm_list, predict_kwargs={"num_threads": processes}), dtype=np.float32
+        )  # type: ignore[ty:invalid-assignment]
+
+
 def predict_single(
     peptidoform: Peptidoform | str,
     model: str = "HCD",
@@ -352,15 +375,7 @@ def predict_batch(
         psms = PSMList(psm_list=psms)
     psm_list = read_psms(psms, filetype=psm_filetype)
 
-    if add_retention_time:
-        logger.info("Adding retention time predictions")
-        rt_predictor = RetentionTime(processes=processes)
-        rt_predictor.add_rt_predictions(psm_list)
-
-    if add_ion_mobility:
-        logger.info("Adding ion mobility predictions")
-        im_predictor = IonMobility(processes=processes)
-        im_predictor.add_im_predictions(psm_list)
+    _add_im_rt(psm_list, add_retention_time, add_ion_mobility, processes=processes)
 
     logger.info("Processing peptides...")
     return _predict_batch_internal(psm_list, model, model_dir, processes=processes)
@@ -417,26 +432,25 @@ def predict_library(
     else:
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
-    search_space.build()
+    search_space.build(processes=processes)
+
+    # Convert to PSMList and filter by precursor m/z range
+    psm_list = PSMList(psm_list=list(search_space))
+    psm_list = search_space.filter_psms_by_mz(psm_list)
+
+    _add_im_rt(psm_list, add_retention_time, add_ion_mobility, processes=processes)
 
     # Pre-load XGBoost models once for all batches
     model_dir = validate_model(model, model_dir)
     xgb_models = load_xgb_models(MODELS[model], model_dir, processes)
 
     for batch in track(
-        _into_batches(search_space, batch_size=batch_size),
+        _into_batches(psm_list, batch_size=batch_size),
         description="Predicting spectra...",
-        total=ceil(len(search_space) / batch_size),
+        total=ceil(len(psm_list) / batch_size),
     ):
-        psm_list = search_space.filter_psms_by_mz(PSMList(psm_list=list(batch)))
-
-        if add_retention_time:
-            RetentionTime(processes=processes).add_rt_predictions(psm_list)
-        if add_ion_mobility:
-            IonMobility(processes=processes).add_im_predictions(psm_list)
-
         yield _predict_batch_internal(
-            psm_list,
+            PSMList(psm_list=list(batch)),
             model,
             model_dir,
             processes=processes,
@@ -501,15 +515,7 @@ def correlate(
     psm_list = read_psms(psms, filetype=psm_filetype)
     spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
-    if add_retention_time:
-        logger.info("Adding retention time predictions")
-        rt_predictor = RetentionTime(processes=processes)
-        rt_predictor.add_rt_predictions(psm_list)
-
-    if add_ion_mobility:
-        logger.info("Adding ion mobility predictions")
-        im_predictor = IonMobility(processes=processes)
-        im_predictor.add_im_predictions(psm_list)
+    _add_im_rt(psm_list, add_retention_time, add_ion_mobility, processes=processes)
 
     # Validate runs and collections
     if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:

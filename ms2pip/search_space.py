@@ -257,14 +257,15 @@ class ProteomeSearchSpace(BaseModel):
         else:
             raise ValueError("Search space must be a dict, str, Path, or ProteomeSearchSpace.")
 
-    def build(self, processes: int = 1):
+    def build(self, processes: int | None = None):
         """
         Build peptide search space from FASTA file.
 
         Parameters
         ----------
-        processes : int
-            Number of processes to use for parallelization.
+        processes
+            Number of processes to use for parallelization. Uses all available CPU cores by
+            default.
 
         """
         processes = processes if processes else multiprocessing.cpu_count()
