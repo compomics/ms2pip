@@ -3,7 +3,7 @@ import pytest
 from psm_utils import PSM, Peptidoform
 from ms2rescore_rs import AnnotatedMS2Spectrum, FragmentAnnotation, MS2Spectrum, Precursor
 
-from ms2pip.core import correlate_preloaded, correlate_single
+from ms2pip.core import correlate, correlate_single
 from ms2pip.spectrum import ObservedSpectrum
 
 
@@ -57,7 +57,7 @@ def test_correlate_single_requires_peptidoform():
         correlate_single(obs)
 
 
-def test_correlate_preloaded_annotated():
+def test_correlate_annotated():
     ann_spec = AnnotatedMS2Spectrum(
         identifier="test_spectrum",
         mz=[175.054, 276.167, 488.319],
@@ -75,7 +75,7 @@ def test_correlate_preloaded_annotated():
         spectrum=ann_spec,
     )
 
-    results = correlate_preloaded([psm], model="HCD")
+    results = correlate([psm], model="HCD")
 
     assert len(results) == 1
     result = results[0]
@@ -87,7 +87,7 @@ def test_correlate_preloaded_annotated():
     assert result.observed_intensity["b"][1] > floor
 
 
-def test_correlate_preloaded_raw():
+def test_correlate_raw():
     raw_spec = MS2Spectrum(
         identifier="test_spectrum",
         mz=[175.054, 276.167, 488.319],
@@ -100,7 +100,7 @@ def test_correlate_preloaded_raw():
         spectrum=raw_spec,
     )
 
-    results = correlate_preloaded(
+    results = correlate(
         [psm], model="HCD", ms2_tolerance=0.02, ms2_tolerance_mode="Da"
     )
 
@@ -109,7 +109,7 @@ def test_correlate_preloaded_raw():
     assert results[0].observed_intensity is not None
 
 
-def test_correlate_preloaded_ppm_tolerance():
+def test_correlate_ppm_tolerance():
     raw_spec = MS2Spectrum(
         identifier="test_spectrum",
         mz=[175.054, 276.167],
@@ -122,7 +122,7 @@ def test_correlate_preloaded_ppm_tolerance():
         spectrum=raw_spec,
     )
 
-    results = correlate_preloaded(
+    results = correlate(
         [psm], model="HCD", ms2_tolerance=20.0, ms2_tolerance_mode="ppm"
     )
 
@@ -130,16 +130,16 @@ def test_correlate_preloaded_ppm_tolerance():
     assert results[0].observed_intensity is not None
 
 
-def test_correlate_preloaded_invalid_spectrum():
+def test_correlate_no_spectra_no_file():
     psm = PSM(
         peptidoform=Peptidoform("ACDEFK/2"),
         spectrum_id="test",
     )
-    with pytest.raises(ValueError, match="MS2Spectrum or AnnotatedMS2Spectrum"):
-        correlate_preloaded([psm])
+    with pytest.raises(ValueError, match="spectrum_file.*must be provided"):
+        correlate([psm])
 
 
-def test_correlate_preloaded_multiple_psms():
+def test_correlate_multiple_psms():
     psms = []
     for i, pep in enumerate(["ACDEFK/2", "PEPTIDEK/3"]):
         spec = MS2Spectrum(
@@ -150,7 +150,7 @@ def test_correlate_preloaded_multiple_psms():
         )
         psms.append(PSM(peptidoform=Peptidoform(pep), spectrum_id=f"spec_{i}", spectrum=spec))
 
-    results = correlate_preloaded(psms, model="HCD")
+    results = correlate(psms, model="HCD")
 
     assert len(results) == 2
     for result in results:
