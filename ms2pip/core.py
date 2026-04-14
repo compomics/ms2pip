@@ -421,30 +421,33 @@ def predict_library(
 
     search_space.build()
 
+    # Convert to PSMList and filter by precursor m/z range
+    psm_list = PSMList(psm_list=list(search_space))
+    psm_list = search_space.filter_psms_by_mz(psm_list)
+
+    # Run RT/IM predictions once on the full list (not per batch)
+    if add_retention_time:
+        from deeplc import predict_and_calibrate as _predict_rt
+
+        logger.info("Predicting retention times with DeepLC...")
+        psm_list["retention_time"] = np.array(_predict_rt(psm_list), dtype=np.float32)
+    if add_ion_mobility:
+        from im2deep import predict as _predict_im
+
+        logger.info("Predicting ion mobility with IM2Deep...")
+        psm_list["ion_mobility"] = np.array(_predict_im(psm_list), dtype=np.float32)
+
     # Pre-load XGBoost models once for all batches
     model_dir = validate_model(model, model_dir)
     xgb_models = load_xgb_models(MODELS[model], model_dir, processes)
 
     for batch in track(
-        _into_batches(search_space, batch_size=batch_size),
+        _into_batches(psm_list, batch_size=batch_size),
         description="Predicting spectra...",
-        total=ceil(len(search_space) / batch_size),
+        total=ceil(len(psm_list) / batch_size),
     ):
-        psm_list = search_space.filter_psms_by_mz(PSMList(psm_list=list(batch)))
-
-        if add_retention_time:
-            from deeplc import predict_and_calibrate as _predict_rt
-
-            logger.info("Predicting retention times with DeepLC...")
-            psm_list["retention_time"] = np.array(_predict_rt(psm_list), dtype=np.float32)
-        if add_ion_mobility:
-            from im2deep import predict as _predict_im
-
-            logger.info("Predicting ion mobility with IM2Deep...")
-            psm_list["ion_mobility"] = np.array(_predict_im(psm_list), dtype=np.float32)
-
         yield _predict_batch_internal(
-            psm_list,
+            PSMList(psm_list=list(batch)),
             model,
             model_dir,
             processes=processes,
