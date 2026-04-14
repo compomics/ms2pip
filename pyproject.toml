@@ -48,7 +48,7 @@ dependencies = [
 [project.optional-dependencies]
 plotting = ["matplotlib>=3.0", "spectrum-utils>=0.4"]
 rt = ["deeplc>=4.0.0a2"]
-im = ["im2deep>=2.0.0a2"]
+im = ["im2deep>=2.0.0a3"]
 
 [dependency-groups]
 notebook = ["ipykernel", "ipywidgets", "pip"]
