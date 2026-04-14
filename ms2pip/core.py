@@ -432,7 +432,7 @@ def predict_library(
     else:
         raise ValueError("Either `fasta_file` or `config` must be provided.")
 
-    search_space.build()
+    search_space.build(processes=processes)
 
     # Convert to PSMList and filter by precursor m/z range
     psm_list = PSMList(psm_list=list(search_space))
