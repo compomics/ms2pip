@@ -6,6 +6,7 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import Generator
+from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
 
@@ -49,8 +50,8 @@ def _read_raw_spectra(spectrum_file: str) -> Generator[MS2Spectrum, None, None]:
 
 
 def _to_observed_spectrum(spectrum: MS2Spectrum) -> ObservedSpectrum:
-    """Convert an MS2Spectrum to an ObservedSpectrum."""
-    return ObservedSpectrum(
+    """Convert an MS2Spectrum to an ObservedSpectrum (skips Pydantic validation)."""
+    return ObservedSpectrum.model_construct(
         mz=np.array(spectrum.mz, dtype=np.float32),
         intensity=np.array(spectrum.intensity, dtype=np.float32),
         identifier=str(spectrum.identifier),
@@ -69,6 +70,7 @@ def _preprocess_spectrum(spectrum: ObservedSpectrum, model: str) -> None:
     spectrum.log2_transform()
 
 
+@lru_cache(maxsize=None)
 def proforma_to_mass_shift(peptidoform: Peptidoform) -> str:
     """
     Convert a Peptidoform to a mass-shift ProForma string.

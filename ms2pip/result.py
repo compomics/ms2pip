@@ -16,6 +16,7 @@ try:
 except ImportError:
     sup = None  # type: ignore[ty:invalid-assignment]
 
+from ms2pip.correlation import pearson
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
 logger = getLogger(__name__)
@@ -117,7 +118,7 @@ def calculate_correlations(results: list[ProcessingResult]) -> None:
             continue
         pred_int = np.concatenate(list(result.predicted_intensity.values()))
         obs_int = np.concatenate(list(result.observed_intensity.values()))
-        result.correlation = np.corrcoef(pred_int, obs_int)[0][1]
+        result.correlation = pearson(pred_int, obs_int)
 
 
 def write_correlations(results: list[ProcessingResult], output_file: str | Path) -> None:

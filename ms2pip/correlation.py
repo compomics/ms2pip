@@ -1,6 +1,16 @@
 import numpy as np
 
 
+def pearson(x: np.ndarray, y: np.ndarray) -> float:
+    """Fast Pearson correlation for two 1D arrays."""
+    xm = x - x.mean()
+    ym = y - y.mean()
+    denom = np.sqrt((xm @ xm) * (ym @ ym))
+    if denom == 0:
+        return 0.0
+    return float(xm @ ym / denom)
+
+
 def ms2pip_pearson(true, pred):
     """Calculate Pearson correlation, including tic-normalization and log-transformation."""
 
@@ -10,8 +20,7 @@ def ms2pip_pearson(true, pred):
     def log_transform(x):
         return np.log2(x + 0.001)
 
-    corr = np.corrcoef(log_transform(tic_norm(true)), log_transform(tic_norm(pred)))[0][1]
-    return corr
+    return pearson(log_transform(tic_norm(true)), log_transform(tic_norm(pred)))
 
 
 def spectral_angle(true, pred, epsilon=1e-7):
