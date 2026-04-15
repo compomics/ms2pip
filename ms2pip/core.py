@@ -24,7 +24,7 @@ from ms2pip._spectrum_processing import (
     resolve_spectra,
     targets_from_annotations,
 )
-from ms2pip._utils.psm_input import read_psms
+from ms2pip._utils.psm_input import filter_valid_psms, read_psms
 from ms2pip._utils.xgb_models import load_xgb_models, predict_intensities, validate_model
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
@@ -70,8 +70,18 @@ def _predict_batch_internal(
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
     frag_model = MODELS[model]["fragmentation"]
 
-    proformas = [proforma_to_mass_shift(psm.peptidoform) for psm in psm_list]
-    num_ions = [len(psm.peptidoform.parsed_sequence) - 1 for psm in psm_list]
+    # Validate and filter PSMs
+    valid_indices, _ = filter_valid_psms(psm_list)
+    results: list[ProcessingResult] = [
+        ProcessingResult(psm_index=i, psm=psm) for i, psm in enumerate(psm_list)
+    ]
+
+    if not valid_indices:
+        return results
+
+    valid_psms = [psm_list[i] for i in valid_indices]
+    proformas = [proforma_to_mass_shift(psm.peptidoform) for psm in valid_psms]
+    num_ions = [len(psm.peptidoform.parsed_sequence) - 1 for psm in valid_psms]
 
     _set_rayon_threads(processes)
 
@@ -94,16 +104,13 @@ def _predict_batch_internal(
         xgb_models=xgb_models,
     )
 
-    # Assemble results
-    results = []
-    for i, psm in enumerate(psm_list):
-        results.append(
-            ProcessingResult(
-                psm_index=i,
-                psm=psm,
-                theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
-                predicted_intensity=predictions[i],
-            )
+    # Fill in results for valid PSMs
+    for j, i in enumerate(valid_indices):
+        results[i] = ProcessingResult(
+            psm_index=i,
+            psm=psm_list[i],
+            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[j].items()},
+            predicted_intensity=predictions[j],
         )
     return results
 
@@ -144,9 +151,23 @@ def _correlate_internal(
     if not psm_spectrum_annotations:
         return []
 
+    # Validate and filter
+    psms_for_validation = PSMList(psm_list=[m.psm for m in psm_spectrum_annotations])
+    valid_indices, _ = filter_valid_psms(psms_for_validation)
+    valid_index_set = set(valid_indices)
+
+    valid_matches = [m for i, m in enumerate(psm_spectrum_annotations) if i in valid_index_set]
+    skipped_results = [
+        ProcessingResult(psm_index=m.psm_index, psm=m.psm)
+        for i, m in enumerate(psm_spectrum_annotations) if i not in valid_index_set
+    ]
+
+    if not valid_matches:
+        return skipped_results
+
     # Step 1: Extract targets from pre-computed annotations
     all_targets = []
-    for m in psm_spectrum_annotations:
+    for m in valid_matches:
         if not m.psm.peptidoform.precursor_charge:
             m.psm.peptidoform.precursor_charge = m.spectrum.precursor_charge  # type: ignore[ty:invalid-assignment]
 
@@ -157,10 +178,10 @@ def _correlate_internal(
         all_targets.append(targets)
 
     proformas = [
-        proforma_to_mass_shift(m.psm.peptidoform) for m in psm_spectrum_annotations
+        proforma_to_mass_shift(m.psm.peptidoform) for m in valid_matches
     ]
     num_ions = [
-        len(m.psm.peptidoform.parsed_sequence) - 1 for m in psm_spectrum_annotations
+        len(m.psm.peptidoform.parsed_sequence) - 1 for m in valid_matches
     ]
 
     # Step 2: Compute features (needed for training and prediction, not annotation-only)
@@ -176,12 +197,12 @@ def _correlate_internal(
         all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
 
     # Step 4: Assemble results based on mode
-    results = []
+    results: list[ProcessingResult] = []
 
     if vector_file:
         # Training mode: return feature vectors + observed targets
         assert all_features is not None
-        for i, m in enumerate(psm_spectrum_annotations):
+        for i, m in enumerate(valid_matches):
             results.append(
                 ProcessingResult(
                     psm_index=m.psm_index,
@@ -197,7 +218,7 @@ def _correlate_internal(
     elif annotations_only:
         # Annotation mode: return m/z + observed targets
         assert all_mz is not None
-        for i, m in enumerate(psm_spectrum_annotations):
+        for i, m in enumerate(valid_matches):
             mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
             results.append(
                 ProcessingResult(
@@ -223,7 +244,7 @@ def _correlate_internal(
             processes=processes,
         )
 
-        for i, m in enumerate(psm_spectrum_annotations):
+        for i, m in enumerate(valid_matches):
             mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
             results.append(
                 ProcessingResult(
@@ -235,6 +256,7 @@ def _correlate_internal(
                 )
             )
 
+    results.extend(skipped_results)
     return results
 
 
