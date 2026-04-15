@@ -15,7 +15,7 @@ from ms2pip.constants import MODELS
 
 logger = logging.getLogger(__name__)
 
-_MAX_PREDICTION_THREADS = 16
+_MAX_PREDICTION_THREADS = 32
 
 
 def validate_model(model: str, model_dir: str | Path | None = None) -> Path:
@@ -77,11 +77,10 @@ def load_xgb_models(
         Number of threads for XGBoost prediction. Capped internally.
 
     """
-    # nthread = min(
-    #     processes if processes is not None else (os.cpu_count() or 1),
-    #     _MAX_PREDICTION_THREADS,
-    # )
-    nthread = processes if processes is not None else (os.cpu_count() or 1)
+    nthread = min(
+        processes if processes is not None else (os.cpu_count() or 1),
+        _MAX_PREDICTION_THREADS,
+    )
     return _initialize_xgb_models(model_params["xgboost_model_files"], model_dir, nthread)
 
 
