@@ -12,6 +12,7 @@ import pandas as pd
 from ms2rescore_rs import (
     ms2pip_compute_features,  # type: ignore[ty:unresolved-import]
     ms2pip_compute_theoretical_mz,  # type: ignore[ty:unresolved-import]
+    ms2pip_extract_targets,  # type: ignore[ty:unresolved-import]
 )
 from psm_utils import PSM, Peptidoform, PSMList
 from rich.progress import track
@@ -22,7 +23,6 @@ from ms2pip._spectrum_processing import (
     annotate_spectrum,
     proforma_to_mass_shift,
     resolve_spectra,
-    targets_from_annotations,
 )
 from ms2pip._utils.psm_input import filter_valid_psms, read_psms
 from ms2pip._utils.xgb_models import load_xgb_models, predict_intensities, validate_model
@@ -109,7 +109,7 @@ def _predict_batch_internal(
         results[i] = ProcessingResult(
             psm_index=i,
             psm=psm_list[i],
-            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[j].items()},
+            theoretical_mz=all_mz[j],
             predicted_intensity=predictions[j],
         )
     return results
@@ -145,17 +145,18 @@ def _validate_and_extract_targets(
         for i, m in enumerate(psm_spectrum_annotations) if i not in valid_index_set
     ]
 
-    # Extract targets from pre-computed annotations
-    all_targets = []
+    # Fill in missing precursor charges from spectra
     for m in valid_matches:
         if not m.psm.peptidoform.precursor_charge:
             m.psm.peptidoform.precursor_charge = m.spectrum.precursor_charge  # type: ignore[ty:invalid-assignment]
 
-        seq_len = len(m.psm.peptidoform.parsed_sequence)
-        targets = targets_from_annotations(
-            m.peak_annotations, m.spectrum.intensity.astype(np.float32), ion_types, seq_len
-        )
-        all_targets.append(targets)
+    # Extract targets from annotations (single batch Rust call)
+    all_targets = ms2pip_extract_targets(
+        annotated_spectra=[m.annotated_spectrum for m in valid_matches],
+        intensities=[m.spectrum.intensity.astype(np.float32) for m in valid_matches],
+        ion_types=ion_types,
+        seq_lens=[len(m.psm.peptidoform.parsed_sequence) for m in valid_matches],
+    )
 
     proformas = [proforma_to_mass_shift(m.psm.peptidoform) for m in valid_matches]
     num_ions = [len(m.psm.peptidoform.parsed_sequence) - 1 for m in valid_matches]
@@ -199,7 +200,7 @@ def _predict_with_observed(
         ProcessingResult(
             psm_index=m.psm_index,
             psm=m.psm,
-            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
+            theoretical_mz=all_mz[i],
             predicted_intensity=predictions[i],
             observed_intensity=all_targets[i],
         )
@@ -231,7 +232,7 @@ def _extract_observations(
         ProcessingResult(
             psm_index=m.psm_index,
             psm=m.psm,
-            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
+            theoretical_mz=all_mz[i],
             observed_intensity=all_targets[i],
         )
         for i, m in enumerate(valid_matches)
@@ -609,9 +610,12 @@ def correlate_single(
     annotated = annotate_spectrum(preprocessed, psm, model, ms2_tolerance, ms2_tolerance_mode)
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
     seq_len = len(observed_spectrum.peptidoform.parsed_sequence)
-    observed_intensity = targets_from_annotations(
-        annotated, preprocessed.intensity.astype(np.float32), ion_types, seq_len
-    )
+    observed_intensity = ms2pip_extract_targets(
+        annotated_spectra=[annotated],
+        intensities=[preprocessed.intensity.astype(np.float32)],
+        ion_types=ion_types,
+        seq_lens=[seq_len],
+    )[0]
 
     result = predict_single(observed_spectrum.peptidoform, model=model)
     result.observed_intensity = observed_intensity
