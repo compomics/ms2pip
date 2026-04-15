@@ -85,11 +85,11 @@ def _predict_batch_internal(
 
     _set_rayon_threads(processes)
 
-    # Batch compute theoretical m/z (single Rust call, Rayon-parallelized)
+    # Batch compute theoretical m/z
     logger.debug("Computing theoretical m/z for %d peptides...", len(proformas))
     all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
 
-    # Batch compute features (single Rust call, Rayon-parallelized)
+    # Batch compute features
     logger.debug("Computing features for %d peptides...", len(proformas))
     all_features = ms2pip_compute_features(proformas)
 
@@ -115,41 +115,24 @@ def _predict_batch_internal(
     return results
 
 
-def _correlate_internal(
+def _validate_and_extract_targets(
     psm_spectrum_annotations: list[MatchedSpectrum],
     model: str,
-    model_dir: str | Path | None = None,
-    vector_file: bool = False,
-    annotations_only: bool = False,
     processes: int | None = None,
-) -> list[ProcessingResult]:
+) -> tuple[
+    list[MatchedSpectrum], list[ProcessingResult], list[dict], list[str], list[int]
+]:
     """
-    Core correlation logic: extract targets, compute features/predictions, assemble results.
+    Filter valid PSMs, extract observed targets, and prepare proformas/num_ions.
 
-    Parameters
-    ----------
-    psm_spectrum_annotations
-        List of (psm_index, psm, preprocessed_spectrum, peak_annotations) tuples.
-        Annotations are per-peak lists of ``(series, position, charge)`` tuples.
-    model
-        Name of prediction model.
-    model_dir
-        Directory for XGBoost model files.
-    vector_file
-        If True, return feature vectors instead of predictions (for training).
-    annotations_only
-        If True, return only m/z and observed intensities (no predictions).
-
+    Returns ``(valid_matches, skipped_results, all_targets, proformas, num_ions)``.
     """
-    if not annotations_only and not vector_file:
-        model_dir = validate_model(model, model_dir)
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
-    frag_model = MODELS[model]["fragmentation"]
 
     _set_rayon_threads(processes)
 
     if not psm_spectrum_annotations:
-        return []
+        return [], [], [], [], []
 
     # Validate and filter
     psms_for_validation = PSMList(psm_list=[m.psm for m in psm_spectrum_annotations])
@@ -162,10 +145,7 @@ def _correlate_internal(
         for i, m in enumerate(psm_spectrum_annotations) if i not in valid_index_set
     ]
 
-    if not valid_matches:
-        return skipped_results
-
-    # Step 1: Extract targets from pre-computed annotations
+    # Extract targets from pre-computed annotations
     all_targets = []
     for m in valid_matches:
         if not m.psm.peptidoform.precursor_charge:
@@ -177,85 +157,113 @@ def _correlate_internal(
         )
         all_targets.append(targets)
 
-    proformas = [
-        proforma_to_mass_shift(m.psm.peptidoform) for m in valid_matches
-    ]
-    num_ions = [
-        len(m.psm.peptidoform.parsed_sequence) - 1 for m in valid_matches
-    ]
+    proformas = [proforma_to_mass_shift(m.psm.peptidoform) for m in valid_matches]
+    num_ions = [len(m.psm.peptidoform.parsed_sequence) - 1 for m in valid_matches]
 
-    # Step 2: Compute features (needed for training and prediction, not annotation-only)
-    all_features = None
-    if not annotations_only:
-        logger.debug("Computing features for %d peptides...", len(proformas))
-        all_features = ms2pip_compute_features(proformas)
+    return valid_matches, skipped_results, all_targets, proformas, num_ions
 
-    # Step 3: Compute theoretical m/z (needed for annotation and prediction, not training)
-    all_mz = None
-    if not vector_file:
-        logger.debug("Computing theoretical m/z for %d peptides...", len(proformas))
-        all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
 
-    # Step 4: Assemble results based on mode
-    results: list[ProcessingResult] = []
+def _predict_with_observed(
+    psm_spectrum_annotations: list[MatchedSpectrum],
+    model: str,
+    model_dir: str | Path | None = None,
+    processes: int | None = None,
+) -> list[ProcessingResult]:
+    """Compute features, m/z, XGBoost predictions, and observed targets for matched spectra."""
+    model_dir = validate_model(model, model_dir)
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+    frag_model = MODELS[model]["fragmentation"]
 
-    if vector_file:
-        # Training mode: return feature vectors + observed targets
-        assert all_features is not None
-        for i, m in enumerate(valid_matches):
-            results.append(
-                ProcessingResult(
-                    psm_index=m.psm_index,
-                    psm=m.psm,
-                    theoretical_mz=None,
-                    predicted_intensity=None,
-                    observed_intensity=all_targets[i],
-                    correlation=None,
-                    feature_vectors=all_features[i],
-                )
-            )
+    valid_matches, skipped_results, all_targets, proformas, num_ions = (
+        _validate_and_extract_targets(psm_spectrum_annotations, model, processes)
+    )
+    if not valid_matches:
+        return skipped_results
 
-    elif annotations_only:
-        # Annotation mode: return m/z + observed targets
-        assert all_mz is not None
-        for i, m in enumerate(valid_matches):
-            mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
-            results.append(
-                ProcessingResult(
-                    psm_index=m.psm_index,
-                    psm=m.psm,
-                    theoretical_mz=mz,
-                    predicted_intensity=None,
-                    observed_intensity=all_targets[i],
-                    correlation=None,
-                    feature_vectors=None,
-                )
-            )
+    logger.debug("Computing features for %d peptides...", len(proformas))
+    all_features = ms2pip_compute_features(proformas)
 
-    else:
-        # Prediction mode: compute XGBoost predictions
-        assert all_features is not None and all_mz is not None
-        logger.debug("Predicting intensities with XGBoost...")
-        predictions = predict_intensities(
-            np.concatenate([f.reshape(-1, NUM_FEATURES) for f in all_features]),
-            num_ions,
-            MODELS[model],
-            model_dir,
-            processes=processes,
+    logger.debug("Computing theoretical m/z for %d peptides...", len(proformas))
+    all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
+
+    logger.debug("Predicting intensities with XGBoost...")
+    predictions = predict_intensities(
+        np.concatenate([f.reshape(-1, NUM_FEATURES) for f in all_features]),
+        num_ions,
+        MODELS[model],
+        model_dir,
+        processes=processes,
+    )
+
+    results = [
+        ProcessingResult(
+            psm_index=m.psm_index,
+            psm=m.psm,
+            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
+            predicted_intensity=predictions[i],
+            observed_intensity=all_targets[i],
         )
+        for i, m in enumerate(valid_matches)
+    ]
+    results.extend(skipped_results)
+    return results
 
-        for i, m in enumerate(valid_matches):
-            mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
-            results.append(
-                ProcessingResult(
-                    psm_index=m.psm_index,
-                    psm=m.psm,
-                    theoretical_mz=mz,
-                    predicted_intensity=predictions[i],
-                    observed_intensity=all_targets[i],
-                )
-            )
 
+def _extract_observations(
+    psm_spectrum_annotations: list[MatchedSpectrum],
+    model: str,
+    processes: int | None = None,
+) -> list[ProcessingResult]:
+    """Compute theoretical m/z and extract observed targets (no predictions)."""
+    ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
+    frag_model = MODELS[model]["fragmentation"]
+
+    valid_matches, skipped_results, all_targets, proformas, _ = (
+        _validate_and_extract_targets(psm_spectrum_annotations, model, processes)
+    )
+    if not valid_matches:
+        return skipped_results
+
+    logger.debug("Computing theoretical m/z for %d peptides...", len(proformas))
+    all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
+
+    results = [
+        ProcessingResult(
+            psm_index=m.psm_index,
+            psm=m.psm,
+            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
+            observed_intensity=all_targets[i],
+        )
+        for i, m in enumerate(valid_matches)
+    ]
+    results.extend(skipped_results)
+    return results
+
+
+def _extract_training_data(
+    psm_spectrum_annotations: list[MatchedSpectrum],
+    model: str,
+    processes: int | None = None,
+) -> list[ProcessingResult]:
+    """Compute features and extract observed targets for model training (no m/z or predictions)."""
+    valid_matches, skipped_results, all_targets, proformas, _ = (
+        _validate_and_extract_targets(psm_spectrum_annotations, model, processes)
+    )
+    if not valid_matches:
+        return skipped_results
+
+    logger.debug("Computing features for %d peptides...", len(proformas))
+    all_features = ms2pip_compute_features(proformas)
+
+    results = [
+        ProcessingResult(
+            psm_index=m.psm_index,
+            psm=m.psm,
+            observed_intensity=all_targets[i],
+            feature_vectors=all_features[i],
+        )
+        for i, m in enumerate(valid_matches)
+    ]
     results.extend(skipped_results)
     return results
 
@@ -547,7 +555,7 @@ def correlate(
     )
 
     logger.info("Processing spectra and peptides...")
-    results = _correlate_internal(matched, model, model_dir, processes=processes)
+    results = _predict_with_observed(matched, model, model_dir, processes=processes)
 
     if compute_correlations:
         logger.info("Computing correlations")
@@ -661,13 +669,7 @@ def get_training_data(
         psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
     )
 
-    results = _correlate_internal(
-        matched,
-        model,
-        model_dir=None,
-        vector_file=True,
-        processes=processes,
-    )
+    results = _extract_training_data(matched, model, processes=processes)
 
     logger.info("Assembling training data in DataFrame...")
     return _assemble_training_data(results, model)
@@ -722,13 +724,7 @@ def annotate_spectra(
         psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
     )
 
-    return _correlate_internal(
-        matched,
-        model,
-        model_dir=None,
-        annotations_only=True,
-        processes=processes,
-    )
+    return _extract_observations(matched, model, processes=processes)
 
 
 def download_models(models: list[str] | None = None, model_dir: str | Path | None = None):

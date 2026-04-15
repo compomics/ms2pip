@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
-from psm_utils import PSM, PSMList, Peptidoform
 from ms2rescore_rs import (
     AnnotatedMS2Spectrum,  # type: ignore[ty:unresolved-import]
     MS2Spectrum,  # type: ignore[ty:unresolved-import]
@@ -19,12 +18,20 @@ from ms2rescore_rs import (
     annotate_ms2_spectra,  # type: ignore[ty:unresolved-import]
     get_ms2_spectra,  # type: ignore[ty:unresolved-import]
 )
+from psm_utils import PSM, Peptidoform, PSMList
 
 import ms2pip.exceptions as exceptions
 from ms2pip.constants import MODELS
 from ms2pip.spectrum import ObservedSpectrum
 
 logger = logging.getLogger(__name__)
+
+
+def _annotations_to_tuples(peak_annotations: list) -> list[list[tuple]]:
+    """Convert FragmentAnnotation lists to plain (series, position, charge) tuples."""
+    return [
+        [(a.series, a.position, a.charge) for a in peak_anns] for peak_anns in peak_annotations
+    ]
 
 
 class MatchedSpectrum(NamedTuple):
@@ -137,10 +144,7 @@ def annotate_spectrum(
         tolerance_value=float(ms2_tolerance),
         tolerance_mode=ms2_tolerance_mode.lower(),
     )
-    return [
-        [(a.series, a.position, a.charge) for a in peak_anns]
-        for peak_anns in annotated[0].peak_annotations
-    ]
+    return _annotations_to_tuples(annotated[0].peak_annotations)
 
 
 def targets_from_annotations(
@@ -224,6 +228,7 @@ def _load_and_match_spectra(
         psms_by_specid[str(psm.spectrum_id)].append((i, psm))
 
     # Step 1: Read raw spectra and match to PSMs (no conversion yet)
+    logger.info("Reading spectra from file...")
     matched_raw: list[tuple[str, MS2Spectrum, list[tuple[int, PSM]]]] = []
     for spectrum in _read_raw_spectra(str(spectrum_file)):
         match = spectrum_id_regex.search(str(spectrum.identifier))
@@ -245,6 +250,7 @@ def _load_and_match_spectra(
         return []
 
     # Step 2: Batch annotate all matched spectra (single Rust call, Rayon-parallelized)
+    logger.debug("Annotating %d matched spectra...", len(matched_raw))
     batch_spectra = []
     batch_proformas = []
     batch_seq_lens = []
@@ -258,6 +264,7 @@ def _load_and_match_spectra(
             batch_indices.append((raw_idx, psm_idx))
 
     frag_model = MODELS[model]["fragmentation"]
+    logger.debug("Starting annotation...")
     annotated_spectra = annotate_ms2_spectra(
         spectra=batch_spectra,
         proformas=batch_proformas,
@@ -267,6 +274,7 @@ def _load_and_match_spectra(
         tolerance_value=float(ms2_tolerance),
         tolerance_mode=ms2_tolerance_mode.lower(),
     )
+    logger.debug("Annotation complete.")
 
     # Step 3: Convert to ObservedSpectrum, preprocess, and assemble results
     preprocessed_cache: dict[str, ObservedSpectrum] = {}
@@ -281,12 +289,11 @@ def _load_and_match_spectra(
             _preprocess_spectrum(obs, model)
             preprocessed_cache[spec_id] = obs
 
-        peak_annotations = [
-            [(a.series, a.position, a.charge) for a in peak_anns]
-            for peak_anns in annotated_spectra[batch_idx].peak_annotations
-        ]
+        peak_annotations = _annotations_to_tuples(annotated_spectra[batch_idx].peak_annotations)
 
-        results.append(MatchedSpectrum(psm_index, psm, preprocessed_cache[spec_id], peak_annotations))
+        results.append(
+            MatchedSpectrum(psm_index, psm, preprocessed_cache[spec_id], peak_annotations)
+        )
 
     return results
 
@@ -323,10 +330,7 @@ def _preloaded_to_annotations(
         if spectra_are_annotated:
             assert isinstance(spectrum, AnnotatedMS2Spectrum)
             assert preloaded_annotations is not None
-            preloaded_annotations[spec_id] = [
-                [(a.series, a.position, a.charge) for a in peak_anns]
-                for peak_anns in spectrum.peak_annotations
-            ]
+            preloaded_annotations[spec_id] = _annotations_to_tuples(spectrum.peak_annotations)
 
     # Build MatchedSpectrum list
     psm_spectrum_annotations: list[MatchedSpectrum] = []
@@ -369,10 +373,7 @@ def _preloaded_to_annotations(
 
         for j, idx in enumerate(needs_annotation):
             m = psm_spectrum_annotations[idx]
-            peak_anns = [
-                [(a.series, a.position, a.charge) for a in anns]
-                for anns in annotated[j].peak_annotations
-            ]
+            peak_anns = _annotations_to_tuples(annotated[j].peak_annotations)
             psm_spectrum_annotations[idx] = m._replace(peak_annotations=peak_anns)
 
     return psm_spectrum_annotations
@@ -397,9 +398,7 @@ def resolve_spectra(
     ]
     if all(has_spectrum):
         if spectrum_file is not None:
-            logger.warning(
-                "PSMs already have preloaded spectra; `spectrum_file` will be ignored."
-            )
+            logger.warning("PSMs already have preloaded spectra; `spectrum_file` will be ignored.")
         matched = _preloaded_to_annotations(psm_list, model, ms2_tolerance, ms2_tolerance_mode)
     elif not any(has_spectrum):
         if spectrum_file is None:

@@ -42,13 +42,18 @@ def _infer_output_name(
 
 
 @click.group()
-@click.option("--logging-level", "-l", type=click.Choice(LOGGING_LEVELS.keys()), default="INFO")
+@click.option(
+    "--logging-level",
+    "-l",
+    type=click.Choice(LOGGING_LEVELS.keys(), case_sensitive=False),
+    default="INFO",
+)
 @click.version_option(version=__version__)
 def cli(*args, **kwargs):
     logging.basicConfig(
         format="%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        level=LOGGING_LEVELS[kwargs["logging_level"]],
+        level=LOGGING_LEVELS[kwargs["logging_level"].upper()],
         handlers=[RichHandler(rich_tracebacks=True, show_level=True, show_path=False)],
     )
     rich.print(build_credits())

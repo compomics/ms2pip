@@ -5,8 +5,6 @@ from __future__ import annotations
 import csv
 from logging import getLogger
 from pathlib import Path
-from typing import Any
-
 import numpy as np
 from psm_utils import PSM
 from pydantic import BaseModel, ConfigDict
@@ -23,7 +21,26 @@ logger = getLogger(__name__)
 
 
 class ProcessingResult(BaseModel):
-    """Result of processing a single PSM."""
+    """
+    Result of processing a single PSM.
+
+    Parameters
+    ----------
+    psm_index
+        Index of the PSM in the input list.
+    psm
+        The PSM object.
+    theoretical_mz
+        Dict mapping ion type to theoretical m/z array.
+    predicted_intensity
+        Dict mapping ion type to predicted intensity array.
+    observed_intensity
+        Dict mapping ion type to observed intensity array.
+    correlation
+        Pearson correlation between predicted and observed intensities.
+    feature_vectors
+        Feature vectors for model training.
+    """
 
     psm_index: int
     psm: PSM
@@ -33,10 +50,6 @@ class ProcessingResult(BaseModel):
     correlation: float | None = None
     feature_vectors: np.ndarray | None = None
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def __init__(__pydantic_self__, **data: Any) -> None:
-        """Result of processing a single PSM."""
-        super().__init__(**data)
 
     def as_spectra(self) -> tuple[PredictedSpectrum | None, ObservedSpectrum | None]:
         """Convert result to predicted and observed spectra."""
@@ -52,8 +65,7 @@ class ProcessingResult(BaseModel):
         peak_order = np.argsort(mz)
 
         if self.predicted_intensity:
-            pred_int = np.concatenate([i for i in self.predicted_intensity.values()])
-            pred_int = (2**pred_int) - 0.001  # Unlog intensities
+            pred_int = np.concatenate(list(self.predicted_intensity.values()))
             predicted = PredictedSpectrum(
                 mz=mz[peak_order],
                 intensity=pred_int[peak_order],
@@ -61,12 +73,12 @@ class ProcessingResult(BaseModel):
                 peptidoform=self.psm.peptidoform if self.psm else None,
                 precursor_charge=self.psm.peptidoform.precursor_charge if self.psm else None,
             )
+            predicted.inverse_log2_transform()
         else:
             predicted = None
 
         if self.observed_intensity:
-            obs_int = np.concatenate([i for i in self.observed_intensity.values()])
-            obs_int = (2**obs_int) - 0.001  # Unlog intensities
+            obs_int = np.concatenate(list(self.observed_intensity.values()))
             observed = ObservedSpectrum(
                 mz=mz[peak_order],
                 intensity=obs_int[peak_order],
@@ -74,6 +86,7 @@ class ProcessingResult(BaseModel):
                 peptidoform=self.psm.peptidoform if self.psm else None,
                 precursor_charge=self.psm.peptidoform.precursor_charge if self.psm else None,
             )
+            observed.inverse_log2_transform()
         else:
             observed = None
 
@@ -113,6 +126,7 @@ class ProcessingResult(BaseModel):
 
 def calculate_correlations(results: list[ProcessingResult]) -> None:
     """Calculate and add Pearson correlations to list of results."""
+    # TODO: Consider nan values? https://github.com/CompOmics/ms2pip/pull/214/changes#diff-5f77421a48cf8f17c5b83ed031897ce8076e2f52c0028aa6f4294a34ba3b3305R115-R123
     for result in results:
         if result.predicted_intensity is None or result.observed_intensity is None:
             continue

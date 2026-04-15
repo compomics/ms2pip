@@ -77,10 +77,11 @@ def load_xgb_models(
         Number of threads for XGBoost prediction. Capped internally.
 
     """
-    nthread = min(
-        processes if processes is not None else (os.cpu_count() or 1),
-        _MAX_PREDICTION_THREADS,
-    )
+    # nthread = min(
+    #     processes if processes is not None else (os.cpu_count() or 1),
+    #     _MAX_PREDICTION_THREADS,
+    # )
+    nthread = processes if processes is not None else (os.cpu_count() or 1)
     return _initialize_xgb_models(model_params["xgboost_model_files"], model_dir, nthread)
 
 

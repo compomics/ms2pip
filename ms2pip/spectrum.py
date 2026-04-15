@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any
-
 import numpy as np
 from psm_utils import Peptidoform
 from pydantic import model_validator, field_validator, ConfigDict, BaseModel
@@ -18,7 +16,32 @@ except ImportError:
 
 
 class Spectrum(BaseModel):
-    """MS2 spectrum."""
+    """
+    MS2 spectrum.
+
+    Parameters
+    ----------
+    mz
+        Array of m/z values.
+    intensity
+        Array of intensity values.
+    annotations
+        Array of peak annotations.
+    identifier
+        Spectrum identifier.
+    peptidoform
+        Peptidoform.
+    precursor_mz
+        Precursor m/z.
+    precursor_charge
+        Precursor charge.
+    retention_time
+        Retention time.
+    mass_tolerance
+        Mass tolerance for spectrum annotation.
+    mass_tolerance_unit
+        Unit of mass tolerance for spectrum annotation.
+    """
 
     mz: np.ndarray
     intensity: np.ndarray
@@ -32,36 +55,6 @@ class Spectrum(BaseModel):
     mass_tolerance_unit: str | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def __init__(__pydantic_self__, **data: Any) -> None:
-        """
-        MS2 spectrum.
-
-        Parameters
-        ----------
-        mz
-            Array of m/z values.
-        intensity
-            Array of intensity values.
-        annotations
-            Array of peak annotations.
-        identifier
-            Spectrum identifier.
-        peptidoform
-            Peptidoform.
-        precursor_mz
-            Precursor m/z.
-        precursor_charge
-            Precursor charge.
-        retention_time
-            Retention time.
-        mass_tolerance
-            Mass tolerance for spectrum annotation.
-        mass_tolerance_unit
-            Unit of mass tolerance for spectrum annotation.
-
-        """
-        super().__init__(**data)
 
     def __repr__(self) -> str:
         return "{}.{}({})".format(
@@ -122,8 +115,12 @@ class Spectrum(BaseModel):
         self.intensity = self.intensity / self.tic
 
     def log2_transform(self) -> None:
-        """Log2-tranform spectrum."""
+        """Log2-transform spectrum."""
         self.intensity = np.log2(self.intensity + 0.001)
+
+    def inverse_log2_transform(self) -> None:
+        """Undo log2 transformation of intensities (inverse of :meth:`log2_transform`)."""
+        self.intensity = (2**self.intensity) - 0.001
 
     def clip_intensity(self, min_intensity=0.0) -> None:
         """Clip intensity values."""
