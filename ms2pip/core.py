@@ -10,10 +10,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from ms2rescore_rs import (
-    AnnotatedMS2Spectrum,  # type: ignore[ty:unresolved-import]
-    MS2Spectrum,  # type: ignore[ty:unresolved-import]
-    Precursor,  # type: ignore[ty:unresolved-import]
-    annotate_ms2_spectra,  # type: ignore[ty:unresolved-import]
     ms2pip_compute_features,  # type: ignore[ty:unresolved-import]
     ms2pip_compute_theoretical_mz,  # type: ignore[ty:unresolved-import]
 )
@@ -22,12 +18,13 @@ from rich.progress import track
 
 import ms2pip.exceptions as exceptions
 from ms2pip._spectrum_processing import (
+    MatchedSpectrum,
     annotate_spectrum,
-    load_and_match_spectra,
     proforma_to_mass_shift,
+    resolve_spectra,
     targets_from_annotations,
 )
-from ms2pip._utils.psm_input import read_psms
+from ms2pip._utils.psm_input import filter_valid_psms, read_psms
 from ms2pip._utils.xgb_models import load_xgb_models, predict_intensities, validate_model
 from ms2pip.constants import MODELS
 from ms2pip.result import ProcessingResult, calculate_correlations
@@ -73,8 +70,18 @@ def _predict_batch_internal(
     ion_types = [it.lower() for it in MODELS[model]["ion_types"]]
     frag_model = MODELS[model]["fragmentation"]
 
-    proformas = [proforma_to_mass_shift(psm.peptidoform) for psm in psm_list]
-    num_ions = [len(psm.peptidoform.parsed_sequence) - 1 for psm in psm_list]
+    # Validate and filter PSMs
+    valid_indices, _ = filter_valid_psms(psm_list)
+    results: list[ProcessingResult] = [
+        ProcessingResult(psm_index=i, psm=psm) for i, psm in enumerate(psm_list)
+    ]
+
+    if not valid_indices:
+        return results
+
+    valid_psms = [psm_list[i] for i in valid_indices]
+    proformas = [proforma_to_mass_shift(psm.peptidoform) for psm in valid_psms]
+    num_ions = [len(psm.peptidoform.parsed_sequence) - 1 for psm in valid_psms]
 
     _set_rayon_threads(processes)
 
@@ -97,22 +104,19 @@ def _predict_batch_internal(
         xgb_models=xgb_models,
     )
 
-    # Assemble results
-    results = []
-    for i, psm in enumerate(psm_list):
-        results.append(
-            ProcessingResult(
-                psm_index=i,
-                psm=psm,
-                theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()},
-                predicted_intensity=predictions[i],
-            )
+    # Fill in results for valid PSMs
+    for j, i in enumerate(valid_indices):
+        results[i] = ProcessingResult(
+            psm_index=i,
+            psm=psm_list[i],
+            theoretical_mz={k: np.array(v, dtype=np.float32) for k, v in all_mz[j].items()},
+            predicted_intensity=predictions[j],
         )
     return results
 
 
 def _correlate_internal(
-    psm_spectrum_annotations: list[tuple[int, PSM, ObservedSpectrum, list]],
+    psm_spectrum_annotations: list[MatchedSpectrum],
     model: str,
     model_dir: str | Path | None = None,
     vector_file: bool = False,
@@ -147,23 +151,37 @@ def _correlate_internal(
     if not psm_spectrum_annotations:
         return []
 
+    # Validate and filter
+    psms_for_validation = PSMList(psm_list=[m.psm for m in psm_spectrum_annotations])
+    valid_indices, _ = filter_valid_psms(psms_for_validation)
+    valid_index_set = set(valid_indices)
+
+    valid_matches = [m for i, m in enumerate(psm_spectrum_annotations) if i in valid_index_set]
+    skipped_results = [
+        ProcessingResult(psm_index=m.psm_index, psm=m.psm)
+        for i, m in enumerate(psm_spectrum_annotations) if i not in valid_index_set
+    ]
+
+    if not valid_matches:
+        return skipped_results
+
     # Step 1: Extract targets from pre-computed annotations
     all_targets = []
-    for psm_index, psm, spectrum, peak_annotations in psm_spectrum_annotations:
-        if not psm.peptidoform.precursor_charge:
-            psm.peptidoform.precursor_charge = spectrum.precursor_charge  # type: ignore[ty:invalid-assignment]
+    for m in valid_matches:
+        if not m.psm.peptidoform.precursor_charge:
+            m.psm.peptidoform.precursor_charge = m.spectrum.precursor_charge  # type: ignore[ty:invalid-assignment]
 
-        seq_len = len(psm.peptidoform.parsed_sequence)
+        seq_len = len(m.psm.peptidoform.parsed_sequence)
         targets = targets_from_annotations(
-            peak_annotations, spectrum.intensity.astype(np.float32), ion_types, seq_len
+            m.peak_annotations, m.spectrum.intensity.astype(np.float32), ion_types, seq_len
         )
         all_targets.append(targets)
 
     proformas = [
-        proforma_to_mass_shift(psm.peptidoform) for _, psm, _, _ in psm_spectrum_annotations
+        proforma_to_mass_shift(m.psm.peptidoform) for m in valid_matches
     ]
     num_ions = [
-        len(psm.peptidoform.parsed_sequence) - 1 for _, psm, _, _ in psm_spectrum_annotations
+        len(m.psm.peptidoform.parsed_sequence) - 1 for m in valid_matches
     ]
 
     # Step 2: Compute features (needed for training and prediction, not annotation-only)
@@ -179,16 +197,16 @@ def _correlate_internal(
         all_mz = ms2pip_compute_theoretical_mz(proformas, ion_types, frag_model, "monoisotopic")
 
     # Step 4: Assemble results based on mode
-    results = []
+    results: list[ProcessingResult] = []
 
     if vector_file:
         # Training mode: return feature vectors + observed targets
         assert all_features is not None
-        for i, (psm_index, psm, _spectrum, _ann) in enumerate(psm_spectrum_annotations):
+        for i, m in enumerate(valid_matches):
             results.append(
                 ProcessingResult(
-                    psm_index=psm_index,
-                    psm=psm,
+                    psm_index=m.psm_index,
+                    psm=m.psm,
                     theoretical_mz=None,
                     predicted_intensity=None,
                     observed_intensity=all_targets[i],
@@ -200,12 +218,12 @@ def _correlate_internal(
     elif annotations_only:
         # Annotation mode: return m/z + observed targets
         assert all_mz is not None
-        for i, (psm_index, psm, _spectrum, _ann) in enumerate(psm_spectrum_annotations):
+        for i, m in enumerate(valid_matches):
             mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
             results.append(
                 ProcessingResult(
-                    psm_index=psm_index,
-                    psm=psm,
+                    psm_index=m.psm_index,
+                    psm=m.psm,
                     theoretical_mz=mz,
                     predicted_intensity=None,
                     observed_intensity=all_targets[i],
@@ -226,18 +244,19 @@ def _correlate_internal(
             processes=processes,
         )
 
-        for i, (psm_index, psm, _spectrum, _ann) in enumerate(psm_spectrum_annotations):
+        for i, m in enumerate(valid_matches):
             mz = {k: np.array(v, dtype=np.float32) for k, v in all_mz[i].items()}
             results.append(
                 ProcessingResult(
-                    psm_index=psm_index,
-                    psm=psm,
+                    psm_index=m.psm_index,
+                    psm=m.psm,
                     theoretical_mz=mz,
                     predicted_intensity=predictions[i],
                     observed_intensity=all_targets[i],
                 )
             )
 
+    results.extend(skipped_results)
     return results
 
 
@@ -371,8 +390,6 @@ def predict_batch(
         Predicted spectra with theoretical m/z and predicted intensity values.
 
     """
-    if isinstance(psms, list):
-        psms = PSMList(psm_list=psms)
     psm_list = read_psms(psms, filetype=psm_filetype)
 
     _add_im_rt(psm_list, add_retention_time, add_ion_mobility, processes=processes)
@@ -459,8 +476,8 @@ def predict_library(
 
 
 def correlate(
-    psms: PSMList | str | Path,
-    spectrum_file: str | Path,
+    psms: PSMList | list[PSM] | str | Path,
+    spectrum_file: str | Path | None = None,
     psm_filetype: str | None = None,
     spectrum_id_pattern: str | None = None,
     compute_correlations: bool = False,
@@ -475,12 +492,21 @@ def correlate(
     """
     Compare predicted and observed intensities and optionally compute correlations.\f
 
+    Spectra can be provided in two ways:
+
+    - **From file**: pass ``spectrum_file`` with a path to a spectrum file. PSMs are matched
+      to spectra by spectrum ID.
+    - **Preloaded**: each PSM already has an :py:class:`ms2rescore_rs.MS2Spectrum` or
+      :py:class:`ms2rescore_rs.AnnotatedMS2Spectrum` in its ``spectrum`` attribute.
+      In this case, ``spectrum_file`` should not be provided.
+
     Parameters
     ----------
     psms
-        PSMList or path to PSM file that is supported by psm_utils.
+        PSMList, list of PSM objects, or path to a PSM file supported by psm_utils.
     spectrum_file
-        Path to spectrum file with target intensities.
+        Path to spectrum file with target intensities. Required when PSMs do not have
+        preloaded spectra; must not be provided when they do.
     psm_filetype
         Filetype of the PSM file. By default, None. Should be one of the supported psm_utils
         filetypes. See https://psm-utils.readthedocs.io/en/stable/#supported-file-formats.
@@ -513,196 +539,15 @@ def correlate(
 
     """
     psm_list = read_psms(psms, filetype=psm_filetype)
-    spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
 
     _add_im_rt(psm_list, add_retention_time, add_ion_mobility, processes=processes)
 
-    # Validate runs and collections
-    if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:
-        raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
-
-    logger.info("Processing spectra and peptides...")
-    matched = load_and_match_spectra(
+    matched = resolve_spectra(
         psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
     )
 
-    if not matched:
-        raise exceptions.NoMatchingSpectraFound(
-            "No spectra matching spectrum IDs from PSM list could be found in provided file."
-        )
-
-    results = _correlate_internal(matched, model, model_dir, processes=processes)
-
-    if compute_correlations:
-        logger.info("Computing correlations")
-        calculate_correlations(results)
-        logger.info(f"Median correlation: {np.median(list(r.correlation for r in results))}")
-
-    return results
-
-
-def correlate_preloaded(
-    psms: PSMList | list[PSM],
-    compute_correlations: bool = False,
-    model: str = "HCD",
-    model_dir: str | Path | None = None,
-    ms2_tolerance: float = 0.02,
-    ms2_tolerance_mode: str = "Da",
-    processes: int | None = None,
-) -> list[ProcessingResult]:
-    """
-    Compare predicted and observed intensities for PSMs with preloaded spectra.\f
-
-    Processes PSMs that already have :py:class:`ms2rescore_rs.MS2Spectrum` or
-    :py:class:`ms2rescore_rs.AnnotatedMS2Spectrum` objects in their ``spectrum``
-    attribute.
-
-    Parameters
-    ----------
-    psms
-        PSMList or list of PSM objects. Each PSM must have an
-        :py:class:`ms2rescore_rs.MS2Spectrum` or
-        :py:class:`ms2rescore_rs.AnnotatedMS2Spectrum` object in its ``spectrum``
-        attribute.
-    compute_correlations
-        Compute correlations between predictions and targets. Default: False.
-    model
-        Model to use for prediction. Default: "HCD".
-    model_dir
-        Directory where XGBoost model files are stored. Default: `~/.ms2pip`.
-    ms2_tolerance
-        MS2 tolerance for observed spectrum peak annotation. By default, 0.02.
-        Only used when spectra are not already annotated.
-    ms2_tolerance_mode
-        Unit of the MS2 tolerance: ``"Da"`` or ``"ppm"``. By default, ``"Da"``.
-        Only used when spectra are not already annotated.
-    processes
-        Number of threads for Rayon (Rust) and XGBoost parallelism. By default,
-        all available.
-
-    Returns
-    -------
-    results: list[ProcessingResult]
-        ProcessingResult objects with theoretical m/z, predicted intensity, and observed
-        intensity values, and optionally, correlations.
-
-    Raises
-    ------
-    ValueError
-        If PSMs do not contain spectrum objects in the ``spectrum`` attribute.
-
-    """
-    if isinstance(psms, list):
-        psm_list = PSMList(psm_list=psms)
-    else:
-        psm_list = psms
-
-    first_spectrum = psm_list["spectrum"][0]
-    if not all(psm_list["spectrum"]) or not isinstance(
-        first_spectrum, (MS2Spectrum, AnnotatedMS2Spectrum)
-    ):
-        raise ValueError(
-            "PSMs must contain MS2Spectrum or AnnotatedMS2Spectrum objects "
-            "in the 'spectrum' attribute."
-        )
-
-    spectra_are_annotated = isinstance(first_spectrum, AnnotatedMS2Spectrum)
-
-    # Convert to ObservedSpectrum and preprocess; store annotations if present
-    preloaded_spectra: dict[str, ObservedSpectrum] = {}
-    preloaded_annotations: dict[str, list] | None = {} if spectra_are_annotated else None
-    for psm in psm_list:
-        spec_id = str(psm.spectrum_id)
-        if spec_id in preloaded_spectra:
-            continue
-        spectrum = psm.spectrum
-        assert spectrum is not None
-        obs = ObservedSpectrum(
-            mz=np.array(spectrum.mz, dtype=np.float32),
-            intensity=np.array(spectrum.intensity, dtype=np.float32),
-            identifier=str(spectrum.identifier),
-            precursor_mz=float(spectrum.precursor.mz),
-            precursor_charge=int(spectrum.precursor.charge),
-            retention_time=float(spectrum.precursor.rt),
-        )
-        for label_type in ["iTRAQ", "TMT"]:
-            if label_type in model:
-                obs.remove_reporter_ions(label_type)
-        obs.tic_norm()
-        obs.log2_transform()
-        preloaded_spectra[spec_id] = obs
-        if spectra_are_annotated:
-            assert isinstance(spectrum, AnnotatedMS2Spectrum)
-            assert preloaded_annotations is not None
-            preloaded_annotations[spec_id] = [
-                [(a.series, a.position, a.charge) for a in peak_anns]
-                for peak_anns in spectrum.peak_annotations
-            ]
-
-    # Build PSM-spectrum-annotation tuples
-    # For unannotated spectra, batch annotate using ms2rescore-rs
-    psm_spectrum_annotations = []
-    needs_annotation = []  # indices into psm_spectrum_annotations that need annotation
-
-    for i, psm in enumerate(psm_list):
-        spec_id = str(psm.spectrum_id)
-        spectrum = preloaded_spectra.get(spec_id)
-        if spectrum is None:
-            continue
-        if preloaded_annotations is not None and spec_id in preloaded_annotations:
-            psm_spectrum_annotations.append((i, psm, spectrum, preloaded_annotations[spec_id]))
-        else:
-            psm_spectrum_annotations.append((i, psm, spectrum, None))
-            needs_annotation.append(len(psm_spectrum_annotations) - 1)
-
-    if not psm_spectrum_annotations:
-        raise exceptions.NoMatchingSpectraFound(
-            "No spectra matching spectrum IDs from PSM list could be found."
-        )
-
-    # Batch annotate any unannotated spectra
-    if needs_annotation:
-        frag_model = MODELS[model]["fragmentation"]
-        batch_spectra = []
-        batch_proformas = []
-        batch_seq_lens = []
-        for idx in needs_annotation:
-            _, psm, spectrum, _ = psm_spectrum_annotations[idx]
-            batch_spectra.append(
-                MS2Spectrum(
-                    identifier=spectrum.identifier or "",
-                    mz=list(spectrum.mz),
-                    intensity=list(spectrum.intensity),
-                    precursor=Precursor(
-                        mz=float(spectrum.precursor_mz) if spectrum.precursor_mz else 0.0,
-                        charge=int(spectrum.precursor_charge) if spectrum.precursor_charge else 0,
-                        rt=float(spectrum.retention_time) if spectrum.retention_time else 0.0,
-                    ),
-                )
-            )
-            batch_proformas.append(proforma_to_mass_shift(psm.peptidoform))
-            batch_seq_lens.append(len(psm.peptidoform.parsed_sequence))
-
-        annotated = annotate_ms2_spectra(
-            spectra=batch_spectra,
-            proformas=batch_proformas,
-            seq_lens=batch_seq_lens,
-            fragmentation_model=frag_model,
-            mass_mode="monoisotopic",
-            tolerance_value=float(ms2_tolerance),
-            tolerance_mode=ms2_tolerance_mode.lower(),
-        )
-
-        for j, idx in enumerate(needs_annotation):
-            psm_index, psm, spectrum, _ = psm_spectrum_annotations[idx]
-            peak_annotations = [
-                [(a.series, a.position, a.charge) for a in peak_anns]
-                for peak_anns in annotated[j].peak_annotations
-            ]
-            psm_spectrum_annotations[idx] = (psm_index, psm, spectrum, peak_annotations)
-
     logger.info("Processing spectra and peptides...")
-    results = _correlate_internal(psm_spectrum_annotations, model, model_dir, processes=processes)
+    results = _correlate_internal(matched, model, model_dir, processes=processes)
 
     if compute_correlations:
         logger.info("Computing correlations")
@@ -810,20 +655,11 @@ def get_training_data(
 
     """
     psm_list = read_psms(psms, filetype=psm_filetype)
-    spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
-
-    if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:
-        raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
 
     logger.info("Processing spectra and peptides...")
-    matched = load_and_match_spectra(
+    matched = resolve_spectra(
         psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
     )
-
-    if not matched:
-        raise exceptions.NoMatchingSpectraFound(
-            "No spectra matching spectrum IDs from PSM list could be found in provided file."
-        )
 
     results = _correlate_internal(
         matched,
@@ -880,20 +716,11 @@ def annotate_spectra(
 
     """
     psm_list = read_psms(psms, filetype=psm_filetype)
-    spectrum_id_pattern = spectrum_id_pattern if spectrum_id_pattern else "(.*)"
-
-    if len(psm_list.collections) != 1 or len(psm_list.runs) != 1:
-        raise exceptions.InvalidInputError("PSMs should be for a single run and collection.")
 
     logger.info("Processing spectra and peptides...")
-    matched = load_and_match_spectra(
+    matched = resolve_spectra(
         psm_list, spectrum_file, spectrum_id_pattern, model, ms2_tolerance, ms2_tolerance_mode
     )
-
-    if not matched:
-        raise exceptions.NoMatchingSpectraFound(
-            "No spectra matching spectrum IDs from PSM list could be found in provided file."
-        )
 
     return _correlate_internal(
         matched,

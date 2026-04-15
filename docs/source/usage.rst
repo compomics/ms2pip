@@ -68,11 +68,12 @@ For instance:
     ms2pip correlate --psm-filetype sage results.sage.tsv spectra.mgf
 
 
-``correlate-preloaded``
-----------------------
+``correlate`` with preloaded spectra
+------------------------------------
 
-Compare predicted and observed intensities for PSMs that already have
-:py:class:`ms2rescore_rs.MS2Spectrum` objects attached to their ``spectrum`` attribute. This is
+When PSMs already have :py:class:`ms2rescore_rs.MS2Spectrum` or
+:py:class:`ms2rescore_rs.AnnotatedMS2Spectrum` objects attached to their ``spectrum`` attribute,
+``correlate`` auto-detects this and uses them directly — no ``spectrum_file`` needed. This is
 useful when spectra are already loaded in memory, e.g., when using MS²PIP within
 `ms2rescore <https://github.com/compomics/ms2rescore/>`_. This mode is only available through the
 Python API.
@@ -81,7 +82,7 @@ Python API.
 
     import ms2pip
 
-    results = ms2pip.correlate_preloaded(psm_list, compute_correlations=True)
+    results = ms2pip.correlate(psm_list, compute_correlations=True)
 
 
 ``correlate-single``
