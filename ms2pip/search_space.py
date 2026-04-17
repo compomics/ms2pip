@@ -194,7 +194,21 @@ class ProteomeSearchSpace(BaseModel):
     max_variable_modifications: int = 3
     charges: list[int] = [2, 3]
 
-    _peptidoform_spaces: list[_PeptidoformSearchSpace] = PrivateAttr(default_factory=list)
+    _peptidoform_spaces: list[_PeptidoformSearchSpace] | None = PrivateAttr(default=None)
+
+    @field_validator("min_length")
+    @classmethod
+    def _validate_min_length(cls, v):
+        if v > 3:
+            return v
+        raise ValueError("Minimum peptide length must be greater than 3.")
+
+    @field_validator("max_length")
+    @classmethod
+    def _validate_max_length(cls, v):
+        if v <= 100:
+            return v
+        raise ValueError("Maximum peptide length must be less than or equal to 100.")
 
     @field_validator("modifications")
     @classmethod
@@ -219,7 +233,7 @@ class ProteomeSearchSpace(BaseModel):
         return self
 
     def __len__(self):
-        if not self._peptidoform_spaces:
+        if self._peptidoform_spaces is None:
             raise ValueError("Search space must be built before length can be determined.")
         return sum(len(pep_space) for pep_space in self._peptidoform_spaces)
 
@@ -276,7 +290,7 @@ class ProteomeSearchSpace(BaseModel):
 
         """
         # Build search space if not already built
-        if not self._peptidoform_spaces:
+        if self._peptidoform_spaces is None:
             raise ValueError("Search space must be built before PSMs can be generated.")
 
         spectrum_id = 0
