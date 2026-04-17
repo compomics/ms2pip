@@ -452,7 +452,7 @@ def predict_library(
         search_space = ProteomeSearchSpace.from_any(config)
         search_space.fasta_file = Path(fasta_file)
     elif fasta_file and not config:
-        search_space = ProteomeSearchSpace(fasta_file=fasta_file)
+        search_space = ProteomeSearchSpace(fasta_file=Path(fasta_file))
     elif not fasta_file and config:
         search_space = ProteomeSearchSpace.from_any(config)
     else:
