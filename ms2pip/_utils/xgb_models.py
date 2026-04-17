@@ -15,7 +15,7 @@ from ms2pip.constants import MODELS
 
 logger = logging.getLogger(__name__)
 
-_MAX_PREDICTION_THREADS = 16
+_MAX_PREDICTION_THREADS = 32
 
 
 def validate_model(model: str, model_dir: str | Path | None = None) -> Path:

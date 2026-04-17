@@ -422,7 +422,7 @@ class Spectronaut(_Writer):
         """Yield fragment information for a processing result."""
         # Normalize intensities
         intensities = {
-            ion_type: _unlogarithmize(intensities)
+            ion_type: (2**intensities) - 0.001
             for ion_type, intensities in result.predicted_intensity.items()  # type: ignore[ty:unresolved-attribute]
         }
         max_intensity = max(itertools.chain(*intensities.values()))
@@ -779,11 +779,6 @@ SUPPORTED_FORMATS = {
 def _peptidoform_str_without_charge(peptidoform: Peptidoform) -> str:
     """Get peptidoform string without charge."""
     return re.sub(r"\/\d+$", "", str(peptidoform))
-
-
-def _unlogarithmize(intensities: np.array) -> np.array:  # type: ignore[ty:invalid-type-form]
-    """Undo logarithmic transformation of intensities."""
-    return (2**intensities) - 0.001
 
 
 def _basepeak_normalize(intensities: np.array, basepeak: float | None = None) -> np.array:  # type: ignore[ty:invalid-type-form]

@@ -80,12 +80,10 @@ from functools import partial
 from itertools import chain, combinations, product
 from logging import getLogger
 from pathlib import Path
-from typing import Any
-
 import numpy as np
 import pyteomics.fasta
 from psm_utils import PSM, PSMList
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, PrivateAttr, field_validator, model_validator
 from pyteomics.parser import icleave
 from rich.progress import track
 
@@ -93,7 +91,27 @@ logger = getLogger(__name__)
 
 
 class ModificationConfig(BaseModel):
-    """Configuration for a single modification in the search space."""
+    """
+    Configuration for a single modification in the search space.
+
+    Parameters
+    ----------
+    label
+        Label of the modification. This can be any valid ProForma 2.0 label.
+    amino_acid
+        Amino acid target of the modification. :py:obj:`None` if the modification is not
+        specific to an amino acid. Default is None.
+    peptide_n_term
+        Whether the modification occurs only on the peptide N-terminus. Default is False.
+    protein_n_term
+        Whether the modification occurs only on the protein N-terminus. Default is False.
+    peptide_c_term
+        Whether the modification occurs only on the peptide C-terminus. Default is False.
+    protein_c_term
+        Whether the modification occurs only on the protein C-terminus. Default is False.
+    fixed
+        Whether the modification is fixed. Default is False.
+    """
 
     label: str
     amino_acid: str | None = None
@@ -102,31 +120,6 @@ class ModificationConfig(BaseModel):
     peptide_c_term: bool | None = False
     protein_c_term: bool | None = False
     fixed: bool | None = False
-
-    def __init__(self, **data: Any):
-        """
-        Configuration for a single modification in the search space.
-
-        Parameters
-        ----------
-        label
-            Label of the modification. This can be any valid ProForma 2.0 label.
-        amino_acid
-            Amino acid target of the modification. :py:obj:`None` if the modification is not
-            specific to an amino acid. Default is None.
-        peptide_n_term
-            Whether the modification occurs only on the peptide N-terminus. Default is False.
-        protein_n_term
-            Whether the modification occurs only on the protein N-terminus. Default is False.
-        peptide_c_term
-            Whether the modification occurs only on the peptide C-terminus. Default is False.
-        protein_c_term
-            Whether the modification occurs only on the protein C-terminus. Default is False.
-        fixed
-            Whether the modification is fixed. Default is False.
-
-        """
-        super().__init__(**data)
 
     @model_validator(mode="after")
     def _modification_must_have_target(self):
@@ -156,7 +149,37 @@ DEFAULT_MODIFICATIONS = [
 
 
 class ProteomeSearchSpace(BaseModel):
-    """Search space for in silico spectral library generation."""
+    """
+    Search space for in silico spectral library generation.
+
+    Parameters
+    ----------
+    fasta_file
+        Path to FASTA file with protein sequences.
+    min_length
+        Minimum peptide length. Default is 8.
+    max_length
+        Maximum peptide length. Default is 30.
+    min_precursor_mz
+        Minimum precursor m/z for peptides. Default is 0.
+    max_precursor_mz
+        Maximum precursor m/z for peptides. Default is np.inf.
+    cleavage_rule
+        Cleavage rule for peptide digestion. Default is "trypsin".
+    missed_cleavages
+        Maximum number of missed cleavages. Default is 2.
+    semi_specific
+        Allow semi-specific cleavage. Default is False.
+    add_decoys
+        Add decoy sequences to search space. Default is False.
+    modifications
+        List of modifications to consider. Default is oxidation of M and
+        carbamidomethylation of C.
+    max_variable_modifications
+        Maximum number of variable modifications per peptide. Default is 3.
+    charges
+        List of charges to consider. Default is [2, 3].
+    """
 
     fasta_file: Path
     min_length: int = 8
@@ -171,42 +194,7 @@ class ProteomeSearchSpace(BaseModel):
     max_variable_modifications: int = 3
     charges: list[int] = [2, 3]
 
-    def __init__(self, **data: Any):
-        """
-        Search space for in silico spectral library generation.
-
-        Parameters
-        ----------
-        fasta_file
-            Path to FASTA file with protein sequences.
-        min_length
-            Minimum peptide length. Default is 8.
-        max_length
-            Maximum peptide length. Default is 30.
-        min_precursor_mz
-            Minimum precursor m/z for peptides. Default is 0.
-        max_precursor_mz
-            Maximum precursor m/z for peptides. Default is np.inf.
-        cleavage_rule
-            Cleavage rule for peptide digestion. Default is "trypsin".
-        missed_cleavages
-            Maximum number of missed cleavages. Default is 2.
-        semi_specific
-            Allow semi-specific cleavage. Default is False.
-        add_decoys
-            Add decoy sequences to search space. Default is False.
-        modifications
-            List of modifications to consider. Default is oxidation of M and carbamidomethylation
-            of C.
-        max_variable_modifications
-            Maximum number of variable modifications per peptide. Default is 3.
-        charges
-            List of charges to consider. Default is [2, 3].
-
-        """
-
-        super().__init__(**data)
-        self._peptidoform_spaces: list[_PeptidoformSearchSpace] = []
+    _peptidoform_spaces: list[_PeptidoformSearchSpace] = PrivateAttr(default_factory=list)
 
     @field_validator("modifications")
     @classmethod
@@ -394,7 +382,24 @@ class ProteomeSearchSpace(BaseModel):
 
 
 class _PeptidoformSearchSpace(BaseModel):
-    """Search space for a given amino acid sequence."""
+    """
+    Search space for a given amino acid sequence.
+
+    Parameters
+    ----------
+    sequence
+        Amino acid sequence of the peptidoform.
+    proteins
+        List of protein IDs containing the peptidoform.
+    is_n_term
+        Whether the peptidoform is an N-terminal peptide. Default is None.
+    is_c_term
+        Whether the peptidoform is a C-terminal peptide. Default is None.
+    modification_options
+        List of dictionaries with modification positions and configurations. Default is [].
+    charge_options
+        List of charge states to consider. Default is [].
+    """
 
     sequence: str
     proteins: list[str]
@@ -402,28 +407,6 @@ class _PeptidoformSearchSpace(BaseModel):
     is_c_term: bool | None = None
     modification_options: list[dict[int, ModificationConfig]] = []
     charge_options: list[int] = []
-
-    def __init__(self, **data: Any):
-        """
-        Search space for a given amino acid sequence.
-
-        Parameters
-        ----------
-        sequence
-            Amino acid sequence of the peptidoform.
-        proteins
-            List of protein IDs containing the peptidoform.
-        is_n_term
-            Whether the peptidoform is an N-terminal peptide. Default is None.
-        is_c_term
-            Whether the peptidoform is a C-terminal peptide. Default is None.
-        modification_options
-            List of dictionaries with modification positions and configurations. Default is [].
-        charge_options
-            List of charge states to consider. Default is [].
-
-        """
-        super().__init__(**data)
 
     def __len__(self):
         return len(self.modification_options) * len(self.charge_options)
