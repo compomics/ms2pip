@@ -184,8 +184,8 @@ class ProteomeSearchSpace(BaseModel):
     fasta_file: Path
     min_length: int = 8
     max_length: int = 30
-    min_precursor_mz: float | None = 0
-    max_precursor_mz: float | None = np.inf
+    min_precursor_mz: float = 0
+    max_precursor_mz: float = np.inf
     cleavage_rule: str = "trypsin"
     missed_cleavages: int = 2
     semi_specific: bool = False
@@ -194,7 +194,31 @@ class ProteomeSearchSpace(BaseModel):
     max_variable_modifications: int = 3
     charges: list[int] = [2, 3]
 
-    _peptidoform_spaces: list[_PeptidoformSearchSpace] = PrivateAttr(default_factory=list)
+    _peptidoform_spaces: list[_PeptidoformSearchSpace] | None = PrivateAttr(default=None)
+
+    @field_validator("min_precursor_mz", mode="before")
+    @classmethod
+    def _coerce_min_precursor_mz(cls, v):
+        return 0.0 if v is None else v
+
+    @field_validator("max_precursor_mz", mode="before")
+    @classmethod
+    def _coerce_max_precursor_mz(cls, v):
+        return np.inf if v is None else v
+
+    @field_validator("min_length")
+    @classmethod
+    def _validate_min_length(cls, v):
+        if v > 3:
+            return v
+        raise ValueError("Minimum peptide length must be greater than 3.")
+
+    @field_validator("max_length")
+    @classmethod
+    def _validate_max_length(cls, v):
+        if v <= 100:
+            return v
+        raise ValueError("Maximum peptide length must be less than or equal to 100.")
 
     @field_validator("modifications")
     @classmethod
@@ -219,7 +243,7 @@ class ProteomeSearchSpace(BaseModel):
         return self
 
     def __len__(self):
-        if not self._peptidoform_spaces:
+        if self._peptidoform_spaces is None:
             raise ValueError("Search space must be built before length can be determined.")
         return sum(len(pep_space) for pep_space in self._peptidoform_spaces)
 
@@ -276,7 +300,7 @@ class ProteomeSearchSpace(BaseModel):
 
         """
         # Build search space if not already built
-        if not self._peptidoform_spaces:
+        if self._peptidoform_spaces is None:
             raise ValueError("Search space must be built before PSMs can be generated.")
 
         spectrum_id = 0
@@ -295,25 +319,26 @@ class ProteomeSearchSpace(BaseModel):
             psm_list=[
                 psm
                 for psm in psms
-                if self.min_precursor_mz <= psm.peptidoform.theoretical_mz <= self.max_precursor_mz  # type: ignore[ty:unsupported-operator]
+                if psm.peptidoform.theoretical_mz is not None
+                and self.min_precursor_mz <= psm.peptidoform.theoretical_mz <= self.max_precursor_mz
             ]
         )
 
     def _digest_fasta(self, processes: int = 1):
         """Digest FASTA file to peptides and populate search space."""
         # Convert to string to avoid issues with Path objects
-        self.fasta_file = str(self.fasta_file)  # type: ignore[ty:invalid-assignment]
+        fasta_file = str(self.fasta_file)
         n_proteins = _count_fasta_entries(self.fasta_file)
         if self.add_decoys:
             fasta_db = pyteomics.fasta.decoy_db(
-                self.fasta_file,
+                fasta_file,
                 mode="reverse",
                 decoy_only=False,
                 keep_nterm=True,
             )
             n_proteins *= 2
         else:
-            fasta_db = pyteomics.fasta.FASTA(self.fasta_file)
+            fasta_db = pyteomics.fasta.FASTA(fasta_file)
 
         # Read proteins and digest to peptides
         with _get_pool(processes) as pool:
@@ -335,6 +360,7 @@ class ProteomeSearchSpace(BaseModel):
 
     def _remove_redundancy(self):
         """Remove redundancy in peptides and combine protein lists."""
+        assert self._peptidoform_spaces is not None  # for type checker
         peptide_dict = dict()
         for peptide in track(
             self._peptidoform_spaces,
@@ -351,6 +377,7 @@ class ProteomeSearchSpace(BaseModel):
 
     def _add_modifications(self, processes: int = 1):
         """Add modifications to peptides in search space."""
+        assert self._peptidoform_spaces is not None  # for type checker
         modifications_by_target = _restructure_modifications_by_target(self.modifications)
         modification_options = []
         with _get_pool(processes) as pool:
@@ -373,6 +400,7 @@ class ProteomeSearchSpace(BaseModel):
 
     def _add_charges(self):
         """Add charge permutations to peptides in search space."""
+        assert self._peptidoform_spaces is not None  # for type checker
         for peptide in track(
             self._peptidoform_spaces,
             description="Adding charge permutations...",

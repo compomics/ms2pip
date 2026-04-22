@@ -77,6 +77,7 @@ def load_xgb_models(
         Number of threads for XGBoost prediction. Capped internally.
 
     """
+    os.environ.pop("CUDA_VISIBLE_DEVICES", None)  # Workaround for dmlc/xgboost#11283
     nthread = min(
         processes if processes is not None else (os.cpu_count() or 1),
         _MAX_PREDICTION_THREADS,
