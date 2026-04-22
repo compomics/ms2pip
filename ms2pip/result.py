@@ -9,11 +9,6 @@ import numpy as np
 from psm_utils import PSM
 from pydantic import BaseModel, ConfigDict
 
-try:
-    import spectrum_utils.plot as sup
-except ImportError:
-    sup = None  # type: ignore[ty:invalid-assignment]
-
 from ms2pip.correlation import pearson
 from ms2pip.spectrum import ObservedSpectrum, PredictedSpectrum
 
@@ -105,6 +100,11 @@ class ProcessingResult(BaseModel):
         Requires optional dependency ``spectrum_utils`` to be installed.
 
         """
+        try:
+            import spectrum_utils.plot as sup
+        except ImportError as e:
+            raise ImportError("Optional dependency spectrum_utils not installed.") from e
+
         predicted, observed = (
             spec.to_spectrum_utils() if spec else None for spec in self.as_spectra()
         )

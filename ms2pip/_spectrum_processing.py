@@ -19,6 +19,7 @@ from ms2rescore_rs import (
     get_ms2_spectra,  # type: ignore[ty:unresolved-import]
 )
 from psm_utils import PSM, Peptidoform, PSMList
+from pyteomics.proforma import MassModification, ModificationBase
 
 import ms2pip.exceptions as exceptions
 from ms2pip.constants import MODELS
@@ -92,7 +93,11 @@ def proforma_to_mass_shift(peptidoform: Peptidoform) -> str:
         parts.append(aa)
         if mods:
             for mod in mods:
-                parts.append(f"[{mod.mass:+.4f}]")  # type: ignore[ty:unresolved-attribute]
+                if not isinstance(mod, (ModificationBase, MassModification)):
+                    raise ValueError(
+                        f"Unsupported ProForma tag type {type(mod)} in peptidoform {peptidoform}"
+                    )
+                parts.append(f"[{mod.mass:+.4f}]")
     c_term = peptidoform.properties.get("c_term")
     if c_term:
         for mod in c_term:
@@ -224,7 +229,9 @@ def _load_and_match_spectra(
             preprocessed_cache[spec_id] = obs
 
         results.append(
-            MatchedSpectrum(psm_index, psm, preprocessed_cache[spec_id], annotated_spectra[batch_idx])
+            MatchedSpectrum(
+                psm_index, psm, preprocessed_cache[spec_id], annotated_spectra[batch_idx]
+            )
         )
 
     return results
