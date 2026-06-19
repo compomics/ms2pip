@@ -433,7 +433,7 @@ class _PeptidoformSearchSpace(BaseModel):
     proteins: list[str]
     is_n_term: bool | None = None
     is_c_term: bool | None = None
-    modification_options: list[dict[int, ModificationConfig]] = []
+    modification_options: list[dict[str | int, ModificationConfig]] = []
     charge_options: list[int] = []
 
     def __len__(self):
@@ -451,7 +451,7 @@ class _PeptidoformSearchSpace(BaseModel):
 
     @staticmethod
     def _construct_peptidoform_string(
-        sequence: str, modifications: dict[int, ModificationConfig], charge: int
+        sequence: str, modifications: dict[str | int, ModificationConfig], charge: int
     ) -> str:
         if not modifications:
             return f"{sequence}/{charge}"
@@ -626,7 +626,7 @@ def _get_peptidoform_modification_versions(
     modifications: list[ModificationConfig],
     modifications_by_target: dict[str, dict[str, list[ModificationConfig]]],
     max_variable_modifications: int = 3,
-) -> list[dict[str | int, list[ModificationConfig]]]:
+) -> list[dict[str | int, ModificationConfig]]:
     """
     Get all potential combinations of modifications for a peptide sequence.
 
