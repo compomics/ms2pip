@@ -71,6 +71,8 @@ def _preprocess_spectrum(spectrum: ObservedSpectrum, model: str) -> None:
     spectrum.log2_transform()
 
 
+# This function is used in ms2rescore, even though the module is private in ms2pip. Any changes
+# to the function call should be followed up in ms2rescore to ensure compatibility.
 @lru_cache(maxsize=None)
 def proforma_to_mass_shift(peptidoform: Peptidoform) -> str:
     """
@@ -248,16 +250,19 @@ def _preloaded_to_annotations(
 
     Returns the same format as :func:`_load_and_match_spectra`: a list of
     :class:`MatchedSpectrum` instances.
+
+    When PSMs carry ``AnnotatedMS2Spectrum`` objects each PSM's annotation is used
+    directly, so multi-rank inputs (several PSMs sharing a spectrum ID but differing
+    in peptidoform) are handled correctly.  The ``ObservedSpectrum`` (preprocessed
+    peak data) is still deduplicated by spectrum ID for efficiency.
     """
     first_spectrum = psm_list["spectrum"][0]
     spectra_are_annotated = isinstance(first_spectrum, AnnotatedMS2Spectrum)
 
-    # Convert to ObservedSpectrum and preprocess; store raw spectra and annotations
+    # Build ObservedSpectrum (preprocessed peaks) lookup, deduplicated by spectrum_id.
+    # For raw MS2Spectrum inputs also keep the original object for batch annotation below.
     preloaded_spectra: dict[str, ObservedSpectrum] = {}
     raw_spectra: dict[str, MS2Spectrum] = {}
-    preloaded_annotated: dict[str, AnnotatedMS2Spectrum] | None = (
-        {} if spectra_are_annotated else None
-    )
     for psm in psm_list:
         spec_id = str(psm.spectrum_id)
         if spec_id in preloaded_spectra:
@@ -267,11 +272,8 @@ def _preloaded_to_annotations(
         obs = _to_observed_spectrum(spectrum)
         _preprocess_spectrum(obs, model)
         preloaded_spectra[spec_id] = obs
-        raw_spectra[spec_id] = spectrum  # keep original for annotation
-        if spectra_are_annotated:
-            assert isinstance(spectrum, AnnotatedMS2Spectrum)
-            assert preloaded_annotated is not None
-            preloaded_annotated[spec_id] = spectrum
+        if not spectra_are_annotated:
+            raw_spectra[spec_id] = spectrum  # type: ignore[assignment]
 
     # Build MatchedSpectrum list
     psm_spectrum_annotations: list[MatchedSpectrum] = []
@@ -282,9 +284,12 @@ def _preloaded_to_annotations(
         obs_spectrum = preloaded_spectra.get(spec_id)
         if obs_spectrum is None:
             continue
-        if preloaded_annotated is not None and spec_id in preloaded_annotated:
+        if spectra_are_annotated:
+            # Use the per-PSM AnnotatedMS2Spectrum directly: each PSM carries its own
+            # peptidoform-specific annotation, even when multiple PSMs share a spectrum_id.
+            assert isinstance(psm.spectrum, AnnotatedMS2Spectrum)
             psm_spectrum_annotations.append(
-                MatchedSpectrum(i, psm, obs_spectrum, preloaded_annotated[spec_id])
+                MatchedSpectrum(i, psm, obs_spectrum, psm.spectrum)
             )
         else:
             # Placeholder -- will be replaced after batch annotation below
@@ -293,7 +298,7 @@ def _preloaded_to_annotations(
             )
             needs_annotation.append(len(psm_spectrum_annotations) - 1)
 
-    # Batch annotate any unannotated spectra using original MS2Spectrum objects
+    # Batch annotate raw (unannotated) spectra per-PSM using each PSM's own peptidoform
     if needs_annotation:
         frag_model = MODELS[model]["fragmentation"]
         batch_spectra = []
