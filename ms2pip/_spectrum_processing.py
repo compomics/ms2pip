@@ -254,34 +254,38 @@ def _preloaded_to_annotations(
     When PSMs carry ``AnnotatedMS2Spectrum`` objects each PSM's annotation is used
     directly, so multi-rank inputs (several PSMs sharing a spectrum ID but differing
     in peptidoform) are handled correctly.  The ``ObservedSpectrum`` (preprocessed
-    peak data) is still deduplicated by spectrum ID for efficiency.
+    peak data) is still deduplicated for efficiency, keyed by ``(run, spectrum_id)``
+    so that identical spectrum IDs from different runs (e.g. the same scan number in
+    separate spectrum files) are never conflated.
     """
     first_spectrum = psm_list["spectrum"][0]
     spectra_are_annotated = isinstance(first_spectrum, AnnotatedMS2Spectrum)
 
-    # Build ObservedSpectrum (preprocessed peaks) lookup, deduplicated by spectrum_id.
+    # Build ObservedSpectrum (preprocessed peaks) lookup, deduplicated by (run, spectrum_id).
+    # Spectrum IDs are only unique within a run, so the run must be part of the key to keep
+    # multi-run inputs (a single correlate() call over several runs) from mixing spectra.
     # For raw MS2Spectrum inputs also keep the original object for batch annotation below.
-    preloaded_spectra: dict[str, ObservedSpectrum] = {}
-    raw_spectra: dict[str, MS2Spectrum] = {}
+    preloaded_spectra: dict[tuple[str, str], ObservedSpectrum] = {}
+    raw_spectra: dict[tuple[str, str], MS2Spectrum] = {}
     for psm in psm_list:
-        spec_id = str(psm.spectrum_id)
-        if spec_id in preloaded_spectra:
+        spec_key = (str(psm.run), str(psm.spectrum_id))
+        if spec_key in preloaded_spectra:
             continue
         spectrum = psm.spectrum
         assert spectrum is not None
         obs = _to_observed_spectrum(spectrum)
         _preprocess_spectrum(obs, model)
-        preloaded_spectra[spec_id] = obs
+        preloaded_spectra[spec_key] = obs
         if not spectra_are_annotated:
-            raw_spectra[spec_id] = spectrum  # type: ignore[assignment]
+            raw_spectra[spec_key] = spectrum  # type: ignore[assignment]
 
     # Build MatchedSpectrum list
     psm_spectrum_annotations: list[MatchedSpectrum] = []
     needs_annotation: list[int] = []
 
     for i, psm in enumerate(psm_list):
-        spec_id = str(psm.spectrum_id)
-        obs_spectrum = preloaded_spectra.get(spec_id)
+        spec_key = (str(psm.run), str(psm.spectrum_id))
+        obs_spectrum = preloaded_spectra.get(spec_key)
         if obs_spectrum is None:
             continue
         if spectra_are_annotated:
@@ -305,7 +309,7 @@ def _preloaded_to_annotations(
         batch_proformas = []
         for idx in needs_annotation:
             m = psm_spectrum_annotations[idx]
-            batch_spectra.append(raw_spectra[str(m.psm.spectrum_id)])
+            batch_spectra.append(raw_spectra[(str(m.psm.run), str(m.psm.spectrum_id))])
             batch_proformas.append(proforma_to_mass_shift(m.psm.peptidoform))
 
         annotated = annotate_ms2_spectra(

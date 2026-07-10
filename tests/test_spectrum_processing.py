@@ -1,8 +1,9 @@
 import numpy as np
 from ms2rescore_rs import AnnotatedMS2Spectrum, FragmentAnnotation, Precursor
-from psm_utils import PSM, Peptidoform
+from psm_utils import PSM, Peptidoform, PSMList
 
 from ms2pip._spectrum_processing import (
+    _preloaded_to_annotations,
     annotate_spectrum,
     proforma_to_mass_shift,
 )
@@ -105,6 +106,57 @@ def test_extract_targets_ignores_unknown_ion_types():
     floor = np.float32(np.log2(0.001))
     assert all(v == floor for v in targets["b"])
     assert all(v == floor for v in targets["y"])
+
+
+def _make_preloaded_annotated(n_peaks: int, identifier: str) -> AnnotatedMS2Spectrum:
+    """AnnotatedMS2Spectrum with ``n_peaks`` peaks, one b1 annotation, rest unmatched."""
+    peak_annotations = [[FragmentAnnotation(series="b", position=1, charge=1)]]
+    peak_annotations += [[] for _ in range(n_peaks - 1)]
+    return AnnotatedMS2Spectrum(
+        identifier=identifier,
+        mz=[100.0 + i for i in range(n_peaks)],
+        intensity=[float(n_peaks - i) for i in range(n_peaks)],
+        precursor=Precursor(mz=250.0, charge=2, rt=100.0),
+        peak_annotations=peak_annotations,
+    )
+
+
+def test_preloaded_multirun_shared_spectrum_id_stays_aligned():
+    """
+    Two runs can share a spectrum_id (e.g. ``scan=1``) while pointing at different
+    spectra with different peak counts. The observed intensities and the annotated
+    spectrum of each MatchedSpectrum must come from the same run, so their lengths
+    stay aligned.
+    """
+    psm_a = PSM(peptidoform=Peptidoform("PEPTIDE/2"), spectrum_id="scan=1", run="runA")
+    psm_a.spectrum = _make_preloaded_annotated(3, "scan=1")
+    psm_b = PSM(peptidoform=Peptidoform("PEPTIDE/2"), spectrum_id="scan=1", run="runB")
+    psm_b.spectrum = _make_preloaded_annotated(5, "scan=1")
+    psm_list = PSMList(psm_list=[psm_a, psm_b])
+
+    matched = _preloaded_to_annotations(psm_list, "HCD", 0.02, "Da")
+
+    assert len(matched) == 2
+    for m in matched:
+        assert len(m.spectrum.intensity) == len(m.annotated_spectrum.mz)
+    # Each PSM keeps its own run's peak count
+    by_run = {m.psm.run: len(m.annotated_spectrum.mz) for m in matched}
+    assert by_run == {"runA": 3, "runB": 5}
+
+
+def test_preloaded_single_run_deduplicates_shared_spectrum_id():
+    """Within one run, two PSMs sharing a spectrum_id reuse one observed spectrum."""
+    psm_1 = PSM(peptidoform=Peptidoform("PEPTIDE/2"), spectrum_id="scan=1", run="runA")
+    psm_1.spectrum = _make_preloaded_annotated(4, "scan=1")
+    psm_2 = PSM(peptidoform=Peptidoform("PEPTIDEK/3"), spectrum_id="scan=1", run="runA")
+    psm_2.spectrum = _make_preloaded_annotated(4, "scan=1")
+    psm_list = PSMList(psm_list=[psm_1, psm_2])
+
+    matched = _preloaded_to_annotations(psm_list, "HCD", 0.02, "Da")
+
+    assert len(matched) == 2
+    for m in matched:
+        assert len(m.spectrum.intensity) == len(m.annotated_spectrum.mz)
 
 
 def test_annotate_spectrum():

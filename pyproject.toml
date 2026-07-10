@@ -45,7 +45,7 @@ dependencies = [
     "ms2rescore-rs>=0.5.0a3,<2",
 ]
 [project.optional-dependencies]
-plotting = ["matplotlib>=3.0", "spectrum-utils>=0.4"]
+plotting = ["matplotlib>=3.0", "spectrum-utils>=0.5"]
 rt = ["deeplc>=4.0.0a2"]
 im = ["im2deep>=2.0.0a3"]
 
