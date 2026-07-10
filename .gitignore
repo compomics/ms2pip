@@ -95,6 +95,9 @@ venv/
 ENV/
 .venv-*/
 
+# uv
+uv.lock
+
 # Spyder project settings
 .spyderproject
 
