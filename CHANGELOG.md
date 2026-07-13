@@ -7,11 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `Spectrum` model: deprecated `model_validator`/`classmethod` combination, missing serializers for `np.ndarray` fields (broke `model_dump_json()`), and equality comparison crashing on array fields
-
-## [4.2.0-beta.1] - 2026-06-19
+## [4.2.0] - 2026-07-13
 
 ### Added
 
@@ -51,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `annotate-spectra` CLI crash (`.with_suffix()` called with no argument)
 - `write_correlations` now accepts `Path` objects
 - `_peptidoform_spaces` empty check uses `is None` instead of truthiness
+- `Spectrum` model: deprecated `model_validator`/`classmethod` combination, missing serializers for `np.ndarray` fields (broke `model_dump_json()`), and equality comparison crashing on array fields
 
 ## [4.1.2] - 2026-02-10
 

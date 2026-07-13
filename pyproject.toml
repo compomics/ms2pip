@@ -42,12 +42,12 @@ dependencies = [
     "pydantic>=2,<3",
     "werkzeug>=2,<4",
     "psm_utils>=1.5,<4",
-    "ms2rescore-rs>=0.5.0a3,<2",
+    "ms2rescore-rs>=0.5.0,<2",
 ]
 [project.optional-dependencies]
 plotting = ["matplotlib>=3.0", "spectrum-utils>=0.5"]
-rt = ["deeplc>=4.0.0a2"]
-im = ["im2deep>=2.0.0a3"]
+rt = ["deeplc>=4.0.0b1,<5"]
+im = ["im2deep>=2.0.0,<3"]
 
 [dependency-groups]
 notebook = ["ipykernel", "ipywidgets", "pip"]
