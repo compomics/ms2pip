@@ -1,7 +1,7 @@
 # isort: skip_file
 """MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."""
 
-__version__ = "4.2.0-beta.1"
+__version__ = "4.2.0"
 __all__ = [
     "predict_single",
     "predict_batch",
