@@ -1,7 +1,6 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 import rich
@@ -32,7 +31,7 @@ PSM_FILETYPES = list(READERS.keys())
 
 def _infer_output_name(
     input_filename: str,
-    output_name: Optional[str] = None,
+    output_name: str | None = None,
 ) -> Path:
     """Infer output filename from input filename if output_filename was not defined."""
     if output_name:
@@ -43,16 +42,19 @@ def _infer_output_name(
 
 
 @click.group()
-@click.option("--logging-level", "-l", type=click.Choice(LOGGING_LEVELS.keys()), default="INFO")
+@click.option(
+    "--logging-level",
+    "-l",
+    type=click.Choice(LOGGING_LEVELS.keys(), case_sensitive=False),
+    default="INFO",
+)
 @click.version_option(version=__version__)
 def cli(*args, **kwargs):
     logging.basicConfig(
         format="%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        level=LOGGING_LEVELS[kwargs["logging_level"]],
-        handlers=[
-            RichHandler(rich_tracebacks=True, show_level=True, show_path=False)
-        ],
+        level=LOGGING_LEVELS[kwargs["logging_level"].upper()],
+        handlers=[RichHandler(rich_tracebacks=True, show_level=True, show_path=False)],
     )
     rich.print(build_credits())
 
@@ -79,7 +81,7 @@ def predict_single(*args, **kwargs):
     # Write output
     rich.print(build_prediction_table(predicted_spectrum))
     write_spectra(output_name, [result], output_format)
-    if plot:
+    if plot and predicted_spectrum:
         spectrum_to_png(predicted_spectrum, output_name)
 
 
@@ -142,6 +144,9 @@ def predict_library(*args, **kwargs):
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--model-dir")
 @click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option(
+    "--ms2-tolerance-mode", type=click.Choice(["Da", "ppm"], case_sensitive=False), default="Da"
+)
 @click.option("--processes", "-n", type=int)
 def correlate(*args, **kwargs):
     # Parse arguments
@@ -171,6 +176,9 @@ def correlate(*args, **kwargs):
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option(
+    "--ms2-tolerance-mode", type=click.Choice(["Da", "ppm"], case_sensitive=False), default="Da"
+)
 @click.option("--processes", "-n", type=int)
 def get_training_data(*args, **kwargs):
     # Parse arguments
@@ -193,6 +201,9 @@ def get_training_data(*args, **kwargs):
 @click.option("--spectrum-id-pattern", "-p")
 @click.option("--model", type=click.Choice(MODELS), default="HCD")
 @click.option("--ms2-tolerance", type=float, default=0.02)
+@click.option(
+    "--ms2-tolerance-mode", type=click.Choice(["Da", "ppm"], case_sensitive=False), default="Da"
+)
 @click.option("--processes", "-n", type=int)
 def annotate_spectra(*args, **kwargs):
     # Parse arguments
@@ -203,8 +214,8 @@ def annotate_spectra(*args, **kwargs):
     results = ms2pip.core.annotate_spectra(*args, **kwargs)
 
     # Write intensities
-    output_name_int = output_name.with_name(output_name.stem + "_observations").with_suffix()
-    logger.info(f"Writing intensities to {output_name_int.with_suffix('.tsv')}")
+    output_name = output_name.with_name(output_name.stem + "_observations")
+    logger.info(f"Writing intensities to {output_name.with_suffix('.tsv')}")
     write_spectra(output_name, results, "tsv")
 
 

@@ -3,64 +3,64 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Optional, Union
+from typing import Annotated, Any
 
 import numpy as np
 from psm_utils import Peptidoform
-from pydantic import model_validator, field_validator, ConfigDict, BaseModel
-try:
-    import spectrum_utils.spectrum as sus
-    import spectrum_utils.plot as sup
-except ImportError:
-    sus = None
-    sup = None
+from pydantic import BaseModel, BeforeValidator, ConfigDict, field_serializer, model_validator
+
+
+def _coerce_peptidoform(v):
+    if v is None or isinstance(v, Peptidoform):
+        return v
+    elif isinstance(v, str):
+        return Peptidoform(v)
+    raise ValueError("Peptidoform must be a string, a Peptidoform object, or None.")
+
+
+_PeptidoformField = Annotated[Peptidoform | None, BeforeValidator(_coerce_peptidoform)]
 
 
 class Spectrum(BaseModel):
-    """MS2 spectrum."""
+    """
+    MS2 spectrum.
+
+    Parameters
+    ----------
+    mz
+        Array of m/z values.
+    intensity
+        Array of intensity values.
+    annotations
+        Array of peak annotations.
+    identifier
+        Spectrum identifier.
+    peptidoform
+        Peptidoform.
+    precursor_mz
+        Precursor m/z.
+    precursor_charge
+        Precursor charge.
+    retention_time
+        Retention time.
+    mass_tolerance
+        Mass tolerance for spectrum annotation.
+    mass_tolerance_unit
+        Unit of mass tolerance for spectrum annotation.
+    """
 
     mz: np.ndarray
     intensity: np.ndarray
-    annotations: Optional[np.ndarray] = None
-    identifier: Optional[str] = None
-    peptidoform: Optional[Union[Peptidoform, str]] = None
-    precursor_mz: Optional[float] = None
-    precursor_charge: Optional[int] = None
-    retention_time: Optional[float] = None
-    mass_tolerance: Optional[float] = None
-    mass_tolerance_unit: Optional[str] = None
+    annotations: np.ndarray | None = None
+    identifier: str | None = None
+    peptidoform: _PeptidoformField = None
+    precursor_mz: float | None = None
+    precursor_charge: int | None = None
+    retention_time: float | None = None
+    mass_tolerance: float | None = None
+    mass_tolerance_unit: str | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def __init__(__pydantic_self__, **data: Any) -> None:
-        """
-        MS2 spectrum.
-
-        Parameters
-        ----------
-        mz
-            Array of m/z values.
-        intensity
-            Array of intensity values.
-        annotations
-            Array of peak annotations.
-        identifier
-            Spectrum identifier.
-        peptidoform
-            Peptidoform.
-        precursor_mz
-            Precursor m/z.
-        precursor_charge
-            Precursor charge.
-        retention_time
-            Retention time.
-        mass_tolerance
-            Mass tolerance for spectrum annotation.
-        mass_tolerance_unit
-            Unit of mass tolerance for spectrum annotation.
-
-        """
-        super().__init__(**data)
 
     def __repr__(self) -> str:
         return "{}.{}({})".format(
@@ -70,24 +70,37 @@ class Spectrum(BaseModel):
         )
 
     @model_validator(mode="after")
-    @classmethod
-    def check_array_lengths(cls, data: dict):
-        if len(data.mz) != len(data.intensity):
+    def check_array_lengths(self):
+        if len(self.mz) != len(self.intensity):
             raise ValueError("Array lengths do not match.")
-        if data.annotations is not None:
-            if len(data.annotations) != len(data.intensity):
+        if self.annotations is not None:
+            if len(self.annotations) != len(self.intensity):
                 raise ValueError("Array lengths do not match.")
-        return data
+        return self
 
-    @field_validator("peptidoform")
-    @classmethod
-    def check_peptidoform(cls, value):
-        if not value or isinstance(value, Peptidoform):
-            return value
-        elif isinstance(value, str):
-            return Peptidoform(value)
-        else:
-            raise ValueError("Peptidoform must be a string, a Peptidoform object, or None.")
+    @field_serializer("mz", "intensity", "annotations")
+    def _serialize_array(self, value: np.ndarray | None) -> list | None:
+        return value.tolist() if value is not None else None
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Spectrum):
+            return NotImplemented
+        return (
+            np.array_equal(self.mz, other.mz)
+            and np.array_equal(self.intensity, other.intensity)
+            and (
+                np.array_equal(self.annotations, other.annotations)
+                if self.annotations is not None and other.annotations is not None
+                else self.annotations is other.annotations
+            )
+            and self.identifier == other.identifier
+            and self.peptidoform == other.peptidoform
+            and self.precursor_mz == other.precursor_mz
+            and self.precursor_charge == other.precursor_charge
+            and self.retention_time == other.retention_time
+            and self.mass_tolerance == other.mass_tolerance
+            and self.mass_tolerance_unit == other.mass_tolerance_unit
+        )
 
     @property
     def tic(self):
@@ -121,8 +134,12 @@ class Spectrum(BaseModel):
         self.intensity = self.intensity / self.tic
 
     def log2_transform(self) -> None:
-        """Log2-tranform spectrum."""
+        """Log2-transform spectrum."""
         self.intensity = np.log2(self.intensity + 0.001)
+
+    def inverse_log2_transform(self) -> None:
+        """Undo log2 transformation of intensities (inverse of :meth:`log2_transform`)."""
+        self.intensity = (2**self.intensity) - 0.001
 
     def clip_intensity(self, min_intensity=0.0) -> None:
         """Clip intensity values."""
@@ -140,37 +157,51 @@ class Spectrum(BaseModel):
           Otherwise, ``ValueError`` is raised.
 
         """
-        if not sus:
-            raise ImportError("Optional dependency spectrum_utils not installed.")
+        try:
+            import spectrum_utils.spectrum as sus
+        except ImportError as e:
+            raise ImportError("Optional dependency spectrum_utils not installed.") from e
 
         if self.precursor_charge:
             precursor_charge = self.precursor_charge
         else:
             if not self.peptidoform:
                 raise ValueError("`precursor_charge` or `peptidoform` must be set.")
-            else:
-                precursor_charge = self.peptidoform.precursor_charge
+            precursor_charge = self.peptidoform.precursor_charge
+            if precursor_charge is None:
+                raise ValueError("Peptidoform charge state is not set.")
 
         if self.precursor_mz:
-            precursor_mz = self.precursor_mz
+            precursor_mz_float = float(self.precursor_mz)
         else:
             if not self.peptidoform:
                 raise ValueError("`precursor_mz` or `peptidoform` must be set.")
+            elif not self.peptidoform.theoretical_mz:
+                raise ValueError(
+                    "Peptidoform theoretical m/z could not be calculated; ensure the charge state "
+                    " is set."
+                )
             else:
                 warnings.warn("precursor_mz not set, using theoretical precursor m/z.")
-                precursor_mz = self.peptidoform.theoretical_mz
+                precursor_mz_float = float(self.peptidoform.theoretical_mz)
 
         spectrum = sus.MsmsSpectrum(
             identifier=self.identifier if self.identifier else "spectrum",
-            precursor_mz=precursor_mz,
+            precursor_mz=precursor_mz_float,
             precursor_charge=precursor_charge,
             mz=self.mz,
             intensity=self.intensity,
-            retention_time=self.retention_time,
+            retention_time=self.retention_time if self.retention_time is not None else 0.0,
         )
-        if self.peptidoform:
+        if (
+            self.peptidoform
+            and self.mass_tolerance is not None
+            and self.mass_tolerance_unit is not None
+        ):
             spectrum.annotate_proforma(
-                str(self.peptidoform), self.mass_tolerance, self.mass_tolerance_unit
+                str(self.peptidoform),
+                self.mass_tolerance,
+                self.mass_tolerance_unit,
             )
         return spectrum
 
@@ -184,7 +215,5 @@ class ObservedSpectrum(Spectrum):
 class PredictedSpectrum(Spectrum):
     """Predicted MS2 spectrum."""
 
-    mass_tolerance: Optional[float] = 0.001
-    mass_tolerance_unit: Optional[str] = "Da"
-
-    pass
+    mass_tolerance: float | None = 0.001
+    mass_tolerance_unit: str | None = "Da"

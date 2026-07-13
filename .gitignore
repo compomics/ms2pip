@@ -1,10 +1,5 @@
-.pytest_cache/
-
-# Custom MS2PIP stuff
+# Custom
 data/
-*_pyx.c
-*_pyx_*.c
-ms2pip/models_xgboost/*.xgboost
 
 # Pytest
 .pytest_cache/
@@ -98,6 +93,7 @@ celerybeat-schedule
 .venv/
 venv/
 ENV/
+.venv-*/
 
 # Spyder project settings
 .spyderproject

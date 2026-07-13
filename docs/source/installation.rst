@@ -6,16 +6,11 @@ Pip package
 .. image:: https://flat.badgen.net/badge/install%20with/pip/green
    :target: https://pypi.org/project/ms2pip/
 
-With Python 3.9 or higher, run:
+With Python 3.11 or higher, run:
 
 .. code-block:: bash
 
    pip install ms2pip
-
-Compiled wheels are available for various Python versions on 64bit Linux,
-Windows, and macOS. This should install MS²PIP in a few seconds. For other
-platforms, MS²PIP can be built from source, although it can take a while
-to compile the large prediction models.
 
 We recommend using a `venv <https://docs.python.org/3/library/venv.html>`__ or
 `conda <https://docs.conda.io/en/latest/>`__ virtual environment.

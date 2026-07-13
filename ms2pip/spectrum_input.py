@@ -1,12 +1,14 @@
 """Read MS2 spectra."""
 
+from __future__ import annotations
+
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import numpy as np
-from ms2rescore_rs import get_ms2_spectra
+from ms2rescore_rs import get_ms2_spectra  # type: ignore[ty:unresolved-import]
 
-from ms2pip.exceptions import UnsupportedSpectrumFiletypeError
+import ms2pip.exceptions as exceptions
 from ms2pip.spectrum import ObservedSpectrum
 
 
@@ -31,8 +33,8 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
     """
     try:
         spectra = get_ms2_spectra(str(spectrum_file))
-    except ValueError:
-        raise UnsupportedSpectrumFiletypeError(Path(spectrum_file).suffixes)
+    except ValueError as e:
+        raise exceptions.UnsupportedSpectrumFiletypeError(Path(spectrum_file).suffixes) from e
 
     for spectrum in spectra:
         obs_spectrum = ObservedSpectrum(
@@ -40,7 +42,7 @@ def read_spectrum_file(spectrum_file: str) -> Generator[ObservedSpectrum, None, 
             intensity=np.array(spectrum.intensity, dtype=np.float32),
             identifier=str(spectrum.identifier),
             precursor_mz=float(spectrum.precursor.mz),
-            precursor_charge=float(spectrum.precursor.charge),
+            precursor_charge=int(spectrum.precursor.charge),
             retention_time=float(spectrum.precursor.rt),
         )
         # Workaround for mobiusklein/mzdata#3

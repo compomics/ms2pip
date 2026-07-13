@@ -1,7 +1,17 @@
 # isort: skip_file
 """MS2PIP: Accurate and versatile peptide fragmentation spectrum prediction."""
 
-__version__ = "4.1.2"
+__version__ = "4.2.0-beta.1"
+__all__ = [
+    "predict_single",
+    "predict_batch",
+    "predict_library",
+    "correlate",
+    "correlate_single",
+    "get_training_data",
+    "annotate_spectra",
+    "download_models",
+]
 
 from warnings import filterwarnings
 
@@ -10,11 +20,12 @@ filterwarnings(
 )
 
 
-from ms2pip.core import (  # noqa: F401 E402
+from ms2pip.core import (  # noqa: E402
     predict_single,
     predict_batch,
     predict_library,
     correlate,
+    correlate_single,
     get_training_data,
     annotate_spectra,
     download_models,
