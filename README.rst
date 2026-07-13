@@ -1,21 +1,21 @@
-.. image:: https://github.com/compomics/ms2pip_c/raw/releases/img/ms2pip_logo_1000px.png
+.. image:: https://github.com/compomics/ms2pip_c/raw/main/img/ms2pip_logo_1000px.png
    :width: 150px
    :height: 150px
 
 |
 
 .. image:: https://img.shields.io/github/v/release/compomics/ms2pip_c?include_prereleases&style=flat-square
-   :target: https://github.com/compomics/ms2pip_c/releases/latest/
+   :target: https://github.com/compomics/ms2pip_c/main/latest/
 .. image:: https://img.shields.io/pypi/v/ms2pip?style=flat-square
    :target: https://pypi.org/project/ms2pip/
-.. image:: https://img.shields.io/github/actions/workflow/status/compomics/ms2pip_c/test.yml?branch=releases&label=tests&style=flat-square
+.. image:: https://img.shields.io/github/actions/workflow/status/compomics/ms2pip_c/test.yml?branch=main&label=tests&style=flat-square
    :target: https://github.com/compomics/ms2pip_c/actions/workflows/test.yml
 .. image:: https://img.shields.io/github/actions/workflow/status/compomics/ms2pip_c/build_and_publish.yml?style=flat-square
    :target: https://github.com/compomics/ms2pip_c/actions/workflows/build_and_publish.yml
 .. image:: https://img.shields.io/github/issues/compomics/ms2pip_c?style=flat-square
    :target: https://github.com/compomics/ms2pip_c/issues/
 .. image:: https://img.shields.io/github/last-commit/compomics/ms2pip_c?style=flat-square
-   :target: https://github.com/compomics/ms2pip_c/commits/releases/
+   :target: https://github.com/compomics/ms2pip_c/commits/main/
 .. image:: https://img.shields.io/github/license/compomics/ms2pip_c?style=flat-square
    :target: https://www.apache.org/licenses/LICENSE-2.0
 .. image:: https://img.shields.io/twitter/follow/compomics?style=social
