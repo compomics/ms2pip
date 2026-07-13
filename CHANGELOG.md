@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Spectrum` model: deprecated `model_validator`/`classmethod` combination, missing serializers for `np.ndarray` fields (broke `model_dump_json()`), and equality comparison crashing on array fields
+
 ## [4.2.0-beta.1] - 2026-06-19
 
 ### Added
