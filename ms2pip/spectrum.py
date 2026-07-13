@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import warnings
-from typing import Annotated
+from typing import Annotated, Any
 
 import numpy as np
 from psm_utils import Peptidoform
-from pydantic import BaseModel, BeforeValidator, ConfigDict, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, field_serializer, model_validator
 
 
 def _coerce_peptidoform(v):
@@ -70,14 +70,37 @@ class Spectrum(BaseModel):
         )
 
     @model_validator(mode="after")
-    @classmethod
-    def check_array_lengths(cls, data):
-        if len(data.mz) != len(data.intensity):
+    def check_array_lengths(self):
+        if len(self.mz) != len(self.intensity):
             raise ValueError("Array lengths do not match.")
-        if data.annotations is not None:
-            if len(data.annotations) != len(data.intensity):
+        if self.annotations is not None:
+            if len(self.annotations) != len(self.intensity):
                 raise ValueError("Array lengths do not match.")
-        return data
+        return self
+
+    @field_serializer("mz", "intensity", "annotations")
+    def _serialize_array(self, value: np.ndarray | None) -> list | None:
+        return value.tolist() if value is not None else None
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Spectrum):
+            return NotImplemented
+        return (
+            np.array_equal(self.mz, other.mz)
+            and np.array_equal(self.intensity, other.intensity)
+            and (
+                np.array_equal(self.annotations, other.annotations)
+                if self.annotations is not None and other.annotations is not None
+                else self.annotations is other.annotations
+            )
+            and self.identifier == other.identifier
+            and self.peptidoform == other.peptidoform
+            and self.precursor_mz == other.precursor_mz
+            and self.precursor_charge == other.precursor_charge
+            and self.retention_time == other.retention_time
+            and self.mass_tolerance == other.mass_tolerance
+            and self.mass_tolerance_unit == other.mass_tolerance_unit
+        )
 
     @property
     def tic(self):
